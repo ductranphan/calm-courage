@@ -1,18 +1,42 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+/**
+ * Root application layout.
+ *
+ * Responsibilities:
+ * - Loads the Literata font before rendering screens.
+ * - Keeps the splash screen visible until fonts are ready.
+ * - Configures Expo Router Stack navigation for the whole app.
+ */
+import { Stack } from "expo-router";
+import { useFonts, Literata_400Regular } from "@expo-google-fonts/literata";
+import * as SplashScreen from "expo-splash-screen";
+import { useEffect } from "react";
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
-
+// Prevent the splash screen from disappearing before custom fonts are loaded.
 SplashScreen.preventAutoHideAsync();
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+export default function RootLayout() {
+  // Load the Literata font used in the Figma design.
+  const [loaded] = useFonts({
+    Literata: Literata_400Regular,
+  });
+
+  // Hide the splash screen once fonts are ready.
+  useEffect(() => {
+    if (loaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [loaded]);
+
+  // Render nothing while fonts are loading to avoid a font flash.
+  if (!loaded) {
+    return null;
+  }
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+      }}
+    />
   );
 }
