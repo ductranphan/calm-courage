@@ -19,6 +19,9 @@ config.resolver.assetExts = config.resolver.assetExts.filter(
 );
 
 // Add SVG to source extensions so it can be imported in TSX files.
-config.resolver.sourceExts.push("svg");
+config.resolver.sourceExts.push("svg", "cjs");
+
+// Resolve Firebase Auth to the React Native bundle (includes AsyncStorage persistence).
+config.resolver.unstable_enablePackageExports = false;
 
 module.exports = config;

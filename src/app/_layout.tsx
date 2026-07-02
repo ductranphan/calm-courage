@@ -11,6 +11,8 @@ import { useFonts, Literata_400Regular } from "@expo-google-fonts/literata";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 
+import { AuthProvider } from "@/contexts/AuthContext";
+
 // Prevent the splash screen from disappearing before custom fonts are loaded.
 SplashScreen.preventAutoHideAsync();
 
@@ -33,10 +35,12 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-      }}
-    />
+    <AuthProvider>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+        }}
+      />
+    </AuthProvider>
   );
 }

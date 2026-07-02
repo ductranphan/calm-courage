@@ -1,10 +1,11 @@
 /**
  * Parent Login screen.
  *
- * Allows existing parents to enter email/password, navigate to forgot password,
- * or choose a social login option. Authentication logic is not connected yet.
+ * Allows existing parents to enter email/password and sign in with Firebase Auth.
  */
+import { useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   Pressable,
   StyleSheet,
@@ -16,6 +17,7 @@ import { router } from "expo-router";
 
 import AppButton from "@/components/AppButton";
 import BackButton from "@/components/BackButton";
+import { useAuth } from "@/contexts/AuthContext";
 import { colors } from "@/constants/colors";
 
 import GoogleIcon from "../../assets/images/google.svg";
@@ -26,11 +28,30 @@ const FIGMA_WIDTH = 402;
 
 const { width } = Dimensions.get("window");
 
-// Width-based scaling keeps this screen closer to the Figma proportions on iPhone.
 const x = (value: number) => value * (width / FIGMA_WIDTH);
 const y = (value: number) => value * (width / FIGMA_WIDTH);
 
 export default function LoginScreen() {
+  const { signIn } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin() {
+    setError(null);
+    setLoading(true);
+
+    try {
+      await signIn(email, password);
+      router.replace("/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to sign in.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <View style={styles.screen}>
       <BackButton />
@@ -41,32 +62,44 @@ export default function LoginScreen() {
         Welcome Back!{"\n"}Please enter your details to sign in.
       </Text>
 
-      {/* Email input; Firebase Auth will be connected later. */}
       <TextInput
         placeholder="Enter your email"
         placeholderTextColor={colors.muted}
         style={[styles.input, styles.emailInput]}
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="email-address"
+        textContentType="emailAddress"
       />
 
-      {/* Password input; value/state handling will be added with auth integration. */}
       <TextInput
         placeholder="Enter password"
         placeholderTextColor={colors.muted}
         secureTextEntry
         style={[styles.input, styles.passwordInput]}
+        value={password}
+        onChangeText={setPassword}
+        textContentType="password"
       />
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Pressable onPress={() => router.push("/forgot-password")}>
         <Text style={styles.forgot}>Forgot?</Text>
       </Pressable>
 
       <View style={styles.loginButton}>
-        <AppButton title="Log In" onPress={() => {}} />
+        {loading ? (
+          <ActivityIndicator color={colors.primary} />
+        ) : (
+          <AppButton title="Log In" onPress={handleLogin} />
+        )}
       </View>
 
       <Text style={styles.or}>OR</Text>
 
-      {/* Social login UI placeholders. */}
       <View style={styles.socials}>
         <GoogleIcon width={x(52)} height={y(52)} />
         <AppleIcon width={x(52)} height={y(52)} />
@@ -134,6 +167,17 @@ const styles = StyleSheet.create({
     top: y(345),
   },
 
+  error: {
+    position: "absolute",
+    left: x(20),
+    top: y(425),
+    width: x(362),
+    color: "#B00020",
+    fontFamily: "Literata",
+    fontSize: 16,
+    lineHeight: 22,
+  },
+
   forgot: {
     position: "absolute",
     left: x(308),
@@ -151,6 +195,10 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: x(96),
     top: y(509),
+    width: x(209),
+    height: y(52),
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   or: {

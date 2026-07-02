@@ -1,12 +1,26 @@
 /**
  * App entry route.
  *
- * For now, the first route redirects users to the onboarding flow.
- * Later this file can decide whether to send users to onboarding,
- * login, or dashboard based on authentication/onboarding status.
+ * Sends users to onboarding, email verification, or home based on auth state.
  */
 import { Redirect } from "expo-router";
 
+import { useAuth } from "@/contexts/AuthContext";
+
 export default function Index() {
-  return <Redirect href="/onboarding" />;
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return null;
+  }
+
+  if (!user) {
+    return <Redirect href="/onboarding" />;
+  }
+
+  if (!user.emailVerified) {
+    return <Redirect href="/verify-email" />;
+  }
+
+  return <Redirect href="/home" />;
 }
