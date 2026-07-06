@@ -1,27 +1,39 @@
 /**
  * Email sign-up screen.
  *
- * Collects parent email, password, PIN, and terms agreement before account creation.
+ * Matches Figma Screen 2.0: Parent Sign-Up & Security.
+ * Collects email, password, PIN, and terms agreement before account creation.
  */
+
 import { useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { router } from "expo-router";
 
 import AppButton from "@/components/AppButton";
-import AppTextInput from "@/components/AppTextInput";
 import BackButton from "@/components/BackButton";
 import PinInput from "@/components/PinInput";
 import TermsModal from "@/components/TermsModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { colors } from "@/constants/colors";
 import { isValidPin } from "@/utils/pin";
+
+const FIGMA_WIDTH = 402;
+const { width } = Dimensions.get("window");
+
+const scale = width / FIGMA_WIDTH;
+const x = (value: number) => value * scale;
+const y = (value: number) => value * scale;
 
 export default function EmailSignupScreen() {
   const { signUp } = useAuth();
@@ -37,6 +49,16 @@ export default function EmailSignupScreen() {
   async function handleSignUp() {
     setError(null);
 
+    if (!termsAccepted) {
+      setError("Please agree to the Terms of Service and Privacy Policy.");
+      return;
+    }
+
+    if (!isValidPin(pin)) {
+      setError("Please create a 4-digit PIN.");
+      return;
+    }
+
     if (password.length < 6) {
       setError("Password must be at least 6 characters.");
       return;
@@ -44,16 +66,6 @@ export default function EmailSignupScreen() {
 
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
-      return;
-    }
-
-    if (!isValidPin(pin)) {
-      setError("Please enter a 4-digit PIN.");
-      return;
-    }
-
-    if (!termsAccepted) {
-      setError("Please agree to the Terms of Service and Privacy Policy.");
       return;
     }
 
@@ -70,84 +82,89 @@ export default function EmailSignupScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <BackButton />
-
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={0}
+    >
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Create Parent Account</Text>
-        <Text style={styles.subtitle}>
-          Join us to start your child&apos;s confidence journey.
-        </Text>
+        <View style={styles.figmaFrame}>
+          <BackButton />
 
-        <View style={styles.form}>
-          <AppTextInput
+          <Text style={styles.title}>Create Parent Account</Text>
+
+          <Text style={styles.subtitle}>
+            Join us to start your child's{"\n"}confidence journey.
+          </Text>
+
+          <TextInput
             placeholder="Enter your email"
+            placeholderTextColor="#B8B3D6"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
-            textContentType="emailAddress"
+            style={[styles.input, styles.emailInput]}
           />
 
-          <AppTextInput
+          <TextInput
             placeholder="Create password"
+            placeholderTextColor="#B8B3D6"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
-            textContentType="newPassword"
+            style={[styles.input, styles.passwordInput]}
           />
 
-          <AppTextInput
+          <TextInput
             placeholder="Confirm password"
+            placeholderTextColor="#B8B3D6"
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
-            textContentType="newPassword"
+            style={[styles.input, styles.confirmInput]}
           />
-        </View>
 
-        <Text style={styles.pinLabel}>Create PIN</Text>
-        <PinInput value={pin} onChange={setPin} />
-
-        <Pressable
-          style={styles.termsRow}
-          onPress={() => setTermsAccepted((current) => !current)}
-        >
-          <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
-            {termsAccepted ? <Text style={styles.checkmark}>✓</Text> : null}
+          <View style={styles.pinSection}>
+            <Text style={styles.pinLabel}>Create PIN</Text>
+            <View style={styles.pinRow}>
+              <PinInput value={pin} onChange={setPin} />
+            </View>
           </View>
-          <Text style={styles.termsText}>
-            I agree to the{" "}
-            <Text
-              style={styles.termsLink}
-              onPress={() => setTermsModalVisible(true)}
-            >
-              Terms of Service
-            </Text>{" "}
-            and{" "}
-            <Text
-              style={styles.termsLink}
-              onPress={() => setTermsModalVisible(true)}
-            >
-              Privacy Policy
-            </Text>
-            .
-          </Text>
-        </Pressable>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+          <View style={styles.termsRow}>
+            <Pressable
+              onPress={() => setTermsAccepted((current) => !current)}
+              style={styles.checkbox}
+            >
+              {termsAccepted ? <View style={styles.checkboxFill} /> : null}
+            </Pressable>
 
-        <View style={styles.button}>
-          {loading ? (
-            <ActivityIndicator color={colors.primary} />
-          ) : (
-            <AppButton title="Send Verification Email" onPress={handleSignUp} />
-          )}
+            <Pressable onPress={() => setTermsModalVisible(true)}>
+              <Text style={styles.termsText}>
+                I agree to the Terms of Service and{"\n"}Privacy Policy.
+              </Text>
+            </Pressable>
+          </View>
+
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+
+          <View style={styles.buttonWrapper}>
+            {loading ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <AppButton
+                title={"Send\nVerification Email"}
+                onPress={handleSignUp}
+                style={styles.sendButton}
+              />
+            )}
+          </View>
         </View>
       </ScrollView>
 
@@ -155,96 +172,158 @@ export default function EmailSignupScreen() {
         visible={termsModalVisible}
         onClose={() => setTermsModalVisible(false)}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  scroll: {
-    flex: 1,
+
+  scrollContent: {
+    minHeight: y(960),
+    backgroundColor: colors.background,
   },
-  content: {
-    paddingHorizontal: 24,
-    paddingTop: 120,
-    paddingBottom: 40,
-    gap: 16,
+
+  figmaFrame: {
+    width: "100%",
+    height: y(960),
+    position: "relative",
+    backgroundColor: colors.background,
   },
+
   title: {
+    position: "absolute",
+    left: x(35),
+    top: y(123),
+    width: x(331),
+    height: y(39),
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: 30,
-    lineHeight: 39,
+    fontSize: x(30),
+    lineHeight: y(39),
     textAlign: "center",
   },
+
   subtitle: {
+    position: "absolute",
+    left: x(20),
+    top: y(188),
+    width: x(362),
+    height: y(48),
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: 18,
-    lineHeight: 24,
-    textAlign: "center",
-    marginBottom: 8,
+    fontSize: x(20),
+    lineHeight: y(24),
   },
-  form: {
-    gap: 16,
-    marginTop: 8,
+
+  input: {
+    position: "absolute",
+    left: x(20),
+    width: x(362),
+    height: y(72),
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: x(20),
+    backgroundColor: colors.white,
+    paddingHorizontal: x(26),
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(20),
   },
+
+  emailInput: {
+    top: y(262),
+  },
+
+  passwordInput: {
+    top: y(370),
+  },
+
+  confirmInput: {
+    top: y(478),
+  },
+
+  pinSection: {
+    position: "absolute",
+    left: x(20),
+    top: y(583),
+    width: x(361),
+    height: y(122),
+  },
+
   pinLabel: {
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: 20,
-    lineHeight: 24,
-    marginTop: 4,
+    fontSize: x(20),
+    lineHeight: y(30),
   },
+
+  pinRow: {
+    marginTop: y(9),
+  },
+
   termsRow: {
+    position: "absolute",
+    left: x(20),
+    top: y(758),
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 12,
-    marginTop: 4,
   },
+
   checkbox: {
-    width: 22,
-    height: 22,
+    width: x(24),
+    height: x(24),
     borderWidth: 1,
     borderColor: colors.primary,
-    borderRadius: 4,
     backgroundColor: colors.white,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 2,
+    marginRight: x(8),
   },
-  checkboxChecked: {
-    backgroundColor: colors.lavender,
+
+  checkboxFill: {
+    width: x(14),
+    height: x(14),
+    backgroundColor: colors.primary,
   },
-  checkmark: {
-    color: colors.primary,
-    fontSize: 14,
-    lineHeight: 16,
-  },
+
   termsText: {
-    flex: 1,
+    width: x(328),
+    height: y(48),
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  termsLink: {
+    fontSize: x(20),
+    lineHeight: y(24),
     textDecorationLine: "underline",
   },
+
   error: {
+    position: "absolute",
+    left: x(20),
+    top: y(812),
+    width: x(362),
     color: "#B00020",
     fontFamily: "Literata",
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: x(13),
     textAlign: "center",
   },
-  button: {
+
+  buttonWrapper: {
+    position: "absolute",
+    left: x(96),
+    top: y(850),
+    width: x(210),
+    height: y(84),
     alignItems: "center",
-    marginTop: 8,
-    minHeight: 52,
     justifyContent: "center",
+  },
+
+  sendButton: {
+    width: x(210),
+    height: y(84),
+    borderRadius: x(20),
   },
 });
