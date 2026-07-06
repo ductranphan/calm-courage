@@ -4,22 +4,37 @@
  * Uses Expo Router to navigate back to the previous screen.
  * The icon comes from the exported Figma SVG assets.
  */
-import { Pressable } from "react-native";
-import { router } from "expo-router";
+
+import { Pressable, StyleSheet } from "react-native";
+import { router, type Href } from "expo-router";
 
 import BackIcon from "../../assets/icons/back.svg";
 
-export default function BackButton() {
+type Props = {
+  fallback?: Href;
+};
+
+export default function BackButton({ fallback = "/" }: Props) {
+  function handlePress() {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace(fallback);
+    }
+  }
+
   return (
-    <Pressable
-      onPress={() => router.back()}
-      style={{
-        position: "absolute",
-        top: 60,
-        left: 25,
-      }}
-    >
-      <BackIcon width={32} height={32} />
+    <Pressable onPress={handlePress} style={styles.button}>
+      <BackIcon width={37.24} height={22.18} />
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  button: {
+    position: "absolute",
+    left: 30,
+    top: 90,
+    zIndex: 50,
+  },
+});
