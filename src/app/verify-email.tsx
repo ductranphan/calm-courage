@@ -1,11 +1,15 @@
 /**
  * Email verification screen.
  *
- * Guides parents to verify their email before accessing the app.
+ * Matches Figma Screen 2.1: Email Verification Gateway.
+ * Keeps Firebase verification logic connected through useAuth().
  */
+
 import { useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -13,11 +17,25 @@ import {
 import { router } from "expo-router";
 
 import AppButton from "@/components/AppButton";
+import BackButton from "@/components/BackButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { colors } from "@/constants/colors";
 
+import LogoSvg from "../../assets/images/logo.svg";
+import EmailIcon from "../../assets/images/email.svg";
+
+const FIGMA_WIDTH = 402;
+const { width } = Dimensions.get("window");
+
+const scale = width / FIGMA_WIDTH;
+const x = (value: number) => value * scale;
+const y = (value: number) => value * scale;
+
 export default function VerifyEmailScreen() {
-  const { user, sendVerificationEmail, reloadUser, signOut } = useAuth();
+  // Firebase auth functions used on this screen.
+  // signOut is temporarily included so you can leave this screen during testing.
+  const { sendVerificationEmail, reloadUser, signOut } = useAuth();
+
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -46,6 +64,7 @@ export default function VerifyEmailScreen() {
 
     try {
       const refreshedUser = await reloadUser();
+
       if (refreshedUser?.emailVerified) {
         router.replace("/home");
         return;
@@ -59,82 +78,177 @@ export default function VerifyEmailScreen() {
     }
   }
 
+  async function handleSignOut() {
+    await signOut();
+    router.replace("/onboarding");
+  }
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Verify Email</Text>
-      <Text style={styles.subtitle}>
-        We sent a verification link to{"\n"}
-        {user?.email ?? "your email address"}.
-      </Text>
+    <View style={styles.screen}>
+      <BackButton fallback="/onboarding" />
+
+      <View style={styles.emailIcon}>
+        <EmailIcon width={x(76)} height={y(57)} />
+      </View>
+
+      <Text style={styles.title}>Verify Your Email</Text>
+
       <Text style={styles.body}>
-        Open the link in your inbox, then return here and tap the button below.
+        We&apos;ve sent a verification link to your{"\n"}
+        registered email. Please check your{"\n"}
+        inbox and click the link to complete{"\n"}
+        your setup.
       </Text>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {message ? <Text style={styles.message}>{message}</Text> : null}
-
-      <View style={styles.actions}>
+      <View style={styles.buttonWrapper}>
         {loading ? (
           <ActivityIndicator color={colors.primary} />
         ) : (
-          <>
-            <AppButton title="I've Verified" onPress={handleVerified} />
-            <AppButton title="Resend Email" onPress={handleResend} />
-            <AppButton title="Sign Out" onPress={() => signOut()} />
-          </>
+          <AppButton
+            title="I’ve Verified My Email"
+            onPress={handleVerified}
+            style={styles.verifyButton}
+          />
         )}
+      </View>
+
+      <View style={styles.resendWrapper}>
+        <Pressable onPress={handleResend}>
+          <Text style={styles.resendText}>
+            Didn&apos;t receive the email?{"\n"}
+            Resend link
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Temporary testing link so you can leave this page if the email is not verified yet */}
+      <Pressable onPress={handleSignOut} style={styles.signOutWrapper}>
+        <Text style={styles.signOutText}>Sign out</Text>
+      </Pressable>
+
+      {message ? <Text style={styles.message}>{message}</Text> : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      <View style={styles.logoWrapper}>
+        <LogoSvg width={x(168)} height={y(62)} />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingHorizontal: 24,
-    paddingTop: 96,
-    gap: 16,
   },
+
+  emailIcon: {
+    position: "absolute",
+    left: x(163),
+    top: y(154),
+    width: x(76),
+    height: y(57),
+  },
+
   title: {
+    position: "absolute",
+    left: x(20),
+    top: y(256),
+    width: x(362),
+    height: y(39),
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: 30,
-    lineHeight: 39,
+    fontSize: x(30),
+    lineHeight: y(39),
     textAlign: "center",
   },
-  subtitle: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: 18,
-    lineHeight: 24,
-    textAlign: "center",
-  },
+
   body: {
+    position: "absolute",
+    left: x(20),
+    top: y(348),
+    width: x(362),
+    height: y(96),
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: x(20),
+    lineHeight: y(24),
+  },
+
+  buttonWrapper: {
+    position: "absolute",
+    left: x(76),
+    top: y(510),
+    width: x(250),
+    height: y(52),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  verifyButton: {
+    width: x(250),
+    height: y(52),
+  },
+
+  resendWrapper: {
+    position: "absolute",
+    left: x(84),
+    top: y(630),
+    width: x(234),
+    height: y(60),
+    alignItems: "center",
+  },
+
+  resendText: {
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(20),
+    lineHeight: y(30),
+    textAlign: "center",
+    textDecorationLine: "underline",
+  },
+
+  signOutWrapper: {
+    position: "absolute",
+    top: y(700),
+    width: "100%",
+    alignItems: "center",
+  },
+
+  signOutText: {
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(16),
+    textDecorationLine: "underline",
+  },
+
+  message: {
+    position: "absolute",
+    left: x(20),
+    top: y(725),
+    width: x(362),
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(14),
     textAlign: "center",
   },
+
   error: {
+    position: "absolute",
+    left: x(20),
+    top: y(725),
+    width: x(362),
     color: "#B00020",
     fontFamily: "Literata",
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: x(14),
     textAlign: "center",
   },
-  message: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: 16,
-    lineHeight: 22,
-    textAlign: "center",
-  },
-  actions: {
-    alignItems: "center",
-    gap: 12,
-    marginTop: 8,
-    minHeight: 52,
+
+  logoWrapper: {
+    position: "absolute",
+    left: x(117),
+    top: y(760),
+    width: x(168),
+    height: y(62),
   },
 });
