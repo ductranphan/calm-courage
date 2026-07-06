@@ -18,10 +18,10 @@ import { router } from "expo-router";
 
 import AppButton from "@/components/AppButton";
 import BackButton from "@/components/BackButton";
+import Logo from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 import { colors } from "@/constants/colors";
 
-import LogoSvg from "../../assets/images/logo.svg";
 import EmailIcon from "../../assets/images/email.svg";
 
 const FIGMA_WIDTH = 402;
@@ -32,8 +32,6 @@ const x = (value: number) => value * scale;
 const y = (value: number) => value * scale;
 
 export default function VerifyEmailScreen() {
-  // Firebase auth functions used on this screen.
-  // signOut is temporarily included so you can leave this screen during testing.
   const { sendVerificationEmail, reloadUser, signOut } = useAuth();
 
   const [error, setError] = useState<string | null>(null);
@@ -121,7 +119,6 @@ export default function VerifyEmailScreen() {
         </Pressable>
       </View>
 
-      {/* Temporary testing link so you can leave this page if the email is not verified yet */}
       <Pressable onPress={handleSignOut} style={styles.signOutWrapper}>
         <Text style={styles.signOutText}>Sign out</Text>
       </Pressable>
@@ -130,7 +127,7 @@ export default function VerifyEmailScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.logoWrapper}>
-        <LogoSvg width={x(168)} height={y(62)} />
+        <Logo width={x(168)} height={y(62)} shadow />
       </View>
     </View>
   );

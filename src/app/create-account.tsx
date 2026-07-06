@@ -9,10 +9,10 @@ import { router } from "expo-router";
 
 import AppButton from "@/components/AppButton";
 import BackButton from "@/components/BackButton";
+import Logo from "@/components/Logo";
 import { colors } from "@/constants/colors";
 import { typography } from "@/constants/typography";
 
-import LogoSvg from "../../assets/images/logo.svg";
 import GoogleIcon from "../../assets/images/google.svg";
 import AppleIcon from "../../assets/images/apple.svg";
 import FacebookIcon from "../../assets/images/facebook.svg";
@@ -33,7 +33,6 @@ export default function CreateAccountScreen() {
 
       <Text style={styles.title}>Create Parent Account</Text>
 
-      {/* Email sign-up path */}
       <View style={styles.emailButton}>
         <AppButton
           title="Email Sign-Up"
@@ -44,7 +43,6 @@ export default function CreateAccountScreen() {
 
       <Text style={styles.or}>OR</Text>
 
-      {/* Social login UI placeholders. Auth logic will be added later. */}
       <View style={styles.socials}>
         <GoogleIcon width={x(52)} height={y(52)} />
         <AppleIcon width={x(52)} height={y(52)} />
@@ -52,7 +50,7 @@ export default function CreateAccountScreen() {
       </View>
 
       <View style={styles.bottomLogo}>
-        <LogoSvg width={x(168)} height={y(62)} />
+        <Logo width={x(168)} height={y(62)} shadow />
       </View>
     </View>
   );
