@@ -2,11 +2,10 @@
  * Email sign-up screen.
  *
  * Matches Figma Screen 2.0: Parent Sign-Up & Security.
- * Collects email, password, PIN, terms agreement,
- * and sends the user to email verification.
+ * Collects email, password, PIN, and terms agreement before account creation.
  */
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -23,8 +22,11 @@ import { router } from "expo-router";
 
 import AppButton from "@/components/AppButton";
 import BackButton from "@/components/BackButton";
+import PinInput from "@/components/PinInput";
+import TermsModal from "@/components/TermsModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { colors } from "@/constants/colors";
+import { isValidPin } from "@/utils/pin";
 
 const FIGMA_WIDTH = 402;
 const { width } = Dimensions.get("window");
@@ -34,17 +36,13 @@ const x = (value: number) => value * scale;
 const y = (value: number) => value * scale;
 
 export default function EmailSignupScreen() {
-  const { signUp, sendVerificationEmail } = useAuth();
-
-  const pinRefs = useRef<Array<TextInput | null>>([]);
-
+  const { signUp } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [pin, setPin] = useState(["", "", "", ""]);
+  const [pin, setPin] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
-
+  const [termsModalVisible, setTermsModalVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -56,7 +54,7 @@ export default function EmailSignupScreen() {
       return;
     }
 
-    if (pin.some((digit) => digit === "")) {
+    if (!isValidPin(pin)) {
       setError("Please create a 4-digit PIN.");
       return;
     }
@@ -74,9 +72,8 @@ export default function EmailSignupScreen() {
     setLoading(true);
 
     try {
-      await signUp(email, password);
-      await sendVerificationEmail();
-      router.replace("/verify-email");
+      await signUp(email, password, pin);
+      router.replace("/terms");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create account.");
     } finally {
@@ -135,53 +132,20 @@ export default function EmailSignupScreen() {
 
           <View style={styles.pinSection}>
             <Text style={styles.pinLabel}>Create PIN</Text>
-
             <View style={styles.pinRow}>
-              {pin.map((digit, index) => (
-                <TextInput
-                  key={index}
-                  ref={(ref) => {
-                    pinRefs.current[index] = ref;
-                  }}
-                  value={digit}
-                  onChangeText={(value) => {
-                    const nextPin = [...pin];
-                    const newValue = value.slice(-1);
-
-                    nextPin[index] = newValue;
-                    setPin(nextPin);
-
-                    if (newValue && index < pin.length - 1) {
-                      pinRefs.current[index + 1]?.focus();
-                    }
-                  }}
-                  onKeyPress={({ nativeEvent }) => {
-                    if (
-                      nativeEvent.key === "Backspace" &&
-                      !pin[index] &&
-                      index > 0
-                    ) {
-                      pinRefs.current[index - 1]?.focus();
-                    }
-                  }}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  secureTextEntry
-                  style={styles.pinBox}
-                />
-              ))}
+              <PinInput value={pin} onChange={setPin} />
             </View>
           </View>
 
           <View style={styles.termsRow}>
             <Pressable
-              onPress={() => setTermsAccepted(!termsAccepted)}
+              onPress={() => setTermsAccepted((current) => !current)}
               style={styles.checkbox}
             >
               {termsAccepted ? <View style={styles.checkboxFill} /> : null}
             </Pressable>
 
-            <Pressable onPress={() => setShowTermsModal(true)}>
+            <Pressable onPress={() => setTermsModalVisible(true)}>
               <Text style={styles.termsText}>
                 I agree to the Terms of Service and{"\n"}Privacy Policy.
               </Text>
@@ -201,40 +165,13 @@ export default function EmailSignupScreen() {
               />
             )}
           </View>
-
-          {showTermsModal ? (
-            <View style={styles.modalBox}>
-              <Pressable
-                onPress={() => setShowTermsModal(false)}
-                style={styles.closeButton}
-              >
-                <Text style={styles.closeText}>×</Text>
-              </Pressable>
-
-              <Text style={styles.modalTitle}>
-                Terms of Service & Privacy Policy
-              </Text>
-
-              <Text style={styles.modalBody}>
-                Welcome to Calm Courage Co.{"\n"}
-                Please review how we protect your family's data:{"\n\n"}
-                1. Data Protection & Privacy{"\n"}
-                • We do not share your child's emotional data or drawings with
-                any third parties.{"\n"}
-                • All voice recordings and canvas activities are encrypted and
-                securely stored.{"\n\n"}
-                2. Parental Control{"\n"}
-                • Parents maintain full access to view, edit, or delete their
-                child's profile and progress reports.{"\n\n"}
-                3. Subscription & Billing{"\n"}
-                • Phase 1 features include free trials, followed by our monthly
-                membership plan ($7.99/mo).{"\n"}
-                • Cancel anytime through your Parent Settings.
-              </Text>
-            </View>
-          ) : null}
         </View>
       </ScrollView>
+
+      <TermsModal
+        visible={termsModalVisible}
+        onClose={() => setTermsModalVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -326,24 +263,6 @@ const styles = StyleSheet.create({
 
   pinRow: {
     marginTop: y(9),
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-
-  pinBox: {
-    width: x(76),
-    height: y(85),
-    borderRadius: x(20),
-    backgroundColor: colors.white,
-    textAlign: "center",
-    fontFamily: "Literata",
-    fontSize: x(24),
-    color: colors.primary,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
   },
 
   termsRow: {
@@ -406,50 +325,5 @@ const styles = StyleSheet.create({
     width: x(210),
     height: y(84),
     borderRadius: x(20),
-  },
-
-  modalBox: {
-    position: "absolute",
-    left: x(20),
-    top: y(258),
-    width: x(362),
-    height: y(570),
-    borderRadius: x(20),
-    backgroundColor: "rgba(217, 217, 217, 0.85)",
-    paddingTop: y(55),
-    paddingHorizontal: x(17),
-    zIndex: 20,
-  },
-
-  closeButton: {
-    position: "absolute",
-    right: x(18),
-    top: y(12),
-    zIndex: 21,
-  },
-
-  closeText: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(42),
-    lineHeight: y(42),
-  },
-
-  modalTitle: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    fontWeight: "700",
-    lineHeight: y(24),
-    marginBottom: y(28),
-  },
-
-  modalBody: {
-    width: x(328),
-    height: y(418),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(16),
-    lineHeight: y(16),
   },
 });

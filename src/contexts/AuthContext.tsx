@@ -14,6 +14,7 @@ import {
 import type { User } from "firebase/auth";
 
 import {
+  acceptTerms,
   reloadCurrentUser,
   resetPassword,
   sendVerificationEmail,
@@ -32,6 +33,7 @@ type AuthContextValue = {
   resetPassword: typeof resetPassword;
   sendVerificationEmail: typeof sendVerificationEmail;
   reloadUser: typeof reloadCurrentUser;
+  acceptTerms: typeof acceptTerms;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -59,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetPassword,
       sendVerificationEmail,
       reloadUser: reloadCurrentUser,
+      acceptTerms,
     }),
     [user, loading]
   );
