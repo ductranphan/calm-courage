@@ -1,11 +1,12 @@
 /**
  * Email sign-up screen.
  *
- * Collects parent email and password, creates a Firebase account, and sends verification.
+ * Collects parent email, password, PIN, and terms agreement before account creation.
  */
 import { useState } from "react";
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,14 +17,20 @@ import { router } from "expo-router";
 import AppButton from "@/components/AppButton";
 import AppTextInput from "@/components/AppTextInput";
 import BackButton from "@/components/BackButton";
+import PinInput from "@/components/PinInput";
+import TermsModal from "@/components/TermsModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { colors } from "@/constants/colors";
+import { isValidPin } from "@/utils/pin";
 
 export default function EmailSignupScreen() {
-  const { signUp, sendVerificationEmail } = useAuth();
+  const { signUp } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [pin, setPin] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsModalVisible, setTermsModalVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -40,12 +47,21 @@ export default function EmailSignupScreen() {
       return;
     }
 
+    if (!isValidPin(pin)) {
+      setError("Please enter a 4-digit PIN.");
+      return;
+    }
+
+    if (!termsAccepted) {
+      setError("Please agree to the Terms of Service and Privacy Policy.");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await signUp(email, password);
-      await sendVerificationEmail();
-      router.replace("/verify-email");
+      await signUp(email, password, pin);
+      router.replace("/terms");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create account.");
     } finally {
@@ -62,9 +78,9 @@ export default function EmailSignupScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>Email Sign-Up</Text>
+        <Text style={styles.title}>Create Parent Account</Text>
         <Text style={styles.subtitle}>
-          Create your parent account to get started.
+          Join us to start your child&apos;s confidence journey.
         </Text>
 
         <View style={styles.form}>
@@ -79,7 +95,7 @@ export default function EmailSignupScreen() {
           />
 
           <AppTextInput
-            placeholder="Create a password"
+            placeholder="Create password"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -95,16 +111,50 @@ export default function EmailSignupScreen() {
           />
         </View>
 
+        <Text style={styles.pinLabel}>Create PIN</Text>
+        <PinInput value={pin} onChange={setPin} />
+
+        <Pressable
+          style={styles.termsRow}
+          onPress={() => setTermsAccepted((current) => !current)}
+        >
+          <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
+            {termsAccepted ? <Text style={styles.checkmark}>✓</Text> : null}
+          </View>
+          <Text style={styles.termsText}>
+            I agree to the{" "}
+            <Text
+              style={styles.termsLink}
+              onPress={() => setTermsModalVisible(true)}
+            >
+              Terms of Service
+            </Text>{" "}
+            and{" "}
+            <Text
+              style={styles.termsLink}
+              onPress={() => setTermsModalVisible(true)}
+            >
+              Privacy Policy
+            </Text>
+            .
+          </Text>
+        </Pressable>
+
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <View style={styles.button}>
           {loading ? (
             <ActivityIndicator color={colors.primary} />
           ) : (
-            <AppButton title="Create Account" onPress={handleSignUp} />
+            <AppButton title="Send Verification Email" onPress={handleSignUp} />
           )}
         </View>
       </ScrollView>
+
+      <TermsModal
+        visible={termsModalVisible}
+        onClose={() => setTermsModalVisible(false)}
+      />
     </View>
   );
 }
@@ -141,6 +191,48 @@ const styles = StyleSheet.create({
   form: {
     gap: 16,
     marginTop: 8,
+  },
+  pinLabel: {
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: 20,
+    lineHeight: 24,
+    marginTop: 4,
+  },
+  termsRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    marginTop: 4,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 4,
+    backgroundColor: colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: colors.lavender,
+  },
+  checkmark: {
+    color: colors.primary,
+    fontSize: 14,
+    lineHeight: 16,
+  },
+  termsText: {
+    flex: 1,
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  termsLink: {
+    textDecorationLine: "underline",
   },
   error: {
     color: "#B00020",

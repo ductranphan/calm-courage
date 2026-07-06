@@ -12,9 +12,10 @@ import {
   signOut,
   type User,
 } from "firebase/auth";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 
 import { auth, db } from "@/config/firebase";
+import { hashPin } from "@/utils/pin";
 
 export function mapAuthError(code: string): string {
   switch (code) {
@@ -52,22 +53,41 @@ function getErrorMessage(error: unknown): string {
   return "Something went wrong. Please try again.";
 }
 
-async function createUserProfile(user: User) {
+async function createUserProfile(user: User, pinHash: string) {
   await setDoc(doc(db, "users", user.uid), {
     email: user.email ?? "",
+    pinHash,
     createdAt: serverTimestamp(),
     onboardingComplete: false,
+    termsAccepted: false,
   });
 }
 
-export async function signUp(email: string, password: string) {
+export async function getUserProfile(userId: string) {
+  const snapshot = await getDoc(doc(db, "users", userId));
+  return snapshot.exists() ? snapshot.data() : null;
+}
+
+export async function acceptTerms(userId: string) {
   try {
+    await updateDoc(doc(db, "users", userId), {
+      termsAccepted: true,
+      termsAcceptedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+export async function signUp(email: string, password: string, pin: string) {
+  try {
+    const pinHash = await hashPin(pin);
     const credential = await createUserWithEmailAndPassword(
       auth,
       email.trim(),
       password
     );
-    await createUserProfile(credential.user);
+    await createUserProfile(credential.user, pinHash);
     return credential.user;
   } catch (error) {
     throw new Error(getErrorMessage(error));
