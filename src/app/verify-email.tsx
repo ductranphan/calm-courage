@@ -1,8 +1,17 @@
 /**
  * Email verification screen.
  *
- * Matches Figma Screen 2.1: Email Verification Gateway.
- * Keeps Firebase verification logic connected through useAuth().
+ * Matches Figma Screen 2.1.
+ *
+ * DEVELOPMENT MODE:
+ * 
+ * For now, pressing "I've Verified My Email" skips Firebase email verification
+ * so i can continue developing the rest of the app.
+ *
+ * BEFORE PRODUCTION:
+ * 
+ * Replace the temporary handleVerified() function with the Firebase version
+ * that is commented below.
  */
 
 import { useState } from "react";
@@ -25,19 +34,23 @@ import { colors } from "@/constants/colors";
 import EmailIcon from "../../assets/images/email.svg";
 
 const FIGMA_WIDTH = 402;
-const { width } = Dimensions.get("window");
+const FIGMA_HEIGHT = 874;
 
-const scale = width / FIGMA_WIDTH;
-const x = (value: number) => value * scale;
-const y = (value: number) => value * scale;
+const { width, height } = Dimensions.get("window");
+
+const x = (value: number) => value * (width / FIGMA_WIDTH);
+const y = (value: number) => value * (height /FIGMA_HEIGHT);
 
 export default function VerifyEmailScreen() {
-  const { sendVerificationEmail, reloadUser, signOut } = useAuth();
+  const { sendVerificationEmail } = useAuth();
 
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Resends the Firebase verification email.
+   */
   async function handleResend() {
     setError(null);
     setMessage(null);
@@ -48,12 +61,39 @@ export default function VerifyEmailScreen() {
       setMessage("Verification email sent.");
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Unable to send verification email."
+        err instanceof Error
+          ? err.message
+          : "Unable to send verification email."
       );
     } finally {
       setLoading(false);
     }
   }
+
+  /**
+   * ============================================================
+   * TEMPORARY DEVELOPMENT FUNCTION
+   * ============================================================
+   *
+   * Skip Firebase verification so i can continue developing
+   * the rest of the application.
+   *
+   * Replace this with the Firebase version below before release.
+   */
+  function handleVerified() {
+    router.replace("/child-profile-info");
+  }
+
+  /**
+   * ============================================================
+   * REAL FIREBASE VERSION (USE BEFORE RELEASE)
+   * ============================================================
+   *
+   * Uncomment this function and delete the temporary one above.
+   */
+
+  /*
+  const { reloadUser } = useAuth();
 
   async function handleVerified() {
     setError(null);
@@ -64,26 +104,28 @@ export default function VerifyEmailScreen() {
       const refreshedUser = await reloadUser();
 
       if (refreshedUser?.emailVerified) {
-        router.replace("/home");
+        router.replace("/child-profile-info");
         return;
       }
 
-      setMessage("Email not verified yet. Check your inbox and try again.");
+      setMessage(
+        "Email not verified yet. Check your inbox and try again."
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to refresh status.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to refresh verification status."
+      );
     } finally {
       setLoading(false);
     }
   }
-
-  async function handleSignOut() {
-    await signOut();
-    router.replace("/onboarding");
-  }
+  */
 
   return (
     <View style={styles.screen}>
-      <BackButton fallback="/onboarding" />
+      <BackButton fallback="/email-signup" />
 
       <View style={styles.emailIcon}>
         <EmailIcon width={x(76)} height={y(57)} />
@@ -110,21 +152,23 @@ export default function VerifyEmailScreen() {
         )}
       </View>
 
-      <View style={styles.resendWrapper}>
-        <Pressable onPress={handleResend}>
-          <Text style={styles.resendText}>
-            Didn&apos;t receive the email?{"\n"}
-            Resend link
-          </Text>
-        </Pressable>
-      </View>
-
-      <Pressable onPress={handleSignOut} style={styles.signOutWrapper}>
-        <Text style={styles.signOutText}>Sign out</Text>
+      <Pressable
+        onPress={handleResend}
+        style={styles.resendWrapper}
+      >
+        <Text style={styles.resendText}>
+          Didn&apos;t receive the email?{"\n"}
+          Resend link
+        </Text>
       </Pressable>
 
-      {message ? <Text style={styles.message}>{message}</Text> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {message ? (
+        <Text style={styles.message}>{message}</Text>
+      ) : null}
+
+      {error ? (
+        <Text style={styles.error}>{error}</Text>
+      ) : null}
 
       <View style={styles.logoWrapper}>
         <Logo width={x(168)} height={y(62)} shadow />
@@ -205,24 +249,10 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
 
-  signOutWrapper: {
-    position: "absolute",
-    top: y(700),
-    width: "100%",
-    alignItems: "center",
-  },
-
-  signOutText: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(16),
-    textDecorationLine: "underline",
-  },
-
   message: {
     position: "absolute",
     left: x(20),
-    top: y(725),
+    top: y(710),
     width: x(362),
     color: colors.primary,
     fontFamily: "Literata",
@@ -233,7 +263,7 @@ const styles = StyleSheet.create({
   error: {
     position: "absolute",
     left: x(20),
-    top: y(725),
+    top: y(710),
     width: x(362),
     color: "#B00020",
     fontFamily: "Literata",

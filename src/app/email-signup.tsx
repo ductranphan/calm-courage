@@ -36,7 +36,8 @@ const x = (value: number) => value * scale;
 const y = (value: number) => value * scale;
 
 export default function EmailSignupScreen() {
-  const { signUp } = useAuth();
+  const { signUp, sendVerificationEmail } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -73,7 +74,8 @@ export default function EmailSignupScreen() {
 
     try {
       await signUp(email, password, pin);
-      router.replace("/terms");
+      await sendVerificationEmail();
+      router.replace("/verify-email");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create account.");
     } finally {
