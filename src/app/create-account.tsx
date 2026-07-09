@@ -4,27 +4,19 @@
  * Gives parents the option to start email sign-up or use social login.
  * Social login buttons are UI-only for now; backend auth will be connected later.
  */
-import { Dimensions, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import { StyleSheet, Text, View } from "react-native";
 
-import AppButton from "@/components/AppButton";
-import BackButton from "@/components/BackButton";
-import Logo from "@/components/Logo";
+import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
+import Logo from "@/components/ui/Logo";
 import { colors } from "@/constants/colors";
 import { typography } from "@/constants/typography";
+import { x, y } from "@/utils/scaling";
 
-import GoogleIcon from "../../assets/images/google.svg";
 import AppleIcon from "../../assets/images/apple.svg";
 import FacebookIcon from "../../assets/images/facebook.svg";
-
-// Figma reference frame. Screen elements use scaled Figma coordinates.
-const FIGMA_WIDTH = 402;
-const FIGMA_HEIGHT = 874;
-
-const { width, height } = Dimensions.get("window");
-
-const x = (value: number) => value * (width / FIGMA_WIDTH);
-const y = (value: number) => value * (height / FIGMA_HEIGHT);
+import GoogleIcon from "../../assets/images/google.svg";
 
 export default function CreateAccountScreen() {
   return (
@@ -70,9 +62,9 @@ const styles = StyleSheet.create({
     height: y(39),
     color: colors.primary,
     textAlign: "center",
-    fontSize: 30,
-    lineHeight: 39,
-    fontFamily: "Literata",
+    fontSize: x(30),
+    lineHeight: y(39),
+    fontFamily: "Quiche",
   },
 
   emailButton: {
@@ -84,7 +76,7 @@ const styles = StyleSheet.create({
   emailButtonSize: {
     width: x(210),
     height: y(84),
-    borderRadius: 20,
+    borderRadius: x(20),
   },
 
   or: {

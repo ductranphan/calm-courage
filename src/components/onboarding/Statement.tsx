@@ -1,13 +1,12 @@
 /**
  * Onboarding statement text.
  *
- * Receives text from the onboarding constants and displays it with the
- * Figma-matched font, alignment, and line height.
+ * Displays each onboarding message inside the Figma statement area.
  */
 import { StyleSheet, Text, View } from "react-native";
 
 import { colors } from "@/constants/colors";
-import { typography } from "@/constants/typography";
+import { x, y } from "@/utils/scaling";
 
 type Props = {
   text: string;
@@ -23,16 +22,18 @@ export default function Statement({ text }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    width: 290,
-    minHeight: 90,
-    justifyContent: "center",
+    width: x(362),
+    height: y(200),
     alignItems: "center",
+    justifyContent: "center",
   },
 
   text: {
+    width: x(295),
     color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(20),
+    lineHeight: y(28),
     textAlign: "center",
-    lineHeight: 28,
-    ...typography.body,
   },
 });

@@ -2,13 +2,12 @@
  * Reusable back button.
  *
  * Uses Expo Router to navigate back to the previous screen.
- * The icon comes from the exported Figma SVG assets.
  */
 
 import { Pressable, StyleSheet } from "react-native";
 import { router, type Href } from "expo-router";
 
-import BackIcon from "../../assets/icons/back.svg";
+import BackIcon from "../../../assets/icons/back.svg";
 
 type Props = {
   fallback?: Href;

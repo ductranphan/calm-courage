@@ -1,45 +1,32 @@
 /**
  * Email verification screen.
  *
- * Matches Figma Screen 2.1.
+ * Matches Figma Screen 2.1: Email Verification Gateway.
  *
- * DEVELOPMENT MODE:
- * 
- * For now, pressing "I've Verified My Email" skips Firebase email verification
- * so i can continue developing the rest of the app.
- *
- * BEFORE PRODUCTION:
- * 
- * Replace the temporary handleVerified() function with the Firebase version
- * that is commented below.
+ * Development note:
+ * The "I've Verified My Email" button temporarily skips the real Firebase
+ * verification check so the rest of the app can be developed.
+ * Replace handleVerified() with the Firebase version before release.
  */
 
+import { router } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { router } from "expo-router";
 
-import AppButton from "@/components/AppButton";
-import BackButton from "@/components/BackButton";
-import Logo from "@/components/Logo";
-import { useAuth } from "@/contexts/AuthContext";
+import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
+import Logo from "@/components/ui/Logo";
 import { colors } from "@/constants/colors";
+import { useAuth } from "@/contexts/AuthContext";
+import { x, y } from "@/utils/scaling";
 
 import EmailIcon from "../../assets/images/email.svg";
-
-const FIGMA_WIDTH = 402;
-const FIGMA_HEIGHT = 874;
-
-const { width, height } = Dimensions.get("window");
-
-const x = (value: number) => value * (width / FIGMA_WIDTH);
-const y = (value: number) => value * (height /FIGMA_HEIGHT);
 
 export default function VerifyEmailScreen() {
   const { sendVerificationEmail } = useAuth();
@@ -48,9 +35,6 @@ export default function VerifyEmailScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  /**
-   * Resends the Firebase verification email.
-   */
   async function handleResend() {
     setError(null);
     setMessage(null);
@@ -63,36 +47,20 @@ export default function VerifyEmailScreen() {
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to send verification email."
+          : "Unable to send verification email.",
       );
     } finally {
       setLoading(false);
     }
   }
 
-  /**
-   * ============================================================
-   * TEMPORARY DEVELOPMENT FUNCTION
-   * ============================================================
-   *
-   * Skip Firebase verification so i can continue developing
-   * the rest of the application.
-   *
-   * Replace this with the Firebase version below before release.
-   */
   function handleVerified() {
     router.replace("/child-profile-info");
   }
 
-  /**
-   * ============================================================
-   * REAL FIREBASE VERSION (USE BEFORE RELEASE)
-   * ============================================================
-   *
-   * Uncomment this function and delete the temporary one above.
-   */
-
   /*
+  Real Firebase version to use before release:
+
   const { reloadUser } = useAuth();
 
   async function handleVerified() {
@@ -108,14 +76,12 @@ export default function VerifyEmailScreen() {
         return;
       }
 
-      setMessage(
-        "Email not verified yet. Check your inbox and try again."
-      );
+      setMessage("Email not verified yet. Check your inbox and try again.");
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to refresh verification status."
+          : "Unable to refresh verification status.",
       );
     } finally {
       setLoading(false);
@@ -152,23 +118,15 @@ export default function VerifyEmailScreen() {
         )}
       </View>
 
-      <Pressable
-        onPress={handleResend}
-        style={styles.resendWrapper}
-      >
+      <Pressable onPress={handleResend} style={styles.resendWrapper}>
         <Text style={styles.resendText}>
           Didn&apos;t receive the email?{"\n"}
           Resend link
         </Text>
       </Pressable>
 
-      {message ? (
-        <Text style={styles.message}>{message}</Text>
-      ) : null}
-
-      {error ? (
-        <Text style={styles.error}>{error}</Text>
-      ) : null}
+      {message ? <Text style={styles.message}>{message}</Text> : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.logoWrapper}>
         <Logo width={x(168)} height={y(62)} shadow />
@@ -198,7 +156,7 @@ const styles = StyleSheet.create({
     width: x(362),
     height: y(39),
     color: colors.primary,
-    fontFamily: "Literata",
+    fontFamily: "Quiche",
     fontSize: x(30),
     lineHeight: y(39),
     textAlign: "center",
@@ -229,6 +187,7 @@ const styles = StyleSheet.create({
   verifyButton: {
     width: x(250),
     height: y(52),
+    borderRadius: x(20),
   },
 
   resendWrapper: {
@@ -238,6 +197,7 @@ const styles = StyleSheet.create({
     width: x(234),
     height: y(60),
     alignItems: "center",
+    justifyContent: "center",
   },
 
   resendText: {
@@ -257,6 +217,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontFamily: "Literata",
     fontSize: x(14),
+    lineHeight: y(18),
     textAlign: "center",
   },
 
@@ -268,6 +229,7 @@ const styles = StyleSheet.create({
     color: "#B00020",
     fontFamily: "Literata",
     fontSize: x(14),
+    lineHeight: y(18),
     textAlign: "center",
   },
 

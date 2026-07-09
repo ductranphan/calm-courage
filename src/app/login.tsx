@@ -1,38 +1,33 @@
 /**
  * Parent Login screen.
  *
- * Allows existing parents to enter email/password and sign in with Firebase Auth.
+ * Allows existing parents to enter their email and password,
+ * then signs them in with Firebase Authentication.
  */
+import { router } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { router } from "expo-router";
 
-import AppButton from "@/components/AppButton";
-import BackButton from "@/components/BackButton";
-import { useAuth } from "@/contexts/AuthContext";
+import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import { colors } from "@/constants/colors";
+import { useAuth } from "@/contexts/AuthContext";
+import { x, y } from "@/utils/scaling";
 
-import GoogleIcon from "../../assets/images/google.svg";
 import AppleIcon from "../../assets/images/apple.svg";
 import FacebookIcon from "../../assets/images/facebook.svg";
-
-const FIGMA_WIDTH = 402;
-
-const { width } = Dimensions.get("window");
-
-const x = (value: number) => value * (width / FIGMA_WIDTH);
-const y = (value: number) => value * (width / FIGMA_WIDTH);
+import GoogleIcon from "../../assets/images/google.svg";
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -127,9 +122,9 @@ const styles = StyleSheet.create({
     height: y(39),
     color: colors.primary,
     textAlign: "center",
-    fontFamily: "Literata",
-    fontSize: 30,
-    lineHeight: 39,
+    fontFamily: "Quiche",
+    fontSize: x(30),
+    lineHeight: y(39),
   },
 
   welcome: {
@@ -140,8 +135,8 @@ const styles = StyleSheet.create({
     height: y(48),
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: 20,
-    lineHeight: 24,
+    fontSize: x(20),
+    lineHeight: y(24),
   },
 
   input: {
@@ -151,12 +146,12 @@ const styles = StyleSheet.create({
     height: y(72),
     borderWidth: 1,
     borderColor: colors.primary,
-    borderRadius: 20,
+    borderRadius: x(20),
     backgroundColor: colors.white,
     paddingHorizontal: x(26),
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: 20,
+    fontSize: x(20),
   },
 
   emailInput: {
@@ -174,8 +169,8 @@ const styles = StyleSheet.create({
     width: x(362),
     color: "#B00020",
     fontFamily: "Literata",
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: x(16),
+    lineHeight: y(22),
   },
 
   forgot: {
@@ -186,8 +181,8 @@ const styles = StyleSheet.create({
     height: y(32),
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: 20,
-    lineHeight: 28,
+    fontSize: x(20),
+    lineHeight: y(28),
     textDecorationLine: "underline",
   },
 
@@ -209,7 +204,8 @@ const styles = StyleSheet.create({
     height: y(24),
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: 20,
+    fontSize: x(20),
+    lineHeight: y(24),
     textAlign: "center",
   },
 
@@ -232,8 +228,8 @@ const styles = StyleSheet.create({
     height: y(32),
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: 20,
-    lineHeight: 28,
+    fontSize: x(20),
+    lineHeight: y(28),
     textDecorationLine: "underline",
   },
 });

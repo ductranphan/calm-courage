@@ -7,40 +7,36 @@
  * - Configures Expo Router Stack navigation for the whole app.
  */
 import { Stack } from "expo-router";
-import { useFonts, Literata_400Regular } from "@expo-google-fonts/literata";
+import * as Font from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { AuthProvider } from "@/contexts/AuthContext";
 
-// Prevent the splash screen from disappearing before custom fonts are loaded.
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  // Load the Literata font used in the Figma design.
-  const [loaded] = useFonts({
-    Literata: Literata_400Regular,
-  });
+  const [fontsLoaded, setFontsLoaded] = useState(false);
 
-  // Hide the splash screen once fonts are ready.
   useEffect(() => {
-    if (loaded) {
+    async function loadFonts() {
+      await Font.loadAsync({
+        Literata: require("../../assets/fonts/Literata-Regular.ttf"),
+        Quiche: require("../../assets/fonts/Quiche-Regular.ttf"),
+      });
+
+      setFontsLoaded(true);
       SplashScreen.hideAsync();
     }
-  }, [loaded]);
 
-  // Render nothing while fonts are loading to avoid a font flash.
-  if (!loaded) {
-    return null;
-  }
+    loadFonts();
+  }, []);
+
+  if (!fontsLoaded) return null;
 
   return (
     <AuthProvider>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-        }}
-      />
+      <Stack screenOptions={{ headerShown: false }} />
     </AuthProvider>
   );
 }

@@ -4,18 +4,14 @@
  * Sends a Firebase password reset email to the parent.
  */
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
-import AppButton from "@/components/AppButton";
-import AppTextInput from "@/components/AppTextInput";
-import BackButton from "@/components/BackButton";
-import { useAuth } from "@/contexts/AuthContext";
+import AppButton from "@/components/ui/AppButton";
+import AppTextInput from "@/components/ui/AppTextInput";
+import BackButton from "@/components/ui/BackButton";
 import { colors } from "@/constants/colors";
+import { useAuth } from "@/contexts/AuthContext";
+import { x, y } from "@/utils/scaling";
 
 export default function ForgotPasswordScreen() {
   const { resetPassword } = useAuth();
@@ -34,7 +30,7 @@ export default function ForgotPasswordScreen() {
       setSuccess("Check your inbox for a password reset link.");
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Unable to send reset email."
+        err instanceof Error ? err.message : "Unable to send reset email.",
       );
     } finally {
       setLoading(false);
@@ -46,6 +42,7 @@ export default function ForgotPasswordScreen() {
       <BackButton />
 
       <Text style={styles.title}>Forgot Password</Text>
+
       <Text style={styles.subtitle}>
         Enter your email and we will send you a reset link.
       </Text>
@@ -80,44 +77,50 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingHorizontal: 24,
-    paddingTop: 72,
-    gap: 16,
+    paddingHorizontal: x(24),
+    paddingTop: y(72),
+    gap: y(16),
   },
+
   title: {
     color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: 30,
-    lineHeight: 39,
+    fontFamily: "Quiche",
+    fontSize: x(30),
+    lineHeight: y(39),
     textAlign: "center",
   },
+
   subtitle: {
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: 18,
-    lineHeight: 24,
+    fontSize: x(18),
+    lineHeight: y(24),
     textAlign: "center",
   },
+
   form: {
-    marginTop: 8,
+    marginTop: y(8),
   },
+
   error: {
     color: "#B00020",
     fontFamily: "Literata",
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: x(16),
+    lineHeight: y(22),
     textAlign: "center",
   },
+
   success: {
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: x(16),
+    lineHeight: y(22),
     textAlign: "center",
   },
+
   button: {
     alignItems: "center",
-    minHeight: 52,
+    minHeight: y(52),
     justifyContent: "center",
   },
 });

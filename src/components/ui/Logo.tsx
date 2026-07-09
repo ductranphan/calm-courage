@@ -6,7 +6,7 @@
  */
 
 import { StyleSheet, View } from "react-native";
-import LogoSvg from "../../assets/images/logo.svg";
+import LogoSvg from "../../../assets/images/logo.svg";
 
 type Props = {
   width?: number;

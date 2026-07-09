@@ -2,38 +2,32 @@
  * Email sign-up screen.
  *
  * Matches Figma Screen 2.0: Parent Sign-Up & Security.
- * Collects email, password, PIN, and terms agreement before account creation.
+ * Collects the parent's email, password, PIN, and terms agreement.
  */
 
+import { router } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
-import { router } from "expo-router";
 
-import AppButton from "@/components/AppButton";
-import BackButton from "@/components/BackButton";
-import PinInput from "@/components/PinInput";
-import TermsModal from "@/components/TermsModal";
-import { useAuth } from "@/contexts/AuthContext";
+import CheckIcon from "../../assets/icons/check.svg";
+import TermsModal from "@/components/modals/TermsModal";
+import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
+import FloatingTextInput from "@/components/ui/FloatingTextInput";
+import PinInput from "@/components/ui/PinInput";
 import { colors } from "@/constants/colors";
+import { useAuth } from "@/contexts/AuthContext";
 import { isValidPin } from "@/utils/pin";
-
-const FIGMA_WIDTH = 402;
-const { width } = Dimensions.get("window");
-
-const scale = width / FIGMA_WIDTH;
-const x = (value: number) => value * scale;
-const y = (value: number) => value * scale;
+import { x, y } from "@/utils/scaling";
 
 export default function EmailSignupScreen() {
   const { signUp, sendVerificationEmail } = useAuth();
@@ -87,7 +81,6 @@ export default function EmailSignupScreen() {
     <KeyboardAvoidingView
       style={styles.screen}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={0}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -103,37 +96,38 @@ export default function EmailSignupScreen() {
             Join us to start your child's{"\n"}confidence journey.
           </Text>
 
-          <TextInput
-            placeholder="Enter your email"
-            placeholderTextColor="#B8B3D6"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            style={[styles.input, styles.emailInput]}
-          />
+          <View style={styles.emailInput}>
+            <FloatingTextInput
+              label="Enter your email"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+            />
+          </View>
 
-          <TextInput
-            placeholder="Create password"
-            placeholderTextColor="#B8B3D6"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            style={[styles.input, styles.passwordInput]}
-          />
+          <View style={styles.passwordInput}>
+            <FloatingTextInput
+              label="Create password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          </View>
 
-          <TextInput
-            placeholder="Confirm password"
-            placeholderTextColor="#B8B3D6"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-            style={[styles.input, styles.confirmInput]}
-          />
+          <View style={styles.confirmInput}>
+            <FloatingTextInput
+              label="Confirm password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+            />
+          </View>
 
           <View style={styles.pinSection}>
             <Text style={styles.pinLabel}>Create PIN</Text>
+
             <View style={styles.pinRow}>
               <PinInput value={pin} onChange={setPin} />
             </View>
@@ -144,7 +138,9 @@ export default function EmailSignupScreen() {
               onPress={() => setTermsAccepted((current) => !current)}
               style={styles.checkbox}
             >
-              {termsAccepted ? <View style={styles.checkboxFill} /> : null}
+              {termsAccepted ? (
+                <CheckIcon width={x(14)} height={x(14)} />
+              ) : null}
             </Pressable>
 
             <Pressable onPress={() => setTermsModalVisible(true)}>
@@ -167,13 +163,13 @@ export default function EmailSignupScreen() {
               />
             )}
           </View>
+
+          <TermsModal
+            visible={termsModalVisible}
+            onClose={() => setTermsModalVisible(false)}
+          />
         </View>
       </ScrollView>
-
-      <TermsModal
-        visible={termsModalVisible}
-        onClose={() => setTermsModalVisible(false)}
-      />
     </KeyboardAvoidingView>
   );
 }
@@ -203,7 +199,7 @@ const styles = StyleSheet.create({
     width: x(331),
     height: y(39),
     color: colors.primary,
-    fontFamily: "Literata",
+    fontFamily: "Quiche",
     fontSize: x(30),
     lineHeight: y(39),
     textAlign: "center",
@@ -221,30 +217,21 @@ const styles = StyleSheet.create({
     lineHeight: y(24),
   },
 
-  input: {
+  emailInput: {
     position: "absolute",
     left: x(20),
-    width: x(362),
-    height: y(72),
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: x(20),
-    backgroundColor: colors.white,
-    paddingHorizontal: x(26),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-  },
-
-  emailInput: {
     top: y(262),
   },
 
   passwordInput: {
+    position: "absolute",
+    left: x(20),
     top: y(370),
   },
 
   confirmInput: {
+    position: "absolute",
+    left: x(20),
     top: y(478),
   },
 
@@ -265,6 +252,8 @@ const styles = StyleSheet.create({
 
   pinRow: {
     marginTop: y(9),
+    width: x(361),
+    alignItems: "center",
   },
 
   termsRow: {
@@ -286,15 +275,9 @@ const styles = StyleSheet.create({
     marginRight: x(8),
   },
 
-  checkboxFill: {
-    width: x(14),
-    height: x(14),
-    backgroundColor: colors.primary,
-  },
-
   termsText: {
     width: x(328),
-    height: y(48),
+    minHeight: y(48),
     color: colors.primary,
     fontFamily: "Literata",
     fontSize: x(20),

@@ -1,29 +1,37 @@
-import { useState } from "react";
-import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import { useState } from "react";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
-import AppButton from "@/components/AppButton";
-import BackButton from "@/components/BackButton";
+import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import { colors } from "@/constants/colors";
-
-import Lion from "../../assets/images/lion.svg";
-import Koala from "../../assets/images/koala.svg";
-import Panda from "../../assets/images/panda.svg";
-import Rabbit from "../../assets/images/rabbit.svg";
-
-const FIGMA_WIDTH = 402;
-const FIGMA_HEIGHT = 874;
-
-const { width, height } = Dimensions.get("window");
-
-const x = (value: number) => value * (width / FIGMA_WIDTH);
-const y = (value: number) => value * (height / FIGMA_HEIGHT);
+import { x, y } from "@/utils/scaling";
 
 const avatars = [
-  { id: "lion", Component: Lion, left: 20, top: 355, imageWidth: 171, imageHeight: 138 },
-  { id: "koala", Component: Koala, left: 211, top: 355, imageWidth: 171, imageHeight: 138 },
-  { id: "panda", Component: Panda, left: 20, top: 517, imageWidth: 171, imageHeight: 138 },
-  { id: "rabbit", Component: Rabbit, left: 211, top: 517, imageWidth: 171, imageHeight: 138 },
+  {
+    id: "lion",
+    source: require("../../assets/images/lion.png"),
+    left: 20,
+    top: 355,
+  },
+  {
+    id: "koala",
+    source: require("../../assets/images/koala.png"),
+    left: 211,
+    top: 355,
+  },
+  {
+    id: "panda",
+    source: require("../../assets/images/panda.png"),
+    left: 20,
+    top: 517,
+  },
+  {
+    id: "rabbit",
+    source: require("../../assets/images/rabbit.png"),
+    left: 211,
+    top: 517,
+  },
 ];
 
 export default function ChildProfileAvatarScreen() {
@@ -41,20 +49,26 @@ export default function ChildProfileAvatarScreen() {
         celebrate achievements.
       </Text>
 
-      {avatars.map(({ id, Component, left, top, imageWidth, imageHeight }) => (
+      {avatars.map(({ id, source, left, top }) => (
         <Pressable
           key={id}
           onPress={() => setSelectedAvatar(id)}
           style={[
-            styles.avatarCard,
+            styles.avatarShadow,
             {
               left: x(left),
               top: y(top),
             },
-            selectedAvatar === id && styles.selectedAvatarCard,
+            selectedAvatar === id && styles.selectedAvatarShadow,
           ]}
         >
-          <Component width={x(imageWidth)} height={y(imageHeight)} />
+          <View style={styles.avatarClip}>
+            <Image
+              source={source}
+              style={styles.avatarImage}
+              resizeMode="contain"
+            />
+          </View>
         </Pressable>
       ))}
 
@@ -82,7 +96,7 @@ const styles = StyleSheet.create({
     width: x(300),
     minHeight: y(90),
     color: colors.primary,
-    fontFamily: "Literata",
+    fontFamily: "Quiche",
     fontSize: x(30),
     lineHeight: y(39),
   },
@@ -99,26 +113,41 @@ const styles = StyleSheet.create({
     lineHeight: y(24),
   },
 
-  avatarCard: {
+  avatarShadow: {
     position: "absolute",
     width: x(171),
     height: y(138),
     borderRadius: x(20),
     backgroundColor: colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    borderWidth: 2,
-    borderColor: "transparent",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
+
+    shadowColor: "#000000",
+    shadowOffset: {
+      width: 0,
+      height: y(4),
+    },
     shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowRadius: x(4),
+    elevation: 8,
   },
 
-  selectedAvatarCard: {
+  selectedAvatarShadow: {
+    borderWidth: x(2),
     borderColor: colors.primary,
+  },
+
+  avatarClip: {
+    width: "100%",
+    height: "100%",
+    borderRadius: x(20),
+    backgroundColor: colors.white,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  avatarImage: {
+    width: "100%",
+    height: "100%",
   },
 
   buttonWrapper: {

@@ -1,20 +1,18 @@
-import { Dimensions, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
+import { useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 
-import AppButton from "@/components/AppButton";
-import BackButton from "@/components/BackButton";
-import Logo from "@/components/Logo";
+import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
+import FloatingTextInput from "@/components/ui/FloatingTextInput";
+import Logo from "@/components/ui/Logo";
 import { colors } from "@/constants/colors";
-
-const FIGMA_WIDTH = 402;
-const FIGMA_HEIGHT = 874;
-
-const { width, height } = Dimensions.get("window");
-
-const x = (value: number) => value * (width / FIGMA_WIDTH);
-const y = (value: number) => value * (height / FIGMA_HEIGHT);
+import { x, y } from "@/utils/scaling";
 
 export default function ChildProfileInfoScreen() {
+  const [childName, setChildName] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+
   return (
     <View style={styles.screen}>
       <BackButton fallback="/verify-email" />
@@ -27,17 +25,26 @@ export default function ChildProfileInfoScreen() {
         space and track progress.
       </Text>
 
-      <TextInput
-        placeholder="Child’s name or nickname"
-        placeholderTextColor={colors.muted}
-        style={[styles.input, styles.nameInput]}
-      />
+      <View style={styles.nameInput}>
+        <FloatingTextInput
+          label="Child’s name or nickname"
+          value={childName}
+          onChangeText={setChildName}
+          autoCapitalize="words"
+          autoCorrect={false}
+        />
+      </View>
 
-      <TextInput
-        placeholder="Child’s date of birth"
-        placeholderTextColor={colors.muted}
-        style={[styles.input, styles.birthInput]}
-      />
+      <View style={styles.birthInput}>
+        <FloatingTextInput
+          label="MM/DD/YYYY"
+          value={birthDate}
+          onChangeText={setBirthDate}
+          keyboardType="numbers-and-punctuation"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
 
       <View style={styles.buttonWrapper}>
         <AppButton
@@ -67,7 +74,7 @@ const styles = StyleSheet.create({
     width: x(260),
     minHeight: y(95),
     color: colors.primary,
-    fontFamily: "Literata",
+    fontFamily: "Quiche",
     fontSize: x(30),
     lineHeight: y(39),
   },
@@ -84,26 +91,15 @@ const styles = StyleSheet.create({
     lineHeight: y(24),
   },
 
-  input: {
+  nameInput: {
     position: "absolute",
     left: x(20),
-    width: x(362),
-    height: y(72),
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: x(20),
-    backgroundColor: colors.white,
-    paddingHorizontal: x(26),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-  },
-
-  nameInput: {
     top: y(355),
   },
 
   birthInput: {
+    position: "absolute",
+    left: x(20),
     top: y(461),
   },
 

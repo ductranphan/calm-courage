@@ -12,7 +12,6 @@ import {
 } from "react-native";
 
 import { colors } from "@/constants/colors";
-import { shadows } from "@/styles/shadows";
 
 const PIN_LENGTH = 4;
 
@@ -76,19 +75,22 @@ export default function PinInput({ value, onChange }: Props) {
 
 const styles = StyleSheet.create({
   row: {
+    width: "100%",
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 12,
   },
   box: {
-    flex: 1,
-    aspectRatio: 1,
-    maxWidth: 72,
-    borderRadius: 16,
+    width: 76,
+    height: 85,
+    borderRadius: 20,
     backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    ...shadows.soft,
+    borderWidth: 0,
+
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   input: {
     flex: 1,

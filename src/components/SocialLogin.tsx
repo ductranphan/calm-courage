@@ -1,1 +1,0 @@
-// Displays Google, Apple, and Facebook login buttons.
