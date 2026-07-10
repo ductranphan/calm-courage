@@ -1,7 +1,7 @@
 /**
- * Child profile service (stub).
+ * Child profile service.
  *
- * Future: CRUD for child profiles under users/{uid}/children/{childId}.
+ * CRUD for child profiles under users/{uid}/children/{childId}.
  */
 import {
   collection,
@@ -12,12 +12,20 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
+import type { AvatarId } from "@/constants/avatars";
 
 export type ChildProfile = {
   id: string;
   name: string;
-  avatarId?: string;
+  age: number;
+  avatarId: AvatarId;
   createdAt?: unknown;
+};
+
+export type CreateChildInput = {
+  name: string;
+  age: number;
+  avatarId: AvatarId;
 };
 
 export async function listChildren(parentUid: string): Promise<ChildProfile[]> {
@@ -33,11 +41,16 @@ export async function listChildren(parentUid: string): Promise<ChildProfile[]> {
 
 export async function createChild(
   parentUid: string,
-  childId: string,
-  data: Pick<ChildProfile, "name" | "avatarId">
-) {
-  await setDoc(doc(db, "users", parentUid, "children", childId), {
-    ...data,
+  data: CreateChildInput
+): Promise<string> {
+  const childRef = doc(collection(db, "users", parentUid, "children"));
+
+  await setDoc(childRef, {
+    name: data.name.trim(),
+    age: data.age,
+    avatarId: data.avatarId,
     createdAt: serverTimestamp(),
   });
+
+  return childRef.id;
 }

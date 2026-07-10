@@ -66,7 +66,7 @@ export default function VerifyEmailScreen() {
       const refreshedUser = await reloadUser();
 
       if (refreshedUser?.emailVerified) {
-        router.replace("/home");
+        router.replace("/add-child");
         return;
       }
 
