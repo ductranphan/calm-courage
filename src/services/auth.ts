@@ -79,6 +79,17 @@ export async function acceptTerms(userId: string) {
   }
 }
 
+export async function completeOnboarding(userId: string) {
+  try {
+    await updateDoc(doc(db, "users", userId), {
+      onboardingComplete: true,
+      onboardingCompletedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
 export async function signUp(email: string, password: string, pin: string) {
   try {
     const pinHash = await hashPin(pin);
