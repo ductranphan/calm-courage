@@ -11,7 +11,11 @@ import AppButton from "@/components/AppButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { avatars } from "@/constants/avatars";
 import { colors } from "@/constants/colors";
-import { type ChildProfile, listChildren } from "@/services/children";
+import {
+  ageFromBirthdate,
+  type ChildProfile,
+  listChildren,
+} from "@/services/children";
 
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
@@ -52,7 +56,8 @@ export default function HomeScreen() {
   }
 
   const child = children[0];
-  const avatar = avatars.find((option) => option.id === child?.avatarId);
+  const avatar = avatars.find((option) => option.id === child?.avatar);
+  const age = ageFromBirthdate(child?.birthdate);
 
   return (
     <View style={styles.container}>
@@ -63,9 +68,14 @@ export default function HomeScreen() {
           <Text style={styles.title}>Welcome</Text>
           {child ? (
             <>
-              <Text style={styles.avatar}>{avatar?.emoji ?? "🐻"}</Text>
+              <Text style={styles.avatar}>{avatar?.emoji ?? "🦁"}</Text>
               <Text style={styles.childName}>{child.name}</Text>
-              <Text style={styles.childMeta}>Age {child.age}</Text>
+              {age !== null ? (
+                <Text style={styles.childMeta}>Age {age}</Text>
+              ) : null}
+              <Text style={styles.childMeta}>
+                Stars {child.stars} · Gems {child.gems}
+              </Text>
             </>
           ) : null}
           <Text style={styles.subtitle}>{user?.email}</Text>

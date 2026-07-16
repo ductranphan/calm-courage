@@ -31,7 +31,7 @@ export default function AddChildScreen() {
   const { user } = useAuth();
   const [name, setName] = useState("");
   const [age, setAge] = useState("");
-  const [avatarId, setAvatarId] = useState<AvatarId>("bear");
+  const [avatar, setAvatar] = useState<AvatarId>("brave_lion");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -60,7 +60,7 @@ export default function AddChildScreen() {
       await createChild(user.uid, {
         name: trimmedName,
         age: parsedAge,
-        avatarId,
+        avatar,
       });
       await completeOnboarding(user.uid);
       router.replace("/home");
@@ -111,21 +111,21 @@ export default function AddChildScreen() {
 
           <Text style={styles.label}>Choose an avatar</Text>
           <View style={styles.avatarRow}>
-            {avatars.map((avatar) => {
-              const selected = avatar.id === avatarId;
+            {avatars.map((option) => {
+              const selected = option.id === avatar;
 
               return (
                 <Pressable
-                  key={avatar.id}
-                  onPress={() => setAvatarId(avatar.id)}
+                  key={option.id}
+                  onPress={() => setAvatar(option.id)}
                   style={[
                     styles.avatarOption,
-                    { backgroundColor: avatar.color },
+                    { backgroundColor: option.color },
                     selected && styles.avatarOptionSelected,
                   ]}
                 >
-                  <Text style={styles.avatarEmoji}>{avatar.emoji}</Text>
-                  <Text style={styles.avatarLabel}>{avatar.label}</Text>
+                  <Text style={styles.avatarEmoji}>{option.emoji}</Text>
+                  <Text style={styles.avatarLabel}>{option.label}</Text>
                 </Pressable>
               );
             })}
