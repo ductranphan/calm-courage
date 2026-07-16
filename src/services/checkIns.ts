@@ -1,7 +1,8 @@
 /**
- * Check-in service (stub).
+ * Check-in service.
  *
- * Future: daily emotion/check-in records under users/{uid}/children/{childId}/checkIns.
+ * Daily emotion check-ins under
+ * parents/{parentUid}/children/{childId}/checkIns/{checkInId}.
  */
 import {
   addDoc,
@@ -14,27 +15,45 @@ import {
 
 import { db } from "@/config/firebase";
 
+export type Emotion =
+  | "happy"
+  | "sad"
+  | "excited"
+  | "frustrated"
+  | "calm"
+  | "proud"
+  | "nervous";
+
 export type CheckIn = {
   id: string;
-  emotion: string;
-  scenarioId?: string;
-  notes?: string;
+  emotions: Emotion;
   createdAt?: unknown;
+  audioUrl?: string | null;
 };
 
-export async function listCheckIns(
-  parentUid: string,
-  childId: string
-): Promise<CheckIn[]> {
-  const checkInsRef = collection(
+export type CreateCheckInInput = {
+  emotions: Emotion;
+  audioUrl?: string | null;
+};
+
+function checkInsCollection(parentUid: string, childId: string) {
+  return collection(
     db,
-    "users",
+    "parents",
     parentUid,
     "children",
     childId,
     "checkIns"
   );
-  const snapshot = await getDocs(query(checkInsRef, orderBy("createdAt", "desc")));
+}
+
+export async function listCheckIns(
+  parentUid: string,
+  childId: string
+): Promise<CheckIn[]> {
+  const snapshot = await getDocs(
+    query(checkInsCollection(parentUid, childId), orderBy("createdAt", "desc"))
+  );
 
   return snapshot.docs.map((checkInDoc) => ({
     id: checkInDoc.id,
@@ -45,19 +64,11 @@ export async function listCheckIns(
 export async function createCheckIn(
   parentUid: string,
   childId: string,
-  data: Pick<CheckIn, "emotion" | "scenarioId" | "notes">
+  data: CreateCheckInInput
 ) {
-  const checkInsRef = collection(
-    db,
-    "users",
-    parentUid,
-    "children",
-    childId,
-    "checkIns"
-  );
-
-  await addDoc(checkInsRef, {
-    ...data,
+  await addDoc(checkInsCollection(parentUid, childId), {
+    emotions: data.emotions,
+    audioUrl: data.audioUrl ?? null,
     createdAt: serverTimestamp(),
   });
 }
