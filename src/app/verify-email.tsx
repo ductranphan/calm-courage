@@ -55,7 +55,7 @@ export default function VerifyEmailScreen() {
   }
 
   function handleVerified() {
-    router.replace("/child-profile-info");
+    router.replace("/add-child");
   }
 
   /*
@@ -72,7 +72,7 @@ export default function VerifyEmailScreen() {
       const refreshedUser = await reloadUser();
 
       if (refreshedUser?.emailVerified) {
-        router.replace("/child-profile-info");
+        router.replace("/add-child");
         return;
       }
 

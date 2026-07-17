@@ -30,7 +30,7 @@ import { isValidPin } from "@/utils/pin";
 import { x, y } from "@/utils/scaling";
 
 export default function EmailSignupScreen() {
-  const { signUp, sendVerificationEmail } = useAuth();
+  const { signUp, acceptTerms, sendVerificationEmail } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -67,7 +67,8 @@ export default function EmailSignupScreen() {
     setLoading(true);
 
     try {
-      await signUp(email, password, pin);
+      const user = await signUp(email, password, pin);
+      await acceptTerms(user.uid);
       await sendVerificationEmail();
       router.replace("/verify-email");
     } catch (err) {
