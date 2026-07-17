@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   setDoc,
   Timestamp,
+  updateDoc,
 } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
@@ -33,6 +34,13 @@ export type CreateChildInput = {
   /** Screen 3 collects age; stored as approximate birthdate in Firestore. */
   age: number;
   avatar: AvatarId;
+};
+
+export type UpdateChildInput = {
+  name?: string;
+  /** Screen 3 collects age; stored as approximate birthdate in Firestore. */
+  age?: number;
+  avatar?: AvatarId;
 };
 
 function childrenCollection(parentUid: string) {
@@ -79,7 +87,11 @@ function mapChildDoc(
     createdAt: data.createdAt,
     stars: typeof data.stars === "number" ? data.stars : 0,
     gems: typeof data.gems === "number" ? data.gems : 0,
-    badges: Array.isArray(data.badges) ? (data.badges as string[]) : [],
+    badges: Array.isArray(data.badges)
+      ? data.badges.filter(
+          (badge): badge is string => typeof badge === "string"
+        )
+      : [],
   };
 }
 
@@ -120,4 +132,50 @@ export async function createChild(
   });
 
   return childRef.id;
+}
+
+/**
+ * Update an existing child profile.
+ *
+ * Only the supplied fields are updated. Existing rewards and createdAt data
+ * remain unchanged.
+ */
+export async function updateChild(
+  parentUid: string,
+  childId: string,
+  data: UpdateChildInput
+): Promise<void> {
+  const updates: Record<string, unknown> = {};
+
+  if (data.name !== undefined) {
+    const trimmedName = data.name.trim();
+
+    if (!trimmedName) {
+      throw new Error("Child name cannot be empty.");
+    }
+
+    updates.name = trimmedName;
+  }
+
+  if (data.age !== undefined) {
+    if (
+      !Number.isInteger(data.age) ||
+      data.age < 1 ||
+      data.age > 17
+    ) {
+      throw new Error("Child age must be between 1 and 17.");
+    }
+
+    updates.birthdate = birthdateFromAge(data.age);
+  }
+
+  if (data.avatar !== undefined) {
+    updates.avatar = data.avatar;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return;
+  }
+
+  await updateDoc(childDoc(parentUid, childId), updates);
 }

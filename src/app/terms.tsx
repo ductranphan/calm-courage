@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 
-import AppButton from "@/components/AppButton";
+import AppButton from "@/components/ui/AppButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { colors } from "@/constants/colors";
 import { termsContent } from "@/constants/terms";

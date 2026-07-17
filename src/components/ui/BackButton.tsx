@@ -8,7 +8,7 @@
 import { Pressable, StyleSheet } from "react-native";
 import { router, type Href } from "expo-router";
 
-import BackIcon from "../../assets/icons/back.svg";
+import BackIcon from "../../../assets/icons/back.svg";
 
 type Props = {
   fallback?: Href;

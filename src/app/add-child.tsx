@@ -16,8 +16,8 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 
-import AppButton from "@/components/AppButton";
-import AppTextInput from "@/components/AppTextInput";
+import AppButton from "@/components/ui/AppButton";
+import AppTextInput from "@/components/ui/AppTextInput";
 import { useAuth } from "@/contexts/AuthContext";
 import { avatars, type AvatarId } from "@/constants/avatars";
 import { colors } from "@/constants/colors";

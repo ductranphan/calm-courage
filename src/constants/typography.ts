@@ -1,13 +1,13 @@
 // Shared font sizes and text styles.
 export const typography = {
   title: {
-    fontFamily: "Literata",
-    fontSize: 26,
+    fontFamily: "Quiche",
+    fontSize: 30,
     fontWeight: "400" as const,
   },
 
   heading: {
-    fontFamily: "Literata",
+    fontFamily: "Quiche",
     fontSize: 22,
     fontWeight: "400" as const,
   },

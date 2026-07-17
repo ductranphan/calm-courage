@@ -7,24 +7,15 @@
  * - Fixed page indicators
  * - Navigation buttons for account creation and login
  */
-import { Dimensions, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
+import { StyleSheet, View } from "react-native";
 
-import AppButton from "@/components/AppButton";
 import OnboardingPager from "@/components/onboarding/OnboardingPager";
+import AppButton from "@/components/ui/AppButton";
 import { colors } from "@/constants/colors";
+import { x, y } from "@/utils/scaling";
 
 import LogoSvg from "../../assets/images/logo.svg";
-
-// Original Figma frame size. All fixed positions are scaled from this frame.
-const FIGMA_WIDTH = 402;
-const FIGMA_HEIGHT = 874;
-
-const { width, height } = Dimensions.get("window");
-
-// Converts Figma X/Y values into device-specific values.
-const x = (value: number) => value * (width / FIGMA_WIDTH);
-const y = (value: number) => value * (height / FIGMA_HEIGHT);
 
 export default function OnboardingScreen() {
   return (
@@ -36,17 +27,20 @@ export default function OnboardingScreen() {
         </View>
       </View>
 
-      {/* Swipeable/auto-playing onboarding text */}
+      {/* Swipeable onboarding text */}
       <OnboardingPager />
 
-      {/* Primary navigation actions */}
+      {/* Primary navigation buttons */}
       <View style={styles.buttons}>
         <AppButton
           title="Get Started"
           onPress={() => router.push("/create-account")}
         />
 
-        <AppButton title="Log In" onPress={() => router.push("/login")} />
+        <AppButton
+          title="Log In"
+          onPress={() => router.push("/login")}
+        />
       </View>
     </View>
   );
@@ -68,11 +62,11 @@ const styles = StyleSheet.create({
   logoShadow: {
     shadowColor: "#000",
     shadowOffset: {
-      width: 10,
-      height: 10,
+      width: x(10),
+      height: y(10),
     },
     shadowOpacity: 0.25,
-    shadowRadius: 10,
+    shadowRadius: x(10),
     elevation: 10,
   },
 
