@@ -2,6 +2,7 @@
  * Authentication service.
  *
  * Wraps Firebase Auth and creates a parent profile in Firestore on sign-up.
+ * Parent docs live at parents/{parentUid} (same ID as Auth uid).
  */
 import {
   createUserWithEmailAndPassword,
@@ -16,6 +17,20 @@ import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firest
 
 import { auth, db } from "@/config/firebase";
 import { hashPin } from "@/utils/pin";
+
+export type ParentSubscription = "trial" | "monthly" | "yearly";
+
+export type ParentProfile = {
+  email: string;
+  displayName: string | null;
+  pinHash: string;
+  subscription: ParentSubscription;
+  createdAt?: unknown;
+  termsAccepted: boolean;
+  termsAcceptedAt?: unknown;
+  onboardingComplete: boolean;
+  onboardingCompletedAt?: unknown;
+};
 
 export function mapAuthError(code: string): string {
   switch (code) {
@@ -53,24 +68,42 @@ function getErrorMessage(error: unknown): string {
   return "Something went wrong. Please try again.";
 }
 
-async function createUserProfile(user: User, pinHash: string) {
-  await setDoc(doc(db, "users", user.uid), {
+function parentDoc(parentUid: string) {
+  return doc(db, "parents", parentUid);
+}
+
+async function createParentProfile(user: User, pinHash: string) {
+  const profile: ParentProfile = {
     email: user.email ?? "",
+    displayName: null,
     pinHash,
-    createdAt: serverTimestamp(),
-    onboardingComplete: false,
+    subscription: "trial",
     termsAccepted: false,
+    onboardingComplete: false,
+  };
+
+  await setDoc(parentDoc(user.uid), {
+    ...profile,
+    createdAt: serverTimestamp(),
+    termsAcceptedAt: null,
   });
 }
 
-export async function getUserProfile(userId: string) {
-  const snapshot = await getDoc(doc(db, "users", userId));
-  return snapshot.exists() ? snapshot.data() : null;
+export async function getParentProfile(
+  parentUid: string
+): Promise<ParentProfile | null> {
+  const snapshot = await getDoc(parentDoc(parentUid));
+  return snapshot.exists() ? (snapshot.data() as ParentProfile) : null;
 }
 
-export async function acceptTerms(userId: string) {
+/** @deprecated Prefer getParentProfile — kept as an alias for existing imports. */
+export async function getUserProfile(parentUid: string) {
+  return getParentProfile(parentUid);
+}
+
+export async function acceptTerms(parentUid: string) {
   try {
-    await updateDoc(doc(db, "users", userId), {
+    await updateDoc(parentDoc(parentUid), {
       termsAccepted: true,
       termsAcceptedAt: serverTimestamp(),
     });
@@ -79,9 +112,9 @@ export async function acceptTerms(userId: string) {
   }
 }
 
-export async function completeOnboarding(userId: string) {
+export async function completeOnboarding(parentUid: string) {
   try {
-    await updateDoc(doc(db, "users", userId), {
+    await updateDoc(parentDoc(parentUid), {
       onboardingComplete: true,
       onboardingCompletedAt: serverTimestamp(),
     });
@@ -98,7 +131,7 @@ export async function signUp(email: string, password: string, pin: string) {
       email.trim(),
       password
     );
-    await createUserProfile(credential.user, pinHash);
+    await createParentProfile(credential.user, pinHash);
     return credential.user;
   } catch (error) {
     throw new Error(getErrorMessage(error));

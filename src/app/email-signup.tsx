@@ -30,7 +30,11 @@ import { isValidPin } from "@/utils/pin";
 import { x, y } from "@/utils/scaling";
 
 export default function EmailSignupScreen() {
+<<<<<<< HEAD
   const { signUp, acceptTerms, sendVerificationEmail } = useAuth();
+=======
+  const { signUp, sendVerificationEmail, acceptTerms } = useAuth();
+>>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -67,8 +71,13 @@ export default function EmailSignupScreen() {
     setLoading(true);
 
     try {
+<<<<<<< HEAD
       const user = await signUp(email, password, pin);
       await acceptTerms(user.uid);
+=======
+      const createdUser = await signUp(email, password, pin);
+      await acceptTerms(createdUser.uid);
+>>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
       await sendVerificationEmail();
       router.replace("/verify-email");
     } catch (err) {
@@ -94,7 +103,7 @@ export default function EmailSignupScreen() {
           <Text style={styles.title}>Create Parent Account</Text>
 
           <Text style={styles.subtitle}>
-            Join us to start your child's{"\n"}confidence journey.
+            Join us to start your child{"'"}s{"\n"}confidence journey.
           </Text>
 
           <View style={styles.emailInput}>

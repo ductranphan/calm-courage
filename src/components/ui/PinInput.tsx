@@ -21,7 +21,7 @@ type Props = {
 };
 
 export default function PinInput({ value, onChange }: Props) {
-  const inputRefs = useRef<Array<TextInput | null>>([]);
+  const inputRefs = useRef<(TextInput | null)[]>([]);
   const digits = Array.from({ length: PIN_LENGTH }, (_, index) => value[index] ?? "");
 
   function updateDigit(index: number, digit: string) {
