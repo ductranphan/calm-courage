@@ -2,10 +2,7 @@
  * Terms of Service and Privacy Policy overlay.
  *
  * Figma-style grey overlay displayed inside the email sign-up screen.
-<<<<<<< HEAD
  * The grey card stays fixed, while the terms text can scroll if needed.
-=======
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
  */
 
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -39,16 +36,6 @@ export default function TermsModal({ visible, onClose }: Props) {
 
         <Text style={styles.text}>
           Welcome to Calm Courage Co.{"\n"}
-<<<<<<< HEAD
-          Please review how we protect your family's data:{"\n\n"}
-
-          1. Data Protection & Privacy{"\n"}
-          • We do not share your child's emotional data or drawings with any third parties.{"\n"}
-          • All voice recordings and canvas activities are encrypted and securely stored.{"\n\n"}
-
-          2. Parental Control{"\n"}
-          • Parents maintain full access to view, edit, or delete their child's profile and progress reports.{"\n\n"}
-=======
           
           Please review how we protect your family{"'"}s data:{"\n\n"}
 
@@ -58,7 +45,6 @@ export default function TermsModal({ visible, onClose }: Props) {
 
           2. Parental Control{"\n"}
           • Parents maintain full access to view, edit, or delete their child{"'"}s profile and progress reports.{"\n\n"}
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
 
           3. Subscription & Billing{"\n"}
           • Phase 1 features include free trials, followed by our monthly membership plan ($7.99/mo).{"\n"}

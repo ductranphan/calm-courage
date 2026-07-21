@@ -1,38 +1,10 @@
 /**
-<<<<<<< HEAD
- * Temporary switch-to-child screen.
- *
- * Placeholder screen shown after the child profile setup flow.
- * This will later be replaced by the real child mode/home transition.
- */
-import { router } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
-
-import AppButton from "@/components/ui/AppButton";
-import BackButton from "@/components/ui/BackButton";
-import { colors } from "@/constants/colors";
-import { x, y } from "@/utils/scaling";
-
-export default function SwitchToChildScreen() {
-  return (
-    <View style={styles.screen}>
-      <BackButton fallback="/child-profile-avatar" />
-
-      <Text style={styles.title}>Switch to Child</Text>
-
-      <Text style={styles.subtitle}>
-        This screen is temporary so you can test the profile setup flow.
-      </Text>
-
-      <AppButton
-        title="Continue to Home"
-        onPress={() => router.replace("/home")}
-      />
-    </View>
-=======
  * Switch to Child Mode screen.
  *
  * Shows the parent that it is time to pass the device to the child.
+ * Matches Figma Screen 4.0.
+ *
+ * The child name is loaded from Firebase instead of being hardcoded.
  */
 
 import { router, useLocalSearchParams } from "expo-router";
@@ -93,14 +65,15 @@ export default function SwitchToChildScreen() {
           setName(selectedChild.name);
         }
       } catch {
-        // Keep the name empty.
+        // Keep empty name instead of showing the wrong child name.
+      } finally {
         if (stillMounted) {
           setLoading(false);
         }
       }
     }
 
-    void loadChildName();
+    loadChildName();
 
     return () => {
       stillMounted = false;
@@ -166,7 +139,6 @@ export default function SwitchToChildScreen() {
         )}
       </View>
     </ScrollView>
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
   );
 }
 
@@ -174,15 +146,6 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
-<<<<<<< HEAD
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: x(24),
-    gap: y(24),
-  },
-
-  title: {
-=======
   },
 
   scrollContent: {
@@ -207,22 +170,10 @@ const styles = StyleSheet.create({
     top: y(123),
     width: x(362),
     height: y(78),
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
     color: colors.primary,
     fontFamily: "Quiche",
     fontSize: x(30),
     lineHeight: y(39),
-<<<<<<< HEAD
-    textAlign: "center",
-  },
-
-  subtitle: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(26),
-    textAlign: "center",
-=======
   },
 
   subtitle: {
@@ -284,6 +235,5 @@ const styles = StyleSheet.create({
     lineHeight: y(24),
     textAlign: "center",
     textDecorationLine: "underline",
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
   },
 });

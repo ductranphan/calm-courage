@@ -1,8 +1,7 @@
 /**
- * Check-in service.
+ * Check-in service (stub).
  *
- * Daily emotion check-ins under
- * parents/{parentUid}/children/{childId}/checkIns/{checkInId}.
+ * Future: daily emotion/check-in records under parents/{uid}/children/{childId}/checkIns.
  */
 import {
   addDoc,
@@ -15,29 +14,19 @@ import {
 
 import { db } from "@/config/firebase";
 
-export type Emotion =
-  | "happy"
-  | "sad"
-  | "excited"
-  | "frustrated"
-  | "calm"
-  | "proud"
-  | "nervous";
-
 export type CheckIn = {
   id: string;
-  emotions: Emotion;
+  emotion: string;
+  scenarioId?: string;
+  notes?: string;
   createdAt?: unknown;
-  audioUrl?: string | null;
 };
 
-export type CreateCheckInInput = {
-  emotions: Emotion;
-  audioUrl?: string | null;
-};
-
-function checkInsCollection(parentUid: string, childId: string) {
-  return collection(
+export async function listCheckIns(
+  parentUid: string,
+  childId: string
+): Promise<CheckIn[]> {
+  const checkInsRef = collection(
     db,
     "parents",
     parentUid,
@@ -45,15 +34,7 @@ function checkInsCollection(parentUid: string, childId: string) {
     childId,
     "checkIns"
   );
-}
-
-export async function listCheckIns(
-  parentUid: string,
-  childId: string
-): Promise<CheckIn[]> {
-  const snapshot = await getDocs(
-    query(checkInsCollection(parentUid, childId), orderBy("createdAt", "desc"))
-  );
+  const snapshot = await getDocs(query(checkInsRef, orderBy("createdAt", "desc")));
 
   return snapshot.docs.map((checkInDoc) => ({
     id: checkInDoc.id,
@@ -64,11 +45,19 @@ export async function listCheckIns(
 export async function createCheckIn(
   parentUid: string,
   childId: string,
-  data: CreateCheckInInput
+  data: Pick<CheckIn, "emotion" | "scenarioId" | "notes">
 ) {
-  await addDoc(checkInsCollection(parentUid, childId), {
-    emotions: data.emotions,
-    audioUrl: data.audioUrl ?? null,
+  const checkInsRef = collection(
+    db,
+    "parents",
+    parentUid,
+    "children",
+    childId,
+    "checkIns"
+  );
+
+  await addDoc(checkInsRef, {
+    ...data,
     createdAt: serverTimestamp(),
   });
 }

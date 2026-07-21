@@ -1,8 +1,10 @@
 /**
  * Emotion options used across the app.
  *
- * The backend saves the emotion ID, for example:
- * "happy", "nervous", or "sad".
+ * The backend saves only the emotion id, for example:
+ * "happy", "nervous", "sad".
+ *
+ * The frontend uses the id to show the correct label and image.
  */
 
 import type { ImageSourcePropType } from "react-native";
@@ -89,12 +91,10 @@ export function normalizeEmotionId(value: unknown): EmotionId {
 
 export function formatEmotionLabel(value: unknown): string {
   const emotionId = normalizeEmotionId(value);
-
   return emotionLabels[emotionId];
 }
 
 export function getEmotionImage(value: unknown): ImageSourcePropType {
   const emotionId = normalizeEmotionId(value);
-
   return emotionImages[emotionId];
 }

@@ -1,30 +1,18 @@
 /**
- * Parent dashboard screen.
+ * Parent Dashboard screen.
  *
- * Connected to the backend where possible:
- * - child name
- * - child avatar
- * - latest check-in mood
+ * Connected to backend where possible:
+ * - child name from Firebase
+ * - avatarId from Firebase through hook
+ * - today's mood from latest check-in
  *
- * Progress remains temporary until the backend stores activity data.
+ * Progress is temporary until backend stores activity/progress data.
  */
-<<<<<<< HEAD
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
-import AppButton from "@/components/ui/AppButton";
-import { avatars } from "@/constants/avatars";
-import { colors } from "@/constants/colors";
-import { useAuth } from "@/contexts/AuthContext";
-import { type ChildProfile, listChildren } from "@/services/children";
-=======
-
-import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import {
-  ActivityIndicator,
   Image,
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -38,72 +26,16 @@ import ProgressBar from "@/components/dashboard/ProgressBar";
 import { colors } from "@/constants/colors";
 import { getEmotionImage } from "@/constants/emotions";
 import { useParentDashboardData } from "@/hooks/useParentDashboardData";
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
 import { x, y } from "@/utils/scaling";
+import { router, useLocalSearchParams } from "expo-router";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
 import AudioOnIcon from "../../assets/icons/audio-on.svg";
 
 export default function ParentDashboardScreen() {
-  const { mood } = useLocalSearchParams<{ mood?: string }>();
-
-  const dashboardData = useParentDashboardData({
-    moodOverride: mood,
-  });
-
-  const [audioEnabled, setAudioEnabled] = useState(false);
-
-  if (dashboardData.loading) {
-    return (
-      <View style={styles.stateScreen}>
-        <ActivityIndicator size="large" color={colors.primary} />
-
-        <Text style={styles.stateText}>
-          Loading your child&apos;s dashboard...
-        </Text>
-      </View>
-    );
-  }
-
-  if (dashboardData.error) {
-    return (
-      <View style={styles.stateScreen}>
-        <Text style={styles.stateTitle}>
-          Unable to load the dashboard
-        </Text>
-
-        <Text style={styles.stateText}>
-          Please check your connection and try again.
-        </Text>
-      </View>
-    );
-  }
-
-  if (
-    dashboardData.empty ||
-    !dashboardData.childId ||
-    !dashboardData.childName ||
-    !dashboardData.avatarId
-  ) {
-    return (
-      <View style={styles.stateScreen}>
-        <Text style={styles.stateTitle}>No child profile yet</Text>
-
-        <Text style={styles.stateText}>
-          Create a child profile to view their emotional progress.
-        </Text>
-
-        <Pressable
-          style={styles.createProfileButton}
-          onPress={() => router.push("/child-profile-info")}
-        >
-          <Text style={styles.createProfileButtonText}>
-            Create Child Profile
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
+const { mood } = useLocalSearchParams<{ mood?: string }>();
+const dashboardData = useParentDashboardData({ moodOverride: mood });
+const [audioEnabled, setAudioEnabled] = useState(false);
 
   return (
     <ScrollView
@@ -115,10 +47,6 @@ export default function ParentDashboardScreen() {
         <Pressable
           style={styles.audioButton}
           onPress={() => setAudioEnabled((current) => !current)}
-          accessibilityRole="button"
-          accessibilityLabel={
-            audioEnabled ? "Turn audio off" : "Turn audio on"
-          }
         >
           {audioEnabled ? (
             <AudioOnIcon width={x(35)} height={x(35)} />
@@ -137,32 +65,23 @@ export default function ParentDashboardScreen() {
           </Text>
 
           <Text style={styles.moodText}>
-            {dashboardData.moodLabel
-              ? `Today's Mood: "${dashboardData.moodLabel}"`
-              : "Today's Mood: No check-in yet"}
+            Today&apos;s Mood: &quot;{dashboardData.moodLabel}&quot;
           </Text>
         </View>
 
         <View style={styles.moodImageWrapper}>
-          {dashboardData.todaysMood ? (
-            <Image
-              source={getEmotionImage(dashboardData.todaysMood)}
-              style={styles.moodImage}
-              resizeMode="contain"
-              fadeDuration={0}
-            />
-          ) : (
-            <Text style={styles.noMoodText}>No check-in yet</Text>
-          )}
+          <Image
+            source={getEmotionImage(dashboardData.todaysMood)}
+            style={styles.moodImage}
+            resizeMode="contain"
+          />
         </View>
 
         <View style={styles.progressBarWrapper}>
           <ProgressBar progress={dashboardData.progressPercent} />
         </View>
 
-        <Text style={styles.phaseText}>
-          {dashboardData.progressLabel}
-        </Text>
+        <Text style={styles.phaseText}>{dashboardData.progressLabel}</Text>
 
         <Text style={styles.activitiesText}>
           {dashboardData.activitiesLabel}
@@ -170,16 +89,14 @@ export default function ParentDashboardScreen() {
 
         <View style={styles.dividerMiddle} />
 
-        <Text style={styles.promptTitle}>
-          Evening Conversation Prompt
-        </Text>
+        <Text style={styles.promptTitle}>Evening Conversation Prompt</Text>
 
         <View style={styles.promptCardWrapper}>
           <InsightPromptCard
             childName={dashboardData.childName}
-            moodLabel={dashboardData.moodLabel ?? "No check-in yet"}
+            moodLabel={dashboardData.moodLabel}
             onViewMore={() => {
-              // This functionality will be added later.
+              // Later: router.push("/parent-insights");
             }}
           />
         </View>
@@ -189,18 +106,15 @@ export default function ParentDashboardScreen() {
             router.push({
               pathname: "/switch-to-child",
               params: {
-                childId: dashboardData.childId,
-                childName: dashboardData.childName,
-                avatarId: dashboardData.avatarId,
+              childId: dashboardData.childId ?? "",
+              childName: dashboardData.childName,
+              avatarId: dashboardData.avatarId,
               },
             })
           }
           style={styles.switchWrapper}
-          accessibilityRole="button"
         >
-          <Text style={styles.switchText}>
-            Switch to Child Mode
-          </Text>
+          <Text style={styles.switchText}>Switch to Child Mode</Text>
         </Pressable>
 
         <View style={styles.bottomNavWrapper}>
@@ -229,56 +143,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
-  stateScreen: {
-    flex: 1,
-    backgroundColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-<<<<<<< HEAD
-    gap: y(16),
-    backgroundColor: colors.background,
-    paddingHorizontal: x(24),
-  },
-
-=======
-    paddingHorizontal: x(30),
-  },
-
-  stateTitle: {
-    color: colors.primary,
-    fontFamily: "Quiche",
-    fontSize: x(28),
-    lineHeight: y(36),
-    textAlign: "center",
-  },
-
-  stateText: {
-    marginTop: y(18),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(18),
-    lineHeight: y(26),
-    textAlign: "center",
-  },
-
-  createProfileButton: {
-    marginTop: y(30),
-    minWidth: x(210),
-    height: y(52),
-    paddingHorizontal: x(24),
-    borderRadius: x(20),
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  createProfileButtonText: {
-    color: colors.white,
-    fontFamily: "Literata",
-    fontSize: x(18),
-    lineHeight: y(24),
-  },
-
   audioButton: {
     position: "absolute",
     left: x(347),
@@ -289,7 +153,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
   title: {
     position: "absolute",
     left: x(20),
@@ -317,45 +180,13 @@ const styles = StyleSheet.create({
     left: x(20),
     top: y(208),
     width: x(362),
-    minHeight: y(61),
+    height: y(61),
     alignItems: "center",
   },
 
   progressReportTitle: {
     width: x(362),
     color: colors.primary,
-<<<<<<< HEAD
-    fontFamily: "Quiche",
-    fontSize: x(28),
-    lineHeight: y(36),
-  },
-
-  avatar: {
-    fontSize: x(48),
-    lineHeight: y(56),
-  },
-
-  childName: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(24),
-    fontWeight: "700",
-  },
-
-  childMeta: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(16),
-    marginBottom: y(4),
-  },
-
-  subtitle: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(18),
-    lineHeight: y(24),
-    marginBottom: y(8),
-=======
     fontFamily: "Literata",
     fontSize: x(20),
     lineHeight: y(35),
@@ -386,15 +217,6 @@ const styles = StyleSheet.create({
   moodImage: {
     width: x(60),
     height: x(60),
-  },
-
-  noMoodText: {
-    width: x(100),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(11),
-    lineHeight: y(16),
-    textAlign: "center",
   },
 
   progressBarWrapper: {
@@ -483,6 +305,5 @@ const styles = StyleSheet.create({
     top: y(783),
     width: x(362),
     height: y(72),
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
   },
 });

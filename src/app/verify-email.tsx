@@ -3,14 +3,12 @@
  *
  * Matches Figma Screen 2.1: Email Verification Gateway.
  *
- * Development note:
- * The "I've Verified My Email" button temporarily skips the real Firebase
- * verification check so the rest of the app can be developed.
- * Replace handleVerified() with the Firebase version before release.
+ * The user can continue only after Firebase confirms that
+ * the email address has been verified.
  */
 
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -22,97 +20,137 @@ import {
 
 import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
-<<<<<<< HEAD
-=======
 import ErrorMessage from "@/components/ui/ErrorMessage";
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
 import Logo from "@/components/ui/Logo";
 import { colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  reloadCurrentUser,
+  sendVerificationEmail,
+} from "@/services/auth";
 import { x, y } from "@/utils/scaling";
 
 import EmailIcon from "../../assets/images/email.svg";
 
+type LoadingAction = "verify" | "resend" | null;
+
 export default function VerifyEmailScreen() {
-  const { sendVerificationEmail } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] =
+    useState<LoadingAction>(null);
+
+  const loading = loadingAction !== null;
+
+  useEffect(() => {
+    /*
+     * The verification page requires an authenticated Firebase user.
+     * Redirect to login if the session no longer exists.
+     */
+    if (!authLoading && !user) {
+      router.replace("/login");
+    }
+  }, [authLoading, user]);
 
   async function handleResend() {
+    if (loading) {
+      return;
+    }
+
     setError(null);
     setMessage(null);
-    setLoading(true);
+    setLoadingAction("resend");
 
     try {
       await sendVerificationEmail();
-      setMessage("Verification email sent.");
-<<<<<<< HEAD
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to send verification email.",
+
+      setMessage(
+        "A new verification email has been sent. Please check your inbox.",
       );
-=======
-    } catch {
-      setError("Unable to send verification email.");
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
+    } catch (resendError) {
+      console.error(
+        "Unable to resend verification email:",
+        resendError,
+      );
+
+      setError(
+        resendError instanceof Error
+          ? resendError.message
+          : "Unable to send the verification email.",
+      );
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   }
 
-  function handleVerified() {
-<<<<<<< HEAD
-    router.replace("/add-child");
-=======
-    router.replace("/child-profile-info");
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
-  }
-
-  /*
-  Real Firebase version to use before release:
-
-  const { reloadUser } = useAuth();
-
   async function handleVerified() {
+    if (loading) {
+      return;
+    }
+
     setError(null);
     setMessage(null);
-    setLoading(true);
+    setLoadingAction("verify");
 
     try {
-      const refreshedUser = await reloadUser();
+      /*
+       * Reload the Firebase user so emailVerified contains
+       * the latest value from Firebase Authentication.
+       */
+      const refreshedUser = await reloadCurrentUser();
 
-      if (refreshedUser?.emailVerified) {
-        router.replace("/child-profile-info");
+      if (!refreshedUser) {
+        setError(
+          "Your session could not be found. Please sign in again.",
+        );
         return;
       }
 
-      setMessage("Email not verified yet. Check your inbox and try again.");
-<<<<<<< HEAD
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to refresh verification status.",
+      if (!refreshedUser.emailVerified) {
+        setMessage(
+          "Your email has not been verified yet. Open the link in your inbox, then try again.",
+        );
+        return;
+      }
+
+      /*
+       * New account flow:
+       *
+       * Verify email
+       * → Who is joining the journey?
+       * → Choose a buddy
+       */
+      router.replace("/child-profile-info");
+    } catch (verificationError) {
+      console.error(
+        "Unable to refresh email verification status:",
+        verificationError,
       );
-=======
-    } catch {
-      setError("Unable to refresh verification status.");
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
+
+      setError(
+        verificationError instanceof Error
+          ? verificationError.message
+          : "Unable to check your verification status.",
+      );
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   }
-  */
+
+  if (authLoading) {
+    return (
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator
+          size="large"
+          color={colors.primary}
+        />
+      </View>
+    );
+  }
 
   return (
-<<<<<<< HEAD
-    <View style={styles.screen}>
-      <BackButton fallback="/email-signup" />
-=======
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.scrollContent}
@@ -120,13 +158,17 @@ export default function VerifyEmailScreen() {
     >
       <View style={styles.figmaFrame}>
         <BackButton fallback="/email-signup" />
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
 
         <View style={styles.emailIcon}>
-          <EmailIcon width={x(76)} height={y(57)} />
+          <EmailIcon
+            width={x(76)}
+            height={y(57)}
+          />
         </View>
 
-        <Text style={styles.title}>Verify Your Email</Text>
+        <Text style={styles.title}>
+          Verify Your Email
+        </Text>
 
         <Text style={styles.body}>
           We&apos;ve sent a verification link to your{"\n"}
@@ -136,8 +178,10 @@ export default function VerifyEmailScreen() {
         </Text>
 
         <View style={styles.buttonWrapper}>
-          {loading ? (
-            <ActivityIndicator color={colors.primary} />
+          {loadingAction === "verify" ? (
+            <ActivityIndicator
+              color={colors.primary}
+            />
           ) : (
             <AppButton
               title="I’ve Verified My Email"
@@ -147,36 +191,61 @@ export default function VerifyEmailScreen() {
           )}
         </View>
 
-<<<<<<< HEAD
-      <Pressable onPress={handleResend} style={styles.resendWrapper}>
-        <Text style={styles.resendText}>
-          Didn&apos;t receive the email?{"\n"}
-          Resend link
-        </Text>
-      </Pressable>
+        <Pressable
+          onPress={handleResend}
+          disabled={loading}
+          style={[
+            styles.resendWrapper,
+            loading && styles.disabledAction,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Resend verification email"
+          accessibilityState={{
+            disabled: loading,
+          }}
+        >
+          <Text style={styles.resendLine}>
+            Didn&apos;t receive the email?
+          </Text>
 
-      {message ? <Text style={styles.message}>{message}</Text> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+          {loadingAction === "resend" ? (
+            <View style={styles.resendLoadingRow}>
+              <ActivityIndicator
+                size="small"
+                color={colors.primary}
+              />
 
-      <View style={styles.logoWrapper}>
-        <Logo width={x(168)} height={y(62)} shadow />
-      </View>
-    </View>
-=======
-        <Pressable onPress={handleResend} style={styles.resendWrapper}>
-          <Text style={styles.resendLine}>Didn&apos;t receive the email?</Text>
-          <Text style={styles.resendLine}>Resend link</Text>
+              <Text style={styles.resendStatus}>
+                Sending...
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.resendLine}>
+              Resend link
+            </Text>
+          )}
         </Pressable>
 
-        {message ? <Text style={styles.message}>{message}</Text> : null}
-        <ErrorMessage message={error} style={styles.error} />
+        {message ? (
+          <Text style={styles.message}>
+            {message}
+          </Text>
+        ) : null}
+
+        <ErrorMessage
+          message={error}
+          style={styles.error}
+        />
 
         <View style={styles.logoWrapper}>
-          <Logo width={x(168)} height={y(62)} shadow />
+          <Logo
+            width={x(168)}
+            height={y(62)}
+            shadow
+          />
         </View>
       </View>
     </ScrollView>
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
   );
 }
 
@@ -184,6 +253,13 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+
+  loadingScreen: {
+    flex: 1,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   scrollContent: {
@@ -226,7 +302,7 @@ const styles = StyleSheet.create({
     left: x(20),
     top: y(348),
     width: x(362),
-    height: y(110),
+    minHeight: y(110),
     color: colors.primary,
     fontFamily: "Literata",
     fontSize: x(20),
@@ -259,6 +335,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  disabledAction: {
+    opacity: 0.6,
+  },
+
   resendLine: {
     color: colors.primary,
     fontFamily: "Literata",
@@ -268,41 +348,38 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
 
+  resendLoadingRow: {
+    minHeight: y(30),
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  resendStatus: {
+    marginLeft: x(8),
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(17),
+    lineHeight: y(24),
+  },
+
   message: {
     position: "absolute",
     left: x(20),
-<<<<<<< HEAD
-    top: y(710),
-=======
     top: y(704),
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
     width: x(362),
     color: "#28B775",
     fontFamily: "Literata",
-<<<<<<< HEAD
-    fontSize: x(14),
-    lineHeight: y(18),
-=======
     fontSize: x(16),
     lineHeight: y(22),
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
     textAlign: "center",
   },
 
   error: {
     position: "absolute",
     left: x(20),
-<<<<<<< HEAD
-    top: y(710),
-    width: x(362),
-    color: "#B00020",
-    fontFamily: "Literata",
-    fontSize: x(14),
-    lineHeight: y(18),
-    textAlign: "center",
-=======
     top: y(704),
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
+    width: x(362),
   },
 
   logoWrapper: {

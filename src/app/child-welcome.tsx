@@ -1,8 +1,8 @@
 /**
  * Child welcome screen.
  *
- * Shows the selected child's name and avatar.
- * It avoids displaying incorrect placeholder child information while loading.
+ * Shows the selected child name and avatar.
+ * It avoids showing Emma/panda before Firebase finishes loading.
  */
 
 import { router, useLocalSearchParams } from "expo-router";
@@ -55,7 +55,11 @@ function formatScore(value: number) {
 export default function ChildWelcomeScreen() {
   const { user } = useAuth();
 
-  const { childId, childName, avatarId } = useLocalSearchParams<{
+  const {
+    childId,
+    childName,
+    avatarId,
+  } = useLocalSearchParams<{
     childId?: string;
     childName?: string;
     avatarId?: string;
@@ -81,13 +85,16 @@ export default function ChildWelcomeScreen() {
         return;
       }
 
+      /**
+       * If route params already include the correct child,
+       * render immediately and avoid the Emma/panda flash.
+       */
       if (childName && avatarId) {
         setChildData({
           childId: childId || null,
           childName,
           avatarId: normalizeAvatarId(avatarId),
         });
-
         setLoading(false);
         return;
       }
@@ -104,17 +111,15 @@ export default function ChildWelcomeScreen() {
           child = children[0] ?? null;
         }
 
-        if (!child || !stillMounted) {
-          return;
-        }
+        if (!child || !stillMounted) return;
 
         setChildData({
           childId: child.id,
           childName: child.name,
-          avatarId: normalizeAvatarId(child.avatar),
+          avatarId: normalizeAvatarId(child.avatarId),
         });
       } catch {
-        // Keep the empty state
+        // Keep empty state. Do not show wrong fallback child.
       } finally {
         if (stillMounted) {
           setLoading(false);
@@ -122,7 +127,7 @@ export default function ChildWelcomeScreen() {
       }
     }
 
-    void loadChild();
+    loadChild();
 
     return () => {
       stillMounted = false;

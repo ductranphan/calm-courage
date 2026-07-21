@@ -1,53 +1,52 @@
 /**
- * Preset avatar companions used by the frontend.
+ * Preset avatar options for child profiles.
+ *
+ * These IDs are saved in Firestore as avatarId.
  */
 
 import type { ImageSourcePropType } from "react-native";
 
 export const avatars = [
   {
-    id: "brave_lion",
-    label: "Brave Lion",
-    emoji: "",
-    color: "#FFF4CC",
+    id: "lion",
+    label: "Lion",
     image: require("../../assets/images/lion.png"),
   },
   {
-    id: "calm_koala",
-    label: "Calm Koala",
-    emoji: "",
-    color: "#EAF7FA",
+    id: "koala",
+    label: "Koala",
     image: require("../../assets/images/koala.png"),
   },
   {
-    id: "friendly_panda",
-    label: "Friendly Panda",
-    emoji: "",
-    color: "#F1F3F5",
+    id: "panda",
+    label: "Panda",
     image: require("../../assets/images/panda.png"),
   },
   {
-    id: "lovely_rabbit",
-    label: "Lovely Rabbit",
-    emoji: "",
-    color: "#FFD6E8",
+    id: "rabbit",
+    label: "Rabbit",
     image: require("../../assets/images/rabbit.png"),
   },
 ] as const;
 
 export type AvatarId = (typeof avatars)[number]["id"];
 
-export const defaultAvatarId: AvatarId = "friendly_panda";
+export const defaultAvatarId: AvatarId = "panda";
 
 export const avatarImages: Record<AvatarId, ImageSourcePropType> = {
-  brave_lion: require("../../assets/images/lion.png"),
-  calm_koala: require("../../assets/images/koala.png"),
-  friendly_panda: require("../../assets/images/panda.png"),
-  lovely_rabbit: require("../../assets/images/rabbit.png"),
+  lion: require("../../assets/images/lion.png"),
+  koala: require("../../assets/images/koala.png"),
+  panda: require("../../assets/images/panda.png"),
+  rabbit: require("../../assets/images/rabbit.png"),
 };
 
 export function isAvatarId(value: unknown): value is AvatarId {
-  return avatars.some((avatar) => avatar.id === value);
+  return (
+    value === "lion" ||
+    value === "koala" ||
+    value === "panda" ||
+    value === "rabbit"
+  );
 }
 
 export function normalizeAvatarId(value: unknown): AvatarId {
@@ -55,21 +54,9 @@ export function normalizeAvatarId(value: unknown): AvatarId {
     return value;
   }
 
-  if (value === "lion") {
-    return "brave_lion";
-  }
-
-  if (value === "koala") {
-    return "calm_koala";
-  }
-
-  if (value === "panda" || value === "bear") {
-    return "friendly_panda";
-  }
-
-  if (value === "rabbit" || value === "bunny") {
-    return "lovely_rabbit";
-  }
+  // Safety for old backend/mock values.
+  if (value === "bear") return "panda";
+  if (value === "bunny") return "rabbit";
 
   return defaultAvatarId;
 }

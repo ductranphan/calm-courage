@@ -1,27 +1,15 @@
 /**
- * Child management screen.
+ * Child Management screen.
  *
- * Displays all child profiles belonging to the current parent.
- *
- * Each child displays:
+ * Shows child profile data from Firebase:
  * - name
- * - approximate age
- * - avatar
- * - latest mood
- *
- * No placeholder child data is displayed.
+ * - age
+ * - avatarId
+ * - latest mood from checkIns
  */
 
-import {
-  router,
-  useFocusEffect,
-} from "expo-router";
-
-import {
-  useCallback,
-  useState,
-} from "react";
-
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -34,432 +22,203 @@ import {
 
 import ParentBottomNav from "@/components/dashboard/ParentBottomNav";
 import AppButton from "@/components/ui/AppButton";
-
 import {
   avatarImages,
+  defaultAvatarId,
   normalizeAvatarId,
   type AvatarId,
 } from "@/constants/avatars";
-
 import { colors } from "@/constants/colors";
-
 import {
+  defaultEmotionId,
   formatEmotionLabel,
-  isEmotionId,
+  normalizeEmotionId,
 } from "@/constants/emotions";
-
 import { useAuth } from "@/contexts/AuthContext";
 import { listCheckIns } from "@/services/checkIns";
-
-import {
-  ageFromBirthdate,
-  listChildren,
-} from "@/services/children";
-
+import { listChildren } from "@/services/children";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
 import AudioOnIcon from "../../assets/icons/audio-on.svg";
 
 type ChildManagementData = {
-  childId: string;
+  childId: string | null;
   name: string;
-  age: number | null;
+  age: number;
   avatarId: AvatarId;
-  moodLabel: string | null;
+  moodLabel: string;
 };
 
-function getMoodLabel(
-  value: unknown,
-): string | null {
-  const emotionValue = Array.isArray(value)
-    ? value[0]
-    : value;
-
-  if (!isEmotionId(emotionValue)) {
-    return null;
-  }
-
-  return formatEmotionLabel(
-    emotionValue,
-  );
-}
+const FALLBACK_CHILD: ChildManagementData = {
+  childId: null,
+  name: "Emma",
+  age: 4,
+  avatarId: defaultAvatarId,
+  moodLabel: formatEmotionLabel(defaultEmotionId),
+};
 
 export default function ChildrenScreen() {
   const { user } = useAuth();
 
-  const [audioEnabled, setAudioEnabled] =
-    useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [childData, setChildData] =
+    useState<ChildManagementData>(FALLBACK_CHILD);
+  const [loading, setLoading] = useState(true);
 
-  const [
-    childrenData,
-    setChildrenData,
-  ] = useState<ChildManagementData[]>([]);
+  useEffect(() => {
+    let stillMounted = true;
 
-  const [loading, setLoading] =
-    useState(true);
+    async function loadChildData() {
+      if (!user?.uid) {
+        setChildData(FALLBACK_CHILD);
+        setLoading(false);
+        return;
+      }
 
-  const [loadError, setLoadError] =
-    useState<string | null>(null);
+      setLoading(true);
 
-  const [reloadKey, setReloadKey] =
-    useState(0);
+      try {
+        const children = await listChildren(user.uid);
+        const firstChild = children[0];
 
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-
-      async function loadChildData() {
-        setLoading(true);
-        setLoadError(null);
-
-        if (!user?.uid) {
-          if (!cancelled) {
-            setChildrenData([]);
-            setLoading(false);
+        if (!firstChild) {
+          if (stillMounted) {
+            setChildData(FALLBACK_CHILD);
           }
-
           return;
         }
 
+        let moodLabel = formatEmotionLabel(defaultEmotionId);
+
         try {
-          const children = await listChildren(
-            user.uid,
-          );
+          const checkIns = await listCheckIns(user.uid, firstChild.id);
+          const latestMood = normalizeEmotionId(checkIns[0]?.emotion);
+          moodLabel = formatEmotionLabel(latestMood);
+        } catch {
+          moodLabel = formatEmotionLabel(defaultEmotionId);
+        }
 
-          const loadedChildren =
-            await Promise.all(
-              children.map(
-                async (
-                  child,
-                ): Promise<ChildManagementData> => {
-                  let moodLabel:
-                    | string
-                    | null = null;
-
-                  try {
-                    const checkIns =
-                      await listCheckIns(
-                        user.uid,
-                        child.id,
-                      );
-
-                    moodLabel = getMoodLabel(
-                      checkIns[0]?.emotions,
-                    );
-                  } catch {
-                    /*
-                     * A check-in error must not prevent
-                     * the child profile from appearing.
-                     */
-                    moodLabel = null;
-                  }
-
-                  return {
-                    childId: child.id,
-                    name: child.name,
-                    age: ageFromBirthdate(
-                      child.birthdate,
-                    ),
-                    avatarId:
-                      normalizeAvatarId(
-                        child.avatar,
-                      ),
-                    moodLabel,
-                  };
-                },
-              ),
-            );
-
-          if (!cancelled) {
-            setChildrenData(
-              loadedChildren,
-            );
-          }
-        } catch (error) {
-          console.error(
-            "Unable to load child profiles:",
-            error,
-          );
-
-          if (!cancelled) {
-            setChildrenData([]);
-
-            setLoadError(
-              "We couldn’t load the child profiles. Please try again.",
-            );
-          }
-        } finally {
-          if (!cancelled) {
-            setLoading(false);
-          }
+        if (stillMounted) {
+          setChildData({
+            childId: firstChild.id,
+            name: firstChild.name,
+            age: firstChild.age,
+            avatarId: normalizeAvatarId(firstChild.avatarId),
+            moodLabel,
+          });
+        }
+      } catch {
+        if (stillMounted) {
+          setChildData(FALLBACK_CHILD);
+        }
+      } finally {
+        if (stillMounted) {
+          setLoading(false);
         }
       }
+    }
 
-      void loadChildData();
+    loadChildData();
 
-      return () => {
-        cancelled = true;
-      };
-    }, [user?.uid, reloadKey]),
-  );
+    return () => {
+      stillMounted = false;
+    };
+  }, [user?.uid]);
 
-  function handleRetry() {
-    setReloadKey(
-      (current) => current + 1,
-    );
-  }
-
-  function handleEditChild(
-    child: ChildManagementData,
-  ) {
-    router.push({
-      pathname: "/child-profile-info",
-      params: {
-        childId: child.childId,
-      },
-    });
-  }
-
-  function handleSwitchToChild(
-    child: ChildManagementData,
-  ) {
-    router.push({
-      pathname: "/switch-to-child",
-      params: {
-        childId: child.childId,
-        childName: child.name,
-        avatarId: child.avatarId,
-      },
-    });
-  }
+  const avatarImage = avatarImages[childData.avatarId];
 
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={
-        styles.scrollContent
-      }
+      contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.audioRow}>
+      <View style={styles.figmaFrame}>
         <Pressable
           style={styles.audioButton}
-          onPress={() =>
-            setAudioEnabled(
-              (current) => !current,
-            )
-          }
-          accessibilityRole="button"
-          accessibilityLabel={
-            audioEnabled
-              ? "Turn audio off"
-              : "Turn audio on"
-          }
+          onPress={() => setAudioEnabled((current) => !current)}
         >
           {audioEnabled ? (
-            <AudioOnIcon
-              width={x(35)}
-              height={x(35)}
-            />
+            <AudioOnIcon width={x(35)} height={x(35)} />
           ) : (
-            <AudioOffIcon
-              width={x(35)}
-              height={x(35)}
-            />
+            <AudioOffIcon width={x(35)} height={x(35)} />
           )}
         </Pressable>
-      </View>
 
-      <Text style={styles.title}>
-        Child Management
-      </Text>
+        <Text style={styles.title}>Child Management</Text>
 
-      <View style={styles.topLine} />
+        <View style={styles.topLine} />
 
-      {loading ? (
-        <View style={styles.loadingState}>
-          <ActivityIndicator
-            size="large"
-            color={colors.primary}
-          />
+        {loading ? (
+          <ActivityIndicator color={colors.primary} style={styles.loader} />
+        ) : (
+          <>
+            <View style={styles.avatarCard}>
+              <Image
+                source={avatarImage}
+                style={styles.avatarImage}
+                resizeMode="contain"
+              />
+            </View>
 
-          <Text style={styles.loadingText}>
-            Loading child profiles...
-          </Text>
-        </View>
-      ) : loadError ? (
-        <View style={styles.messageState}>
-          <Text style={styles.messageTitle}>
-            Unable to load profiles
-          </Text>
+            <View style={styles.childInfoWrapper}>
+              <Text style={styles.childInfoText}>Name: {childData.name}</Text>
+              <Text style={styles.childInfoText}>Age: {childData.age}</Text>
+              <Text style={styles.childInfoText}>Today’s Mood:</Text>
+              <Text style={styles.childInfoText}>{childData.moodLabel}</Text>
+            </View>
 
-          <Text style={styles.messageText}>
-            {loadError}
-          </Text>
-
-          <Pressable
-            style={styles.retryButton}
-            onPress={handleRetry}
-            accessibilityRole="button"
-          >
-            <Text
-              style={
-                styles.retryButtonText
-              }
-            >
-              Try Again
-            </Text>
-          </Pressable>
-        </View>
-      ) : childrenData.length === 0 ? (
-        <View style={styles.messageState}>
-          <Text style={styles.messageTitle}>
-            No child profiles yet
-          </Text>
-
-          <Text style={styles.messageText}>
-            Add a child profile to begin
-            their emotional learning journey.
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.childrenList}>
-          {childrenData.map((child) => {
-            const avatarSource =
-              avatarImages[
-                child.avatarId
-              ];
-
-            return (
-              <View
-                key={child.childId}
-                style={styles.childCard}
-              >
-                <View
-                  style={
-                    styles.childContentRow
+            <View style={styles.editButtonWrapper}>
+              <AppButton
+                title="Edit"
+                onPress={() => {
+                  if (!childData.childId) {
+                    router.push("/child-profile-info");
+                    return;
                   }
-                >
-                  <View
-                    style={styles.avatarCard}
-                  >
-                    <Image
-                      source={avatarSource}
-                      style={
-                        styles.avatarImage
-                      }
-                      resizeMode="contain"
-                      fadeDuration={0}
-                    />
-                  </View>
 
-                  <View
-                    style={
-                      styles.childInfoWrapper
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.childNameText
-                      }
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                    >
-                      {child.name}
-                    </Text>
+                  router.push({
+                    pathname: "/child-profile-info",
+                    params: {
+                      childId: childData.childId,
+                    },
+                  });
+                }}
+                style={styles.editButton}
+              />
+            </View>
+          </>
+        )}
 
-                    <Text
-                      style={
-                        styles.childInfoText
-                      }
-                    >
-                      Age:{" "}
-                      {child.age ?? "—"}
-                    </Text>
+        <View style={styles.childInfoLine} />
 
-                    <Text
-                      style={
-                        styles.childInfoText
-                      }
-                    >
-                      Today&apos;s Mood:
-                    </Text>
+        <Pressable
+          style={styles.addChildCard}
+          onPress={() => router.push("/child-profile-info")}
+        >
+          <Text style={styles.addChildText}>+ Add Multiple Child Profiles</Text>
+        </Pressable>
 
-                    <Text
-                      style={
-                        styles.childMoodText
-                      }
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                    >
-                      {child.moodLabel ??
-                        "No check-in yet"}
-                    </Text>
-                  </View>
-                </View>
+        <Pressable
+          onPress={() =>
+            router.push({
+              pathname: "/switch-to-child",
+              params: {
+                childId: childData.childId ?? "",
+                childName: childData.name,
+                avatarId: childData.avatarId,
+              },
+            })
+          }
+          style={styles.switchWrapper}
+        >
+          <Text style={styles.switchText}>Switch to Child Mode</Text>
+        </Pressable>
 
-                <View
-                  style={
-                    styles.childActions
-                  }
-                >
-                  <AppButton
-                    title="Edit"
-                    onPress={() =>
-                      handleEditChild(
-                        child,
-                      )
-                    }
-                    style={
-                      styles.editButton
-                    }
-                  />
-
-                  <Pressable
-                    style={
-                      styles.switchButton
-                    }
-                    onPress={() =>
-                      handleSwitchToChild(
-                        child,
-                      )
-                    }
-                    accessibilityRole="button"
-                  >
-                    <Text
-                      style={
-                        styles.switchButtonText
-                      }
-                    >
-                      Switch to Child Mode
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            );
-          })}
+        <View style={styles.bottomNavWrapper}>
+          <ParentBottomNav activeTab="children" />
         </View>
-      )}
-
-      <Pressable
-        style={styles.addChildCard}
-        onPress={() =>
-          router.push(
-            "/child-profile-info",
-          )
-        }
-        accessibilityRole="button"
-      >
-        <Text style={styles.addChildText}>
-          + Add Another Child Profile
-        </Text>
-      </Pressable>
-
-      <View style={styles.bottomNavWrapper}>
-        <ParentBottomNav
-          activeTab="children"
-        />
       </View>
     </ScrollView>
   );
@@ -473,19 +232,20 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     minHeight: y(900),
-    paddingHorizontal: x(20),
-    paddingTop: y(48),
-    paddingBottom: y(35),
     backgroundColor: colors.background,
   },
 
-  audioRow: {
+  figmaFrame: {
     width: "100%",
-    height: x(35),
-    alignItems: "flex-end",
+    height: y(900),
+    position: "relative",
+    backgroundColor: colors.background,
   },
 
   audioButton: {
+    position: "absolute",
+    left: x(347),
+    top: y(48),
     width: x(35),
     height: x(35),
     alignItems: "center",
@@ -493,8 +253,11 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    marginTop: y(40),
-    width: "100%",
+    position: "absolute",
+    left: x(20),
+    top: y(123),
+    width: x(362),
+    height: y(39),
     color: colors.primary,
     fontFamily: "Quiche",
     fontSize: x(30),
@@ -503,176 +266,82 @@ const styles = StyleSheet.create({
   },
 
   topLine: {
-    width: "100%",
+    position: "absolute",
+    left: x(20),
+    top: y(188),
+    width: x(362),
     height: StyleSheet.hairlineWidth,
-    marginTop: y(26),
     backgroundColor: colors.primary,
   },
 
-  loadingState: {
-    minHeight: y(180),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  loadingText: {
-    marginTop: y(14),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(16),
-    lineHeight: y(22),
-    textAlign: "center",
-  },
-
-  messageState: {
-    minHeight: y(180),
-    paddingHorizontal: x(20),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  messageTitle: {
-    color: colors.primary,
-    fontFamily: "Quiche",
-    fontSize: x(23),
-    lineHeight: y(30),
-    textAlign: "center",
-  },
-
-  messageText: {
-    marginTop: y(10),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(16),
-    lineHeight: y(23),
-    textAlign: "center",
-  },
-
-  retryButton: {
-    minWidth: x(120),
-    minHeight: y(42),
-    marginTop: y(16),
-    paddingHorizontal: x(20),
-    borderRadius: x(15),
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  retryButtonText: {
-    color: colors.white,
-    fontFamily: "Literata",
-    fontSize: x(16),
-    lineHeight: y(22),
-  },
-
-  childrenList: {
-    width: "100%",
-    marginTop: y(22),
-    rowGap: y(20),
-  },
-
-  childCard: {
-    width: "100%",
-    minHeight: y(205),
-    padding: x(14),
-    borderRadius: x(20),
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.white,
-
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: y(3),
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: x(4),
-    elevation: 4,
-  },
-
-  childContentRow: {
-    flexDirection: "row",
-    alignItems: "center",
+  loader: {
+    position: "absolute",
+    left: x(186),
+    top: y(260),
   },
 
   avatarCard: {
-    width: x(125),
-    height: y(125),
+    position: "absolute",
+    left: x(20),
+    top: y(212),
+    width: x(132),
+    height: y(132),
     borderRadius: x(15),
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
 
   avatarImage: {
-    width: "100%",
-    height: "100%",
+    width: x(132),
+    height: y(132),
   },
 
   childInfoWrapper: {
-    flex: 1,
-    minHeight: y(125),
-    marginLeft: x(16),
-    justifyContent: "center",
-  },
-
-  childNameText: {
-    color: colors.primary,
-    fontFamily: "Quiche",
-    fontSize: x(24),
-    lineHeight: y(31),
+    position: "absolute",
+    left: x(171),
+    top: y(213),
+    width: x(150),
+    height: y(132),
   },
 
   childInfoText: {
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: x(17),
-    lineHeight: y(26),
+    fontSize: x(20),
+    lineHeight: y(35),
   },
 
-  childMoodText: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(17),
-    lineHeight: y(25),
-    fontWeight: "700",
-  },
-
-  childActions: {
-    minHeight: y(52),
-    marginTop: y(14),
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  editButtonWrapper: {
+    position: "absolute",
+    left: x(326),
+    top: y(294),
+    width: x(56),
+    height: y(52),
   },
 
   editButton: {
-    width: x(90),
-    height: y(46),
+    width: x(56),
+    height: y(52),
     borderRadius: x(15),
   },
 
-  switchButton: {
-    minHeight: y(46),
-    paddingHorizontal: x(8),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  switchButtonText: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(16),
-    lineHeight: y(22),
-    textDecorationLine: "underline",
+  childInfoLine: {
+    position: "absolute",
+    left: x(20),
+    top: y(364),
+    width: x(362),
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.primary,
   },
 
   addChildCard: {
-    width: "100%",
-    minHeight: y(135),
-    marginTop: y(28),
+    position: "absolute",
+    left: x(20),
+    top: y(438),
+    width: x(362),
+    height: y(271),
     borderRadius: x(20),
     borderWidth: 1,
     borderStyle: "dashed",
@@ -682,26 +351,42 @@ const styles = StyleSheet.create({
     justifyContent: "center",
 
     shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: y(3),
-    },
-    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: y(4) },
+    shadowOpacity: 0.25,
     shadowRadius: x(4),
-    elevation: 3,
+    elevation: 5,
   },
 
   addChildText: {
     color: colors.primary,
     fontFamily: "Literata",
     fontSize: x(20),
-    lineHeight: y(26),
+    lineHeight: y(24),
     textAlign: "center",
   },
 
+  switchWrapper: {
+    position: "absolute",
+    left: x(20),
+    top: y(750),
+    width: x(206),
+    height: y(24),
+    justifyContent: "center",
+  },
+
+  switchText: {
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(20),
+    lineHeight: y(24),
+    textDecorationLine: "underline",
+  },
+
   bottomNavWrapper: {
-    width: "100%",
+    position: "absolute",
+    left: x(20),
+    top: y(783),
+    width: x(362),
     height: y(72),
-    marginTop: y(35),
   },
 });

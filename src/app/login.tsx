@@ -1,47 +1,27 @@
 /**
  * Parent Login screen.
  *
-<<<<<<< HEAD
- * Allows existing parents to enter their email and password,
- * then signs them in with Firebase Authentication.
- */
-=======
  * Matches Figma Screen 1.1: Parent Login.
  * Allows existing parents to enter their email and password,
  * then signs them in with Firebase Authentication.
  */
 
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
 import { router } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-<<<<<<< HEAD
-=======
   KeyboardAvoidingView,
   Platform,
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-<<<<<<< HEAD
 
-import AppButton from "@/components/ui/AppButton";
-import BackButton from "@/components/ui/BackButton";
-import { colors } from "@/constants/colors";
-import { useAuth } from "@/contexts/AuthContext";
-import { x, y } from "@/utils/scaling";
-=======
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
-
+import GoogleIcon from "../../assets/images/google.svg";
 import AppleIcon from "../../assets/images/apple.svg";
 import FacebookIcon from "../../assets/images/facebook.svg";
-<<<<<<< HEAD
-import GoogleIcon from "../../assets/images/google.svg";
-=======
 
 import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
@@ -50,7 +30,6 @@ import FloatingTextInput from "@/components/ui/FloatingTextInput";
 import { colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { x, y } from "@/utils/scaling";
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
@@ -73,7 +52,7 @@ export default function LoginScreen() {
 
     try {
       await signIn(email.trim(), password);
-      router.replace("/home");
+      router.replace("/parent-verification");
     } catch {
       setError("Unable to log in. Please check your email and password.");
     } finally {
@@ -178,23 +157,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
-<<<<<<< HEAD
-  title: {
-    position: "absolute",
-    left: x(103),
-    top: y(90),
-    width: x(195),
-    height: y(39),
-    color: colors.primary,
-    textAlign: "center",
-    fontFamily: "Quiche",
-    fontSize: x(30),
-    lineHeight: y(39),
-=======
   scrollContent: {
     minHeight: y(940),
     backgroundColor: colors.background,
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
   },
 
   figmaFrame: {
@@ -227,24 +192,6 @@ const styles = StyleSheet.create({
     fontFamily: "Literata",
     fontSize: x(20),
     lineHeight: y(24),
-<<<<<<< HEAD
-  },
-
-  input: {
-    position: "absolute",
-    left: x(20),
-    width: x(362),
-    height: y(72),
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: x(20),
-    backgroundColor: colors.white,
-    paddingHorizontal: x(26),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-=======
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
   },
 
   emailInput: {
@@ -256,16 +203,7 @@ const styles = StyleSheet.create({
   passwordInput: {
     position: "absolute",
     left: x(20),
-<<<<<<< HEAD
-    top: y(425),
-    width: x(362),
-    color: "#B00020",
-    fontFamily: "Literata",
-    fontSize: x(16),
-    lineHeight: y(22),
-=======
     top: y(396),
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
   },
 
   forgotPasswordWrapper: {
@@ -282,11 +220,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontFamily: "Literata",
     fontSize: x(20),
-<<<<<<< HEAD
-    lineHeight: y(28),
-=======
     lineHeight: y(24),
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
     textDecorationLine: "underline",
   },
 
@@ -341,35 +275,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-<<<<<<< HEAD
-  or: {
-    position: "absolute",
-    left: x(186),
-    top: y(622),
-    width: x(31),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textAlign: "center",
-  },
-
-  socials: {
-    position: "absolute",
-    left: x(109),
-    top: y(707),
-    width: x(184),
-    height: y(53),
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  createAccount: {
-=======
   createAccountWrapper: {
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
     position: "absolute",
     left: x(20),
     top: y(872),
@@ -382,11 +288,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontFamily: "Literata",
     fontSize: x(20),
-<<<<<<< HEAD
-    lineHeight: y(28),
-=======
     lineHeight: y(24),
->>>>>>> 085db16234b9c8005b24ff1b18f08fb73e237d40
     textDecorationLine: "underline",
   },
 });
