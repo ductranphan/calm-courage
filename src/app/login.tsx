@@ -6,7 +6,7 @@
  * then signs them in with Firebase Authentication.
  */
 
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -52,7 +52,7 @@ export default function LoginScreen() {
 
     try {
       await signIn(email.trim(), password);
-      router.replace("/");
+      router.replace("/parent-verification" as Href);
     } catch {
       setError("Unable to log in. Please check your email and password.");
     } finally {

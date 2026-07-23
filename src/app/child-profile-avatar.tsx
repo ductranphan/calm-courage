@@ -2,10 +2,10 @@
  * Child profile avatar screen.
  *
  * Used for both:
- * - creating a child profile
- * - opening an existing child profile for editing
+ * - creating a new child profile
+ * - editing an existing child profile
  *
- * The backend stores the selected avatar in the `avatar` field.
+ * Saves the selected avatar to Firebase as avatarId.
  */
 
 import { router, useLocalSearchParams } from "expo-router";
@@ -19,8 +19,8 @@ import {
   View,
 } from "react-native";
 
-import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
+import AppButton from "@/components/ui/AppButton";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import {
   avatarImages,
@@ -30,14 +30,9 @@ import {
 } from "@/constants/avatars";
 import { colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  ageFromBirthdate,
-  createChild,
-  getChild,
-  updateChild,
-} from "@/services/children";
-import { completeOnboarding } from "@/services/auth";
 import { seedPhaseActivities } from "@/services/activityAttempts";
+import { completeOnboarding } from "@/services/auth";
+import { createChild, getChild, updateChild } from "@/services/children";
 import { x, y } from "@/utils/scaling";
 
 const avatarPositions: {
@@ -45,10 +40,10 @@ const avatarPositions: {
   left: number;
   top: number;
 }[] = [
-  { id: "brave_lion", left: 20, top: 355 },
-  { id: "calm_koala", left: 211, top: 355 },
-  { id: "friendly_panda", left: 20, top: 517 },
-  { id: "lovely_rabbit", left: 211, top: 517 },
+  { id: "lion", left: 20, top: 355 },
+  { id: "koala", left: 211, top: 355 },
+  { id: "panda", left: 20, top: 517 },
+  { id: "rabbit", left: 211, top: 517 },
 ];
 
 export default function ChildProfileAvatarScreen() {
@@ -87,18 +82,15 @@ export default function ChildProfileAvatarScreen() {
           if (stillMounted) {
             setError("Child profile not found.");
           }
-
           return;
         }
 
         if (stillMounted) {
           setChildName(child.name);
-          setChildAge(String(ageFromBirthdate(child.birthdate) ?? ""));
-          setSelectedAvatar(normalizeAvatarId(child.avatar));
+          setChildAge(String(child.age));
+          setSelectedAvatar(normalizeAvatarId(child.avatarId));
         }
-      } catch (loadError) {
-        console.error("Unable to load child profile:", loadError);
-
+      } catch {
         if (stillMounted) {
           setError("Unable to load child profile.");
         }
@@ -109,7 +101,7 @@ export default function ChildProfileAvatarScreen() {
       }
     }
 
-    void loadExistingChild();
+    loadExistingChild();
 
     return () => {
       stillMounted = false;
@@ -124,63 +116,52 @@ export default function ChildProfileAvatarScreen() {
       return;
     }
 
-    const parsedAge = Number.parseInt(childAge, 10);
-    const trimmedName = childName.trim();
+    const parsedAge = Number(childAge);
 
-    if (!trimmedName) {
+    if (!childName.trim()) {
       setError("Please enter the child’s name first.");
       return;
     }
 
-    if (
-      !childAge.trim() ||
-      !Number.isInteger(parsedAge) ||
-      parsedAge < 1 ||
-      parsedAge > 17
-    ) {
-      setError("Please enter an age between 1 and 17.");
+    if (!childAge.trim() || Number.isNaN(parsedAge) || parsedAge <= 0) {
+      setError("Please enter a valid age.");
       return;
     }
 
     setSaving(true);
 
     try {
+      let savedChildId = childId;
+
       if (editing && childId) {
         await updateChild(user.uid, childId, {
-          name: trimmedName,
+          name: childName,
           age: parsedAge,
-          avatar: selectedAvatar,
+          avatarId: selectedAvatar,
+        });
+      } else {
+        savedChildId = await createChild(user.uid, {
+          name: childName,
+          age: parsedAge,
+          avatarId: selectedAvatar,
         });
 
-        router.replace("/children");
-        return;
+        if (savedChildId) {
+          await seedPhaseActivities(user.uid, savedChildId, 1);
+          await completeOnboarding(user.uid);
+        }
       }
-
-      const savedChildId = await createChild(user.uid, {
-        name: trimmedName,
-        age: parsedAge,
-        avatar: selectedAvatar,
-      });
-
-      await seedPhaseActivities(user.uid, savedChildId, 1);
-      await completeOnboarding(user.uid);
 
       router.replace({
         pathname: "/switch-to-child",
         params: {
-          childId: savedChildId,
-          childName: trimmedName,
+          childId: savedChildId ?? "",
+          childName: childName.trim(),
           avatarId: selectedAvatar,
         },
       });
-    } catch (saveError) {
-      console.error("Unable to save child profile:", saveError);
-
-      setError(
-        editing
-          ? "Unable to update child profile."
-          : "Unable to create child profile."
-      );
+    } catch {
+      setError("Unable to save child profile.");
     } finally {
       setSaving(false);
     }
@@ -219,33 +200,17 @@ export default function ChildProfileAvatarScreen() {
         <Pressable
           key={id}
           onPress={() => setSelectedAvatar(id)}
-          disabled={saving}
-          accessibilityRole="button"
-          accessibilityLabel={`Choose ${id.replaceAll("_", " ")}`}
-          accessibilityState={{
-            selected: selectedAvatar === id,
-            disabled: saving,
-          }}
-          style={[
-            styles.avatarShadow,
-            {
-              left: x(left),
-              top: y(top),
-            },
-          ]}
+          style={[styles.avatarShadow, { left: x(left), top: y(top) }]}
         >
           <View style={styles.avatarClip}>
             <Image
               source={avatarImages[id]}
               style={styles.avatarImage}
               resizeMode="contain"
-              fadeDuration={0}
             />
           </View>
 
-          {selectedAvatar === id ? (
-            <View style={styles.selectedBorder} />
-          ) : null}
+          {selectedAvatar === id ? <View style={styles.selectedBorder} /> : null}
         </Pressable>
       ))}
 
@@ -345,7 +310,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: x(20),
     top: y(695),
-    width: x(362),
   },
 
   buttonWrapper: {

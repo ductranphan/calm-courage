@@ -19,6 +19,7 @@ import {
 } from "react-native";
 
 import CheckIcon from "../../assets/icons/check.svg";
+
 import TermsModal from "@/components/modals/TermsModal";
 import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
@@ -30,81 +31,184 @@ import { isValidPin } from "@/utils/pin";
 import { x, y } from "@/utils/scaling";
 
 export default function EmailSignupScreen() {
-  const { signUp, sendVerificationEmail, acceptTerms } = useAuth();
+  const {
+    signUp,
+    sendVerificationEmail,
+  } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [
+    confirmPassword,
+    setConfirmPassword,
+  ] = useState("");
+
   const [pin, setPin] = useState("");
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [termsModalVisible, setTermsModalVisible] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [
+    termsAccepted,
+    setTermsAccepted,
+  ] = useState(false);
 
-  async function handleSignUp() {
-    setError(null);
+  const [
+    termsModalVisible,
+    setTermsModalVisible,
+  ] = useState(false);
 
-    if (!termsAccepted) {
-      setError("Please agree to the Terms of Service and Privacy Policy.");
-      return;
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  function validateForm(): string | null {
+    const normalizedEmail = email
+      .trim()
+      .toLowerCase();
+
+    if (!normalizedEmail) {
+      return "Please enter your email address.";
     }
 
-    if (!isValidPin(pin)) {
-      setError("Please create a 4-digit PIN.");
-      return;
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        normalizedEmail,
+      )
+    ) {
+      return "Please enter a valid email address.";
     }
 
     if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
+      return "Password must be at least 6 characters.";
     }
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+      return "Passwords do not match.";
+    }
+
+    if (!isValidPin(pin)) {
+      return "Please create a 4-digit PIN.";
+    }
+
+    if (!termsAccepted) {
+      return "Please agree to the Terms of Service and Privacy Policy.";
+    }
+
+    return null;
+  }
+
+  async function handleSignUp() {
+    if (loading) {
       return;
     }
+
+    setError(null);
+
+    const validationError = validateForm();
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    const normalizedEmail = email
+      .trim()
+      .toLowerCase();
 
     setLoading(true);
 
     try {
-      const createdUser = await signUp(email, password, pin);
-      await acceptTerms(createdUser.uid);
+      /*
+       * signUp creates both:
+       *
+       * 1. Firebase Authentication user
+       * 2. Firestore parents/{uid} profile
+       */
+      await signUp(
+        normalizedEmail,
+        password,
+        pin,
+      );
+    } catch (signUpError) {
+      console.error(
+        "Unable to create parent account:",
+        signUpError,
+      );
+
+      setError(
+        signUpError instanceof Error
+          ? signUpError.message
+          : "Unable to create account.",
+      );
+
+      setLoading(false);
+      return;
+    }
+
+    try {
+      /*
+       * The account already exists at this point.
+       *
+       * If email sending fails, the parent can still continue to
+       * the verification page and press Resend link.
+       */
       await sendVerificationEmail();
-      router.replace("/verify-email");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to create account.");
+    } catch (verificationError) {
+      console.error(
+        "Account created, but verification email could not be sent:",
+        verificationError,
+      );
     } finally {
       setLoading(false);
     }
+
+    router.replace("/verify-email");
   }
 
   return (
     <KeyboardAvoidingView
       style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={
+        Platform.OS === "ios"
+          ? "padding"
+          : "height"
+      }
     >
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={
+          styles.scrollContent
+        }
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.figmaFrame}>
           <BackButton />
 
-          <Text style={styles.title}>Create Parent Account</Text>
+          <Text style={styles.title}>
+            Create Parent Account
+          </Text>
 
           <Text style={styles.subtitle}>
-            Join us to start your child{"'"}s{"\n"}confidence journey.
+            Join us to start your child{"'"}s
+            {"\n"}
+            confidence journey.
           </Text>
 
           <View style={styles.emailInput}>
             <FloatingTextInput
               label="Enter your email"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(value) => {
+                setEmail(value);
+                setError(null);
+              }}
               autoCapitalize="none"
               autoCorrect={false}
+              spellCheck={false}
               keyboardType="email-address"
+              textContentType="emailAddress"
+              autoComplete="email"
+              returnKeyType="next"
+              editable={!loading}
             />
           </View>
 
@@ -112,8 +216,19 @@ export default function EmailSignupScreen() {
             <FloatingTextInput
               label="Create password"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(value) => {
+                setPassword(value);
+                setError(null);
+              }}
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              textContentType="none"
+              autoComplete="off"
+              returnKeyType="next"
+              editable={!loading}
+              style={styles.secureInput}
             />
           </View>
 
@@ -121,44 +236,104 @@ export default function EmailSignupScreen() {
             <FloatingTextInput
               label="Confirm password"
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              onChangeText={(value) => {
+                setConfirmPassword(value);
+                setError(null);
+              }}
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              textContentType="none"
+              autoComplete="off"
+              returnKeyType="done"
+              editable={!loading}
+              style={styles.secureInput}
+              onSubmitEditing={handleSignUp}
             />
           </View>
 
           <View style={styles.pinSection}>
-            <Text style={styles.pinLabel}>Create PIN</Text>
+            <Text style={styles.pinLabel}>
+              Create PIN
+            </Text>
 
             <View style={styles.pinRow}>
-              <PinInput value={pin} onChange={setPin} />
+              <PinInput
+                value={pin}
+                onChange={(value) => {
+                  setPin(value);
+                  setError(null);
+                }}
+              />
             </View>
           </View>
 
           <View style={styles.termsRow}>
             <Pressable
-              onPress={() => setTermsAccepted((current) => !current)}
-              style={styles.checkbox}
+              onPress={() => {
+                setTermsAccepted(
+                  (current) => !current,
+                );
+                setError(null);
+              }}
+              disabled={loading}
+              style={[
+                styles.checkbox,
+                loading &&
+                  styles.disabledControl,
+              ]}
+              accessibilityRole="checkbox"
+              accessibilityLabel="Agree to Terms of Service and Privacy Policy"
+              accessibilityState={{
+                checked: termsAccepted,
+                disabled: loading,
+              }}
             >
               {termsAccepted ? (
-                <CheckIcon width={x(14)} height={x(14)} />
+                <CheckIcon
+                  width={x(14)}
+                  height={x(14)}
+                />
               ) : null}
             </Pressable>
 
-            <Pressable onPress={() => setTermsModalVisible(true)}>
+            <Pressable
+              onPress={() =>
+                setTermsModalVisible(true)
+              }
+              disabled={loading}
+              accessibilityRole="button"
+              accessibilityLabel="Read Terms of Service and Privacy Policy"
+            >
               <Text style={styles.termsText}>
-                I agree to the Terms of Service and{"\n"}Privacy Policy.
+                I agree to the Terms of Service
+                and{"\n"}
+                Privacy Policy.
               </Text>
             </Pressable>
           </View>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? (
+            <Text
+              style={styles.error}
+              accessibilityRole="alert"
+            >
+              {error}
+            </Text>
+          ) : null}
 
           <View style={styles.buttonWrapper}>
             {loading ? (
-              <ActivityIndicator color={colors.primary} />
+              <ActivityIndicator
+                size="large"
+                color={colors.primary}
+              />
             ) : (
               <AppButton
-                title={"Send\nVerification Email"}
+                title={
+                  "Send\nVerification Email"
+                }
                 onPress={handleSignUp}
                 style={styles.sendButton}
               />
@@ -167,7 +342,9 @@ export default function EmailSignupScreen() {
 
           <TermsModal
             visible={termsModalVisible}
-            onClose={() => setTermsModalVisible(false)}
+            onClose={() =>
+              setTermsModalVisible(false)
+            }
           />
         </View>
       </ScrollView>
@@ -236,6 +413,21 @@ const styles = StyleSheet.create({
     top: y(478),
   },
 
+  /*
+   * Both password inputs use exactly the same font and spacing.
+   *
+   * iOS can display secure characters differently when a custom
+   * font or password autofill is active. Using the system font for
+   * secure fields keeps their dots visually identical.
+   */
+  secureInput: {
+    fontFamily:
+      Platform.OS === "ios"
+        ? "System"
+        : "Literata",
+    letterSpacing: 0,
+  },
+
   pinSection: {
     position: "absolute",
     left: x(20),
@@ -276,6 +468,10 @@ const styles = StyleSheet.create({
     marginRight: x(8),
   },
 
+  disabledControl: {
+    opacity: 0.6,
+  },
+
   termsText: {
     width: x(328),
     minHeight: y(48),
@@ -294,6 +490,7 @@ const styles = StyleSheet.create({
     color: "#B00020",
     fontFamily: "Literata",
     fontSize: x(13),
+    lineHeight: y(18),
     textAlign: "center",
   },
 

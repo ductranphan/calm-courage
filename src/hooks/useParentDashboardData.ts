@@ -1,18 +1,25 @@
 /**
- * Loads the parent dashboard data from Firestore.
+ * Parent dashboard data hook.
  *
- * Uses real child profile, latest mood check-in, and activity progress.
+ * Reads real child profile data from Firebase:
+ * - child name
+ * - child age
+ * - child avatarId
+ * - latest mood/check-in
+ * - Phase 1 activity progress
  */
 
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  defaultAvatarId,
   normalizeAvatarId,
   type AvatarId,
 } from "@/constants/avatars";
 import {
+  defaultEmotionId,
   formatEmotionLabel,
-  isEmotionId,
+  normalizeEmotionId,
   type EmotionId,
 } from "@/constants/emotions";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,19 +28,14 @@ import {
   seedPhaseActivities,
 } from "@/services/activityAttempts";
 import { listCheckIns } from "@/services/checkIns";
-import {
-  ageFromBirthdate,
-  listChildren,
-} from "@/services/children";
-
-type DashboardStatus = "loading" | "ready" | "empty" | "error";
+import { listChildren } from "@/services/children";
 
 type DashboardData = {
-  childId: string;
+  childId: string | null;
   childName: string;
-  childAge: number | null;
+  childAge: number;
   avatarId: AvatarId;
-  todaysMood: EmotionId | null;
+  todaysMood: EmotionId;
   progress: {
     phase: number;
     completedActivities: number;
@@ -45,58 +47,69 @@ type Options = {
   moodOverride?: unknown;
 };
 
+const FALLBACK_DATA: DashboardData = {
+  childId: null,
+  childName: "Emma",
+  childAge: 4,
+  avatarId: defaultAvatarId,
+  todaysMood: defaultEmotionId,
+  progress: {
+    phase: 1,
+    completedActivities: 0,
+    totalActivities: 5,
+  },
+};
+
 export function useParentDashboardData(options: Options = {}) {
   const { user } = useAuth();
 
-  const moodOverride = isEmotionId(options.moodOverride)
-    ? options.moodOverride
+  const moodOverride = options?.moodOverride
+    ? normalizeEmotionId(options.moodOverride)
     : null;
 
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [status, setStatus] =
-    useState<DashboardStatus>("loading");
+  const [data, setData] = useState<DashboardData>({
+    ...FALLBACK_DATA,
+    todaysMood: moodOverride ?? FALLBACK_DATA.todaysMood,
+  });
+
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let cancelled = false;
+    let stillMounted = true;
 
     async function loadDashboardData() {
-      setData(null);
-
       if (!user?.uid) {
-        setStatus("empty");
+        setData({
+          ...FALLBACK_DATA,
+          todaysMood: moodOverride ?? FALLBACK_DATA.todaysMood,
+        });
+        setLoading(false);
         return;
       }
 
-      setStatus("loading");
+      setLoading(true);
 
       try {
         const children = await listChildren(user.uid);
         const firstChild = children[0];
 
         if (!firstChild) {
-          if (!cancelled) {
-            setData(null);
-            setStatus("empty");
+          if (stillMounted) {
+            setData({
+              ...FALLBACK_DATA,
+              todaysMood: moodOverride ?? FALLBACK_DATA.todaysMood,
+            });
           }
-
           return;
         }
 
-        let latestMood: EmotionId | null = null;
+        let latestMood: EmotionId = defaultEmotionId;
 
         try {
-          const checkIns = await listCheckIns(
-            user.uid,
-            firstChild.id,
-          );
-
-          const savedEmotion = checkIns[0]?.emotions;
-
-          if (isEmotionId(savedEmotion)) {
-            latestMood = savedEmotion;
-          }
+          const checkIns = await listCheckIns(user.uid, firstChild.id);
+          latestMood = normalizeEmotionId(checkIns[0]?.emotion);
         } catch {
-          latestMood = null;
+          latestMood = defaultEmotionId;
         }
 
         // Ensure Phase 1 attempts exist for children created before seeding.
@@ -108,75 +121,53 @@ export function useParentDashboardData(options: Options = {}) {
           1,
         );
 
-        if (!cancelled) {
+        if (stillMounted) {
           setData({
             childId: firstChild.id,
             childName: firstChild.name,
-            childAge: ageFromBirthdate(firstChild.birthdate),
-            avatarId: normalizeAvatarId(firstChild.avatar),
+            childAge: firstChild.age,
+            avatarId: normalizeAvatarId(firstChild.avatarId),
             todaysMood: moodOverride ?? latestMood,
             progress,
           });
-
-          setStatus("ready");
         }
-      } catch (error) {
-        console.error("Unable to load dashboard:", error);
-
-        if (!cancelled) {
-          setData(null);
-          setStatus("error");
+      } catch {
+        if (stillMounted) {
+          setData({
+            ...FALLBACK_DATA,
+            todaysMood: moodOverride ?? FALLBACK_DATA.todaysMood,
+          });
+        }
+      } finally {
+        if (stillMounted) {
+          setLoading(false);
         }
       }
     }
 
-    void loadDashboardData();
+    loadDashboardData();
 
     return () => {
-      cancelled = true;
+      stillMounted = false;
     };
   }, [user?.uid, moodOverride]);
 
   const progressPercent = useMemo(() => {
-    if (!data || data.progress.totalActivities === 0) {
+    if (data.progress.totalActivities === 0) {
       return 0;
     }
 
-    return (
-      data.progress.completedActivities /
-      data.progress.totalActivities
-    );
-  }, [data]);
+    return data.progress.completedActivities / data.progress.totalActivities;
+  }, [data.progress.completedActivities, data.progress.totalActivities]);
 
-  const roundedProgressPercent = Math.round(
-    progressPercent * 100,
-  );
+  const roundedProgressPercent = Math.round(progressPercent * 100);
 
   return {
-    status,
-    loading: status === "loading",
-    ready: status === "ready",
-    empty: status === "empty",
-    error: status === "error",
-
-    childId: data?.childId ?? null,
-    childName: data?.childName ?? null,
-    childAge: data?.childAge ?? null,
-    avatarId: data?.avatarId ?? null,
-    todaysMood: data?.todaysMood ?? null,
-
-    moodLabel: data?.todaysMood
-      ? formatEmotionLabel(data.todaysMood)
-      : null,
-
+    ...data,
+    loading,
+    moodLabel: formatEmotionLabel(data.todaysMood),
     progressPercent,
-
-    progressLabel: data
-      ? `Phase ${data.progress.phase}: ${roundedProgressPercent}% complete`
-      : "",
-
-    activitiesLabel: data
-      ? `(${data.progress.completedActivities}/${data.progress.totalActivities} Activities Done)`
-      : "",
+    progressLabel: `Phase ${data.progress.phase}: ${roundedProgressPercent}% complete`,
+    activitiesLabel: `(${data.progress.completedActivities}/${data.progress.totalActivities} Activities Done)`,
   };
 }

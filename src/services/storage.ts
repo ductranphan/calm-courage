@@ -1,10 +1,7 @@
 /**
  * Storage service (stub).
  *
- * Future: upload avatar art and check-in audio to Firebase Storage.
- * Suggested paths:
- *   parents/{parentUid}/children/{childId}/avatars/...
- *   parents/{parentUid}/children/{childId}/checkIns/{checkInId}.m4a
+ * Future: upload avatar art and other media to Firebase Storage.
  */
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 

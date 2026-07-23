@@ -1,46 +1,28 @@
 /**
- * Child profile information screen.
+ * Child profile info screen.
  *
  * Used for both:
- * - creating a child profile
- * - opening an existing child profile for editing
- *
- * The page is scrollable and tapping outside an input closes the keyboard.
+ * - creating a new child profile
+ * - editing an existing child profile
  */
 
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
-import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
+import AppButton from "@/components/ui/AppButton";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import FloatingTextInput from "@/components/ui/FloatingTextInput";
 import Logo from "@/components/ui/Logo";
 import { colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  ageFromBirthdate,
-  getChild,
-} from "@/services/children";
+import { getChild } from "@/services/children";
 import { x, y } from "@/utils/scaling";
 
 export default function ChildProfileInfoScreen() {
   const { user } = useAuth();
-
-  const { childId } = useLocalSearchParams<{
-    childId?: string;
-  }>();
+  const { childId } = useLocalSearchParams<{ childId?: string }>();
 
   const editing = Boolean(childId);
 
@@ -50,14 +32,11 @@ export default function ChildProfileInfoScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    let stillMounted = true;
 
     async function loadChild() {
       if (!childId || !user?.uid) {
-        if (!cancelled) {
-          setLoading(false);
-        }
-
+        setLoading(false);
         return;
       }
 
@@ -65,61 +44,47 @@ export default function ChildProfileInfoScreen() {
         const child = await getChild(user.uid, childId);
 
         if (!child) {
-          if (!cancelled) {
+          if (stillMounted) {
             setError("Child profile not found.");
           }
-
           return;
         }
 
-        if (!cancelled) {
+        if (stillMounted) {
           setChildName(child.name);
-          setAge(
-            String(ageFromBirthdate(child.birthdate) ?? ""),
-          );
+          setAge(String(child.age));
         }
-      } catch (loadError) {
-        console.error(
-          "Unable to load child profile:",
-          loadError,
-        );
-
-        if (!cancelled) {
+      } catch {
+        if (stillMounted) {
           setError("Unable to load child profile.");
         }
       } finally {
-        if (!cancelled) {
+        if (stillMounted) {
           setLoading(false);
         }
       }
     }
 
-    void loadChild();
+    loadChild();
 
     return () => {
-      cancelled = true;
+      stillMounted = false;
     };
   }, [childId, user?.uid]);
 
   function handleNext() {
-    Keyboard.dismiss();
     setError(null);
 
     const trimmedName = childName.trim();
-    const parsedAge = Number.parseInt(age, 10);
+    const parsedAge = Number(age);
 
     if (!trimmedName) {
       setError("Please enter the child’s name.");
       return;
     }
 
-    if (
-      !age.trim() ||
-      !Number.isInteger(parsedAge) ||
-      parsedAge < 1 ||
-      parsedAge > 17
-    ) {
-      setError("Please enter an age between 1 and 17.");
+    if (!age.trim() || Number.isNaN(parsedAge) || parsedAge <= 0) {
+      setError("Please enter a valid age.");
       return;
     }
 
@@ -135,119 +100,59 @@ export default function ChildProfileInfoScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingScreen}>
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-        />
-
-        <Text style={styles.loadingText}>
-          Loading child profile...
-        </Text>
+      <View style={styles.screen}>
+        <ActivityIndicator color={colors.primary} style={styles.loader} />
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode={
-          Platform.OS === "ios" ? "interactive" : "on-drag"
-        }
-      >
-        <View style={styles.figmaFrame}>
-          <Pressable
-            style={styles.dismissKeyboardArea}
-            onPress={Keyboard.dismiss}
-            accessible={false}
-          />
+    <View style={styles.screen}>
+      <BackButton fallback={editing ? "/children" : "/verify-email"} />
 
-          <BackButton
-            fallback={
-              editing ? "/children" : "/verify-email"
-            }
-          />
+      <Text style={styles.title}>
+        {editing ? "Edit Child Profile" : "Who is joining\n the journey?"}
+      </Text>
 
-          <Text style={styles.title}>
-            {editing
-              ? "Edit Child Profile"
-              : "Who is joining\n the journey?"}
-          </Text>
+      <Text style={styles.subtitle}>
+        Please enter your child&apos;s details to{"\n"}
+        personalize their emotional learning{"\n"}
+        space and track progress.
+      </Text>
 
-          <Text style={styles.subtitle}>
-            Please enter your child&apos;s details to{"\n"}
-            personalize their emotional learning{"\n"}
-            space and track progress.
-          </Text>
+      <View style={styles.nameInput}>
+        <FloatingTextInput
+          label="Child’s name or nickname"
+          placeholder="Child’s name or nickname"
+          value={childName}
+          onChangeText={setChildName}
+          autoCapitalize="words"
+          autoCorrect={false}
+        />
+      </View>
 
-          <View style={styles.nameInput}>
-            <FloatingTextInput
-              label="Child’s name or nickname"
-              placeholder="Child’s name or nickname"
-              value={childName}
-              onChangeText={(value) => {
-                setChildName(value);
+      <View style={styles.ageInput}>
+        <FloatingTextInput
+          label="Child’s age"
+          placeholder="Child’s age"
+          value={age}
+          onChangeText={setAge}
+          keyboardType="number-pad"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
 
-                if (error) {
-                  setError(null);
-                }
-              }}
-              autoCapitalize="words"
-              autoCorrect={false}
-              returnKeyType="next"
-            />
-          </View>
+      <ErrorMessage message={error} style={styles.error} />
 
-          <View style={styles.ageInput}>
-            <FloatingTextInput
-              label="Child’s age"
-              placeholder="Child’s age"
-              value={age}
-              onChangeText={(value) => {
-                setAge(value.replace(/[^0-9]/g, ""));
+      <View style={styles.buttonWrapper}>
+        <AppButton title="Next" onPress={handleNext} style={styles.nextButton} />
+      </View>
 
-                if (error) {
-                  setError(null);
-                }
-              }}
-              keyboardType="number-pad"
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="done"
-              onSubmitEditing={Keyboard.dismiss}
-            />
-          </View>
-
-          <ErrorMessage
-            message={error}
-            style={styles.error}
-          />
-
-          <View style={styles.buttonWrapper}>
-            <AppButton
-              title="Next"
-              onPress={handleNext}
-              style={styles.nextButton}
-            />
-          </View>
-
-          <View style={styles.logoWrapper}>
-            <Logo
-              width={x(168)}
-              height={y(62)}
-              shadow
-            />
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      <View style={styles.logoWrapper}>
+        <Logo width={x(168)} height={y(62)} shadow />
+      </View>
+    </View>
   );
 }
 
@@ -257,40 +162,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
-  scrollContent: {
-    minHeight: y(960),
-    backgroundColor: colors.background,
-  },
-
-  figmaFrame: {
-    width: "100%",
-    height: y(960),
-    position: "relative",
-    backgroundColor: colors.background,
-  },
-
-  dismissKeyboardArea: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  },
-
-  loadingScreen: {
-    flex: 1,
-    backgroundColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  loadingText: {
-    marginTop: y(14),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(17),
-    lineHeight: y(24),
-    textAlign: "center",
+  loader: {
+    marginTop: y(400),
   },
 
   title: {
@@ -310,7 +183,7 @@ const styles = StyleSheet.create({
     left: x(20),
     top: y(242),
     width: x(362),
-    minHeight: y(72),
+    height: y(72),
     color: colors.primary,
     fontFamily: "Literata",
     fontSize: x(20),
@@ -321,21 +194,18 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: x(20),
     top: y(355),
-    zIndex: 2,
   },
 
   ageInput: {
     position: "absolute",
     left: x(20),
     top: y(461),
-    zIndex: 2,
   },
 
   error: {
     position: "absolute",
     left: x(20),
     top: y(545),
-    width: x(362),
   },
 
   buttonWrapper: {
@@ -344,7 +214,6 @@ const styles = StyleSheet.create({
     top: y(597),
     width: x(210),
     height: y(52),
-    zIndex: 2,
   },
 
   nextButton: {

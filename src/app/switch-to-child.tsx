@@ -2,6 +2,9 @@
  * Switch to Child Mode screen.
  *
  * Shows the parent that it is time to pass the device to the child.
+ * Matches Figma Screen 4.0.
+ *
+ * The child name is loaded from Firebase instead of being hardcoded.
  */
 
 import { router, useLocalSearchParams } from "expo-router";
@@ -62,14 +65,15 @@ export default function SwitchToChildScreen() {
           setName(selectedChild.name);
         }
       } catch {
-        // Keep the name empty.
+        // Keep empty name instead of showing the wrong child name.
+      } finally {
         if (stillMounted) {
           setLoading(false);
         }
       }
     }
 
-    void loadChildName();
+    loadChildName();
 
     return () => {
       stillMounted = false;

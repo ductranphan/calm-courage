@@ -1,8 +1,8 @@
 /**
  * Child welcome screen.
  *
- * Shows the selected child's name and avatar.
- * It avoids displaying incorrect placeholder child information while loading.
+ * Shows the selected child name and avatar.
+ * It avoids showing Emma/panda before Firebase finishes loading.
  */
 
 import { router, useLocalSearchParams } from "expo-router";
@@ -57,7 +57,11 @@ function starsUntilNextReward(stars: number) {
 export default function ChildWelcomeScreen() {
   const { user } = useAuth();
 
-  const { childId, childName, avatarId } = useLocalSearchParams<{
+  const {
+    childId,
+    childName,
+    avatarId,
+  } = useLocalSearchParams<{
     childId?: string;
     childName?: string;
     avatarId?: string;
@@ -86,7 +90,22 @@ export default function ChildWelcomeScreen() {
         return;
       }
 
-      setLoading(true);
+      /**
+       * If route params already include the correct child,
+       * render immediately and avoid the Emma/panda flash.
+       * Rewards still load from Firebase below.
+       */
+      if (childName && avatarId) {
+        setChildData((current) => ({
+          ...current,
+          childId: childId || null,
+          childName,
+          avatarId: normalizeAvatarId(avatarId),
+        }));
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
 
       try {
         let child = null;
@@ -115,13 +134,13 @@ export default function ChildWelcomeScreen() {
         setChildData({
           childId: child.id,
           childName: child.name,
-          avatarId: normalizeAvatarId(child.avatar),
+          avatarId: normalizeAvatarId(child.avatarId),
           stars: child.stars,
           gems: child.gems,
           badges: child.badges.length,
         });
       } catch {
-        // Keep the last known state
+        // Keep the last known state. Do not show a wrong fallback child.
       } finally {
         if (stillMounted) {
           setLoading(false);
@@ -129,7 +148,7 @@ export default function ChildWelcomeScreen() {
       }
     }
 
-    void loadChild();
+    loadChild();
 
     return () => {
       stillMounted = false;

@@ -1,10 +1,12 @@
 /**
- * Daily emotion screen.
+ * Daily Emotion screen.
  *
- * Displays emotion images and saves the selected emotion using the
- * backend-compatible 'emotions' field.
+ * Matches Figma Screen 6.0: Daily Emotion Check-In.
+ * Shows emotion images from assets/images.
+ * Saves the selected emotion as a Firebase check-in.
  *
- * The current flow navigates immediately and saves in the background.
+ * The screen navigates instantly after tapping an emotion.
+ * Firebase saves the mood in the background.
  */
 
 import { router, useLocalSearchParams } from "expo-router";
@@ -31,7 +33,6 @@ import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
 import AudioOnIcon from "../../assets/icons/audio-on.svg";
-
 const LogoImage = require("../../assets/images/logo.png");
 
 const emotionPositions: Record<EmotionId, { left: number; top: number }> = {
@@ -54,17 +55,15 @@ export default function DailyEmotionScreen() {
   const [activeChildId, setActiveChildId] = useState<string | null>(
     childId || null,
   );
-
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
 
   useEffect(() => {
     let stillMounted = true;
 
     async function loadFallbackChild() {
-      if (childId || !user?.uid) {
-        return;
-      }
+      if (childId || !user?.uid) return;
 
       try {
         const children = await listChildren(user.uid);
@@ -73,11 +72,11 @@ export default function DailyEmotionScreen() {
           setActiveChildId(children[0].id);
         }
       } catch {
-        // An error is displayed if the child tries to select an emotion.
+        // Error will show only if the child taps an emotion.
       }
     }
 
-    void loadFallbackChild();
+    loadFallbackChild();
 
     return () => {
       stillMounted = false;
@@ -92,6 +91,10 @@ export default function DailyEmotionScreen() {
       return;
     }
 
+    /**
+     * Navigate immediately so the child does not wait on Firebase.
+     * The parent dashboard receives the mood instantly through params.
+     */
     router.replace({
       pathname: "/home",
       params: {
@@ -99,10 +102,13 @@ export default function DailyEmotionScreen() {
       },
     });
 
+    /**
+     * Save check-in and activity progress in the background.
+     */
     void (async () => {
       try {
         await createCheckIn(user.uid, activeChildId, {
-          emotions: emotionId,
+          emotion: emotionId,
         });
 
         const nameFeeling = ACTIVITIES_BY_ID.phase1_name_the_feeling;
@@ -138,9 +144,7 @@ export default function DailyEmotionScreen() {
           )}
         </Pressable>
 
-        <Text style={styles.title}>
-          How are you feeling{"\n"}today?
-        </Text>
+        <Text style={styles.title}>How are you feeling{"\n"}today?</Text>
 
         <Text style={styles.subtitle}>
           Select the emotion that best matches{"\n"}

@@ -1,7 +1,7 @@
 /**
- * App entry route.
+ * Application entry route.
  *
- * Sends users to onboarding, terms, email verification, child setup, or home.
+ * Sends users to onboarding, email verification, child setup, or home.
  */
 
 import { Redirect, type Href } from "expo-router";
@@ -21,7 +21,6 @@ import { listChildren } from "@/services/children";
 
 type EntryRoute =
   | "/onboarding"
-  | "/terms"
   | "/verify-email"
   | "/child-profile-info"
   | "/home";
@@ -60,15 +59,6 @@ export default function Index() {
         }
 
         /*
-         * The parent must accept the terms before continuing
-         * to email verification or the main application.
-         */
-        if (!profile?.termsAccepted) {
-          setNextRoute("/terms");
-          return;
-        }
-
-        /*
          * Email verification must be completed before the parent
          * can create child profiles or access the dashboard.
          */
@@ -84,7 +74,7 @@ export default function Index() {
         }
 
         /*
-         * Use the new Figma-aligned child setup flow when the parent
+         * Use the Figma-aligned child setup flow when the parent
          * has no child profiles yet.
          */
         if (children.length === 0) {
@@ -96,7 +86,7 @@ export default function Index() {
          * Heal profiles created before onboardingComplete was set on
          * the Figma child-create path.
          */
-        if (!profile.onboardingComplete) {
+        if (!profile?.onboardingComplete) {
           await completeOnboarding(user.uid);
 
           if (cancelled) {

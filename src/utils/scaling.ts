@@ -2,7 +2,8 @@
  * Responsive scaling utilities.
  *
  * Converts Figma pixel values into responsive values based on the
- * current device dimensions.
+ * current device width.
+ *
  */
 
 import { Dimensions } from "react-native";

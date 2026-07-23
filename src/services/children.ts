@@ -1,17 +1,17 @@
 /**
  * Child profile service.
  *
- * CRUD for child profiles under parents/{parentUid}/children/{childId}.
- * Schema matches product slides (Screen 3 / 3.1).
+ * CRUD for child profiles under parents/{uid}/children/{childId}.
  */
+
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
   serverTimestamp,
   setDoc,
-  Timestamp,
   updateDoc,
 } from "firebase/firestore";
 
@@ -21,93 +21,71 @@ import type { AvatarId } from "@/constants/avatars";
 export type ChildProfile = {
   id: string;
   name: string;
-  birthdate: Timestamp | { seconds: number; nanoseconds: number };
-  avatar: AvatarId;
-  createdAt?: unknown;
+  age: number;
+  avatarId: AvatarId;
   stars: number;
   gems: number;
   badges: string[];
+  createdAt?: unknown;
+  updatedAt?: unknown;
 };
 
 export type CreateChildInput = {
   name: string;
-  /** Screen 3 collects age; stored as approximate birthdate in Firestore. */
   age: number;
-  avatar: AvatarId;
+  avatarId: AvatarId;
 };
 
 export type UpdateChildInput = {
   name?: string;
-  /** Screen 3 collects age; stored as approximate birthdate in Firestore. */
   age?: number;
-  avatar?: AvatarId;
+  avatarId?: AvatarId;
 };
 
-function childrenCollection(parentUid: string) {
-  return collection(db, "parents", parentUid, "children");
-}
-
-function childDoc(parentUid: string, childId: string) {
-  return doc(db, "parents", parentUid, "children", childId);
-}
-
-/** Convert age (years) into a birthdate timestamp (Jan 1 of birth year). */
-export function birthdateFromAge(age: number): Timestamp {
-  const year = new Date().getFullYear() - age;
-  return Timestamp.fromDate(new Date(year, 0, 1));
-}
-
-/** Derive approximate age in years from a stored birthdate. */
-export function ageFromBirthdate(
-  birthdate: ChildProfile["birthdate"] | null | undefined
-): number | null {
-  if (!birthdate || typeof birthdate !== "object" || !("seconds" in birthdate)) {
-    return null;
-  }
-
-  const birth = new Date(birthdate.seconds * 1000);
-  const now = new Date();
-  let age = now.getFullYear() - birth.getFullYear();
-  const monthDiff = now.getMonth() - birth.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) {
-    age -= 1;
-  }
-  return age >= 0 ? age : null;
-}
+export type AwardRewardsInput = {
+  stars?: number;
+  gems?: number;
+  badges?: string[];
+};
 
 function mapChildDoc(
   id: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
 ): ChildProfile {
   return {
     id,
     name: typeof data.name === "string" ? data.name : "",
-    birthdate: data.birthdate as ChildProfile["birthdate"],
-    avatar: data.avatar as AvatarId,
-    createdAt: data.createdAt,
+    age: typeof data.age === "number" ? data.age : 0,
+    avatarId: data.avatarId as AvatarId,
     stars: typeof data.stars === "number" ? data.stars : 0,
     gems: typeof data.gems === "number" ? data.gems : 0,
     badges: Array.isArray(data.badges)
       ? data.badges.filter(
-          (badge): badge is string => typeof badge === "string"
+          (badge): badge is string => typeof badge === "string",
         )
       : [],
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
   };
 }
 
 export async function listChildren(parentUid: string): Promise<ChildProfile[]> {
-  const snapshot = await getDocs(childrenCollection(parentUid));
+  const snapshot = await getDocs(
+    collection(db, "parents", parentUid, "children"),
+  );
 
-  return snapshot.docs.map((childSnapshot) =>
-    mapChildDoc(childSnapshot.id, childSnapshot.data())
+  return snapshot.docs.map((childDoc) =>
+    mapChildDoc(childDoc.id, childDoc.data()),
   );
 }
 
 export async function getChild(
   parentUid: string,
-  childId: string
+  childId: string,
 ): Promise<ChildProfile | null> {
-  const snapshot = await getDoc(childDoc(parentUid, childId));
+  const childRef = doc(db, "parents", parentUid, "children", childId);
+  const snapshot = await getDoc(childRef);
+
   if (!snapshot.exists()) {
     return null;
   }
@@ -117,74 +95,52 @@ export async function getChild(
 
 export async function createChild(
   parentUid: string,
-  data: CreateChildInput
+  data: CreateChildInput,
 ): Promise<string> {
-  const childRef = doc(childrenCollection(parentUid));
+  const childRef = doc(collection(db, "parents", parentUid, "children"));
 
   await setDoc(childRef, {
     name: data.name.trim(),
-    birthdate: birthdateFromAge(data.age),
-    avatar: data.avatar,
-    createdAt: serverTimestamp(),
+    age: data.age,
+    avatarId: data.avatarId,
     stars: 0,
     gems: 0,
     badges: [],
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
 
   return childRef.id;
 }
 
-/**
- * Update an existing child profile.
- *
- * Only the supplied fields are updated. Existing rewards and createdAt data
- * remain unchanged.
- */
 export async function updateChild(
   parentUid: string,
   childId: string,
-  data: UpdateChildInput
+  data: UpdateChildInput,
 ): Promise<void> {
-  const updates: Record<string, unknown> = {};
+  const childRef = doc(db, "parents", parentUid, "children", childId);
+
+  const updateData: Record<
+    string,
+    string | number | AvatarId | ReturnType<typeof serverTimestamp>
+  > = {
+    updatedAt: serverTimestamp(),
+  };
 
   if (data.name !== undefined) {
-    const trimmedName = data.name.trim();
-
-    if (!trimmedName) {
-      throw new Error("Child name cannot be empty.");
-    }
-
-    updates.name = trimmedName;
+    updateData.name = data.name.trim();
   }
 
   if (data.age !== undefined) {
-    if (
-      !Number.isInteger(data.age) ||
-      data.age < 1 ||
-      data.age > 17
-    ) {
-      throw new Error("Child age must be between 1 and 17.");
-    }
-
-    updates.birthdate = birthdateFromAge(data.age);
+    updateData.age = data.age;
   }
 
-  if (data.avatar !== undefined) {
-    updates.avatar = data.avatar;
+  if (data.avatarId !== undefined) {
+    updateData.avatarId = data.avatarId;
   }
 
-  if (Object.keys(updates).length === 0) {
-    return;
-  }
-
-  await updateDoc(childDoc(parentUid, childId), updates);
+  await updateDoc(childRef, updateData);
 }
-
-export type AwardRewardsInput = {
-  stars?: number;
-  gems?: number;
-  badges?: string[];
-};
 
 /**
  * Increment a child's reward totals after an activity or check-in.
@@ -208,9 +164,20 @@ export async function awardRewards(
     }
   }
 
-  await updateDoc(childDoc(parentUid, childId), {
+  const childRef = doc(db, "parents", parentUid, "children", childId);
+
+  await updateDoc(childRef, {
     stars: child.stars + Math.max(0, rewards.stars ?? 0),
     gems: child.gems + Math.max(0, rewards.gems ?? 0),
     badges: nextBadges,
+    updatedAt: serverTimestamp(),
   });
+}
+
+export async function deleteChild(
+  parentUid: string,
+  childId: string,
+): Promise<void> {
+  const childRef = doc(db, "parents", parentUid, "children", childId);
+  await deleteDoc(childRef);
 }

@@ -2,6 +2,7 @@
  * Terms of Service and Privacy Policy overlay.
  *
  * Figma-style grey overlay displayed inside the email sign-up screen.
+ * The grey card stays fixed, while the terms text can scroll if needed.
  */
 
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
