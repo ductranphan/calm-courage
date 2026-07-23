@@ -16,7 +16,7 @@ import {
 
 import { colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
-import { getUserProfile } from "@/services/auth";
+import { completeOnboarding, getUserProfile } from "@/services/auth";
 import { listChildren } from "@/services/children";
 
 type EntryRoute =
@@ -84,15 +84,24 @@ export default function Index() {
         }
 
         /*
-         * Use the new Figma-aligned child setup flow when onboarding
-         * is incomplete or the parent has no child profiles.
+         * Use the new Figma-aligned child setup flow when the parent
+         * has no child profiles yet.
          */
-        if (
-          !profile.onboardingComplete ||
-          children.length === 0
-        ) {
+        if (children.length === 0) {
           setNextRoute("/child-profile-info");
           return;
+        }
+
+        /*
+         * Heal profiles created before onboardingComplete was set on
+         * the Figma child-create path.
+         */
+        if (!profile.onboardingComplete) {
+          await completeOnboarding(user.uid);
+
+          if (cancelled) {
+            return;
+          }
         }
 
         setNextRoute("/home");

@@ -3,10 +3,7 @@
  *
  * Matches Figma Screen 2.1: Email Verification Gateway.
  *
- * Development note:
- * The "I've Verified My Email" button temporarily skips the real Firebase
- * verification check so the rest of the app can be developed.
- * Replace handleVerified() with the Firebase version before release.
+ * Reloads the Firebase user and only continues once emailVerified is true.
  */
 
 import { router } from "expo-router";
@@ -31,7 +28,7 @@ import { x, y } from "@/utils/scaling";
 import EmailIcon from "../../assets/images/email.svg";
 
 export default function VerifyEmailScreen() {
-  const { sendVerificationEmail } = useAuth();
+  const { sendVerificationEmail, reloadUser } = useAuth();
 
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -51,15 +48,6 @@ export default function VerifyEmailScreen() {
       setLoading(false);
     }
   }
-
-  function handleVerified() {
-    router.replace("/child-profile-info");
-  }
-
-  /*
-  Real Firebase version to use before release:
-
-  const { reloadUser } = useAuth();
 
   async function handleVerified() {
     setError(null);
@@ -81,7 +69,6 @@ export default function VerifyEmailScreen() {
       setLoading(false);
     }
   }
-  */
 
   return (
     <ScrollView

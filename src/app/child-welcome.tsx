@@ -40,16 +40,18 @@ type ChildWelcomeData = {
   childId: string | null;
   childName: string;
   avatarId: AvatarId;
-};
-
-const TEMP_SCORES = {
-  stars: 15,
-  diamonds: 5,
-  badges: 3,
+  stars: number;
+  gems: number;
+  badges: number;
 };
 
 function formatScore(value: number) {
   return value.toString().padStart(2, "0");
+}
+
+function starsUntilNextReward(stars: number) {
+  const remainder = stars % 5;
+  return remainder === 0 && stars > 0 ? 5 : 5 - remainder;
 }
 
 export default function ChildWelcomeScreen() {
@@ -64,12 +66,15 @@ export default function ChildWelcomeScreen() {
   const hasImmediateData = Boolean(childName && avatarId);
 
   const [audioEnabled, setAudioEnabled] = useState(false);
-  const [loading, setLoading] = useState(!hasImmediateData);
+  const [loading, setLoading] = useState(true);
 
   const [childData, setChildData] = useState<ChildWelcomeData>({
     childId: childId || null,
     childName: childName || "",
     avatarId: normalizeAvatarId(avatarId ?? defaultAvatarId),
+    stars: 0,
+    gems: 0,
+    badges: 0,
   });
 
   useEffect(() => {
@@ -77,17 +82,6 @@ export default function ChildWelcomeScreen() {
 
     async function loadChild() {
       if (!user?.uid) {
-        setLoading(false);
-        return;
-      }
-
-      if (childName && avatarId) {
-        setChildData({
-          childId: childId || null,
-          childName,
-          avatarId: normalizeAvatarId(avatarId),
-        });
-
         setLoading(false);
         return;
       }
@@ -104,7 +98,17 @@ export default function ChildWelcomeScreen() {
           child = children[0] ?? null;
         }
 
-        if (!child || !stillMounted) {
+        if (!stillMounted) {
+          return;
+        }
+
+        if (!child) {
+          setChildData((current) => ({
+            ...current,
+            childId: childId || null,
+            childName: childName || current.childName,
+            avatarId: normalizeAvatarId(avatarId ?? current.avatarId),
+          }));
           return;
         }
 
@@ -112,9 +116,12 @@ export default function ChildWelcomeScreen() {
           childId: child.id,
           childName: child.name,
           avatarId: normalizeAvatarId(child.avatar),
+          stars: child.stars,
+          gems: child.gems,
+          badges: child.badges.length,
         });
       } catch {
-        // Keep the empty state
+        // Keep the last known state
       } finally {
         if (stillMounted) {
           setLoading(false);
@@ -127,7 +134,7 @@ export default function ChildWelcomeScreen() {
     return () => {
       stillMounted = false;
     };
-  }, [user?.uid, childId, childName, avatarId]);
+  }, [user?.uid, childId, childName, avatarId, hasImmediateData]);
 
   const buddyImage = avatarImages[childData.avatarId];
 
@@ -158,21 +165,22 @@ export default function ChildWelcomeScreen() {
 
               <View style={styles.statsRow}>
                 <StarIcon width={x(32)} height={x(32)} />
-                <Text style={styles.statText}>{TEMP_SCORES.stars}</Text>
+                <Text style={styles.statText}>{childData.stars}</Text>
 
                 <DiamondIcon width={x(20)} height={x(20)} />
                 <Text style={styles.statText}>
-                  {formatScore(TEMP_SCORES.diamonds)}
+                  {formatScore(childData.gems)}
                 </Text>
 
                 <BadgeIcon width={x(28)} height={x(28)} />
                 <Text style={styles.statText}>
-                  {formatScore(TEMP_SCORES.badges)}
+                  {formatScore(childData.badges)}
                 </Text>
               </View>
 
               <Text style={styles.rewardText}>
-                5 more stars until your next{"\n"}big reward!
+                {starsUntilNextReward(childData.stars)} more stars until your
+                next{"\n"}big reward!
               </Text>
             </View>
 

@@ -52,7 +52,7 @@ export default function LoginScreen() {
 
     try {
       await signIn(email.trim(), password);
-      router.replace("/home");
+      router.replace("/");
     } catch {
       setError("Unable to log in. Please check your email and password.");
     } finally {

@@ -123,6 +123,31 @@ export async function completeOnboarding(parentUid: string) {
   }
 }
 
+/**
+ * Verify the parent PIN against the hash stored on the parent profile.
+ */
+export async function verifyPin(
+  parentUid: string,
+  pin: string,
+): Promise<boolean> {
+  if (!/^\d{4}$/.test(pin)) {
+    return false;
+  }
+
+  try {
+    const profile = await getParentProfile(parentUid);
+
+    if (!profile?.pinHash) {
+      return false;
+    }
+
+    const pinHash = await hashPin(pin);
+    return pinHash === profile.pinHash;
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
 export async function signUp(email: string, password: string, pin: string) {
   try {
     const pinHash = await hashPin(pin);

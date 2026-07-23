@@ -36,6 +36,8 @@ import {
   getChild,
   updateChild,
 } from "@/services/children";
+import { completeOnboarding } from "@/services/auth";
+import { seedPhaseActivities } from "@/services/activityAttempts";
 import { x, y } from "@/utils/scaling";
 
 const avatarPositions: {
@@ -159,6 +161,9 @@ export default function ChildProfileAvatarScreen() {
         age: parsedAge,
         avatar: selectedAvatar,
       });
+
+      await seedPhaseActivities(user.uid, savedChildId, 1);
+      await completeOnboarding(user.uid);
 
       router.replace({
         pathname: "/switch-to-child",

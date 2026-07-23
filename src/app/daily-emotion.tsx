@@ -24,7 +24,9 @@ import { colors } from "@/constants/colors";
 import { emotions, type EmotionId } from "@/constants/emotions";
 import { useAuth } from "@/contexts/AuthContext";
 import { createCheckIn } from "@/services/checkIns";
-import { listChildren } from "@/services/children";
+import { awardRewards, listChildren } from "@/services/children";
+import { ACTIVITIES_BY_ID } from "@/constants/activities";
+import { completeActivityAttempt } from "@/services/activityAttempts";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -97,11 +99,23 @@ export default function DailyEmotionScreen() {
       },
     });
 
-    void createCheckIn(user.uid, activeChildId, {
-      emotions: emotionId,
-    }).catch(() => {
-      console.log("Unable to save emotion.");
-    });
+    void (async () => {
+      try {
+        await createCheckIn(user.uid, activeChildId, {
+          emotions: emotionId,
+        });
+
+        const nameFeeling = ACTIVITIES_BY_ID.phase1_name_the_feeling;
+
+        if (nameFeeling) {
+          await completeActivityAttempt(user.uid, activeChildId, nameFeeling);
+        } else {
+          await awardRewards(user.uid, activeChildId, { stars: 1 });
+        }
+      } catch {
+        console.log("Unable to save emotion progress.");
+      }
+    })();
   }
 
   return (

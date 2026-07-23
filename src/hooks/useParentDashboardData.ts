@@ -1,5 +1,7 @@
 /**
- * Loads the parent dashboard data without displaying fake child information.
+ * Loads the parent dashboard data from Firestore.
+ *
+ * Uses real child profile, latest mood check-in, and activity progress.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -14,6 +16,10 @@ import {
   type EmotionId,
 } from "@/constants/emotions";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  getChildActivityProgress,
+  seedPhaseActivities,
+} from "@/services/activityAttempts";
 import { listCheckIns } from "@/services/checkIns";
 import {
   ageFromBirthdate,
@@ -37,15 +43,6 @@ type DashboardData = {
 
 type Options = {
   moodOverride?: unknown;
-};
-
-/**
- * Progress stays temporary until the backend provides activity progress.
- */
-const TEMPORARY_PROGRESS = {
-  phase: 1,
-  completedActivities: 3,
-  totalActivities: 5,
 };
 
 export function useParentDashboardData(options: Options = {}) {
@@ -102,6 +99,15 @@ export function useParentDashboardData(options: Options = {}) {
           latestMood = null;
         }
 
+        // Ensure Phase 1 attempts exist for children created before seeding.
+        await seedPhaseActivities(user.uid, firstChild.id, 1);
+
+        const progress = await getChildActivityProgress(
+          user.uid,
+          firstChild.id,
+          1,
+        );
+
         if (!cancelled) {
           setData({
             childId: firstChild.id,
@@ -109,7 +115,7 @@ export function useParentDashboardData(options: Options = {}) {
             childAge: ageFromBirthdate(firstChild.birthdate),
             avatarId: normalizeAvatarId(firstChild.avatar),
             todaysMood: moodOverride ?? latestMood,
-            progress: TEMPORARY_PROGRESS,
+            progress,
           });
 
           setStatus("ready");

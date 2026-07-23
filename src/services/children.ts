@@ -179,3 +179,38 @@ export async function updateChild(
 
   await updateDoc(childDoc(parentUid, childId), updates);
 }
+
+export type AwardRewardsInput = {
+  stars?: number;
+  gems?: number;
+  badges?: string[];
+};
+
+/**
+ * Increment a child's reward totals after an activity or check-in.
+ */
+export async function awardRewards(
+  parentUid: string,
+  childId: string,
+  rewards: AwardRewardsInput,
+): Promise<void> {
+  const child = await getChild(parentUid, childId);
+
+  if (!child) {
+    throw new Error("Child profile not found.");
+  }
+
+  const nextBadges = [...child.badges];
+
+  for (const badge of rewards.badges ?? []) {
+    if (!nextBadges.includes(badge)) {
+      nextBadges.push(badge);
+    }
+  }
+
+  await updateDoc(childDoc(parentUid, childId), {
+    stars: child.stars + Math.max(0, rewards.stars ?? 0),
+    gems: child.gems + Math.max(0, rewards.gems ?? 0),
+    badges: nextBadges,
+  });
+}

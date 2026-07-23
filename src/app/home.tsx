@@ -1,12 +1,10 @@
 /**
  * Parent dashboard screen.
  *
- * Connected to the backend where possible:
- * - child name
- * - child avatar
+ * Connected to the backend:
+ * - child name / avatar
  * - latest check-in mood
- *
- * Progress remains temporary until the backend stores activity data.
+ * - Phase 1 activity progress from Firestore
  */
 
 import { router, useLocalSearchParams } from "expo-router";
