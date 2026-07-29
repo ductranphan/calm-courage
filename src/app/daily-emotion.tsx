@@ -5,13 +5,14 @@
  * Shows emotion images from assets/images.
  * Saves the selected emotion as a Firebase check-in.
  *
- * The screen navigates instantly after tapping an emotion.
- * Firebase saves the mood in the background.
+ * Waits for Firebase to save one check-in for the current local day before
+ * leaving the screen, so failed writes are never shown as successful.
  */
 
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   Pressable,
   ScrollView,
@@ -23,12 +24,15 @@ import {
 import BackButton from "@/components/ui/BackButton";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import { colors } from "@/constants/colors";
-import { emotions, type EmotionId } from "@/constants/emotions";
+import {
+  emotions,
+  isEmotionId,
+  type EmotionId,
+} from "@/constants/emotions";
+import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { createCheckIn } from "@/services/checkIns";
-import { awardRewards, listChildren } from "@/services/children";
-import { ACTIVITIES_BY_ID } from "@/constants/activities";
-import { completeActivityAttempt } from "@/services/activityAttempts";
+import { saveDailyCheckIn } from "@/services/checkIns";
+import { getChild } from "@/services/children";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -50,40 +54,55 @@ const emotionPositions: Record<EmotionId, { left: number; top: number }> = {
 
 export default function DailyEmotionScreen() {
   const { user } = useAuth();
+  const { activeChild, selectActiveChild } = useActiveChild();
   const { childId } = useLocalSearchParams<{ childId?: string }>();
 
-  const [activeChildId, setActiveChildId] = useState<string | null>(
-    childId || null,
-  );
+  const activeChildId = activeChild?.id ?? childId ?? null;
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+  const [savingEmotion, setSavingEmotion] =
+    useState<EmotionId | null>(null);
 
   useEffect(() => {
     let stillMounted = true;
 
-    async function loadFallbackChild() {
-      if (childId || !user?.uid) return;
+    async function restoreSelectedChild() {
+      if (activeChild || !childId || !user?.uid) {
+        return;
+      }
 
       try {
-        const children = await listChildren(user.uid);
+        const child = await getChild(user.uid, childId);
 
-        if (stillMounted && children[0]) {
-          setActiveChildId(children[0].id);
+        if (stillMounted && child) {
+          selectActiveChild({
+            id: child.id,
+            name: child.name,
+            avatarId: child.avatarId,
+          });
         }
       } catch {
-        // Error will show only if the child taps an emotion.
+        // The existing error message is shown if an emotion is tapped.
       }
     }
 
-    loadFallbackChild();
+    void restoreSelectedChild();
 
     return () => {
       stillMounted = false;
     };
-  }, [childId, user?.uid]);
+  }, [
+    activeChild,
+    childId,
+    user?.uid,
+    selectActiveChild,
+  ]);
 
-  function handleSelectEmotion(emotionId: EmotionId) {
+  async function handleSelectEmotion(emotionId: EmotionId) {
+    if (savingEmotion) {
+      return;
+    }
+
     setError(null);
 
     if (!user?.uid || !activeChildId) {
@@ -91,37 +110,46 @@ export default function DailyEmotionScreen() {
       return;
     }
 
-    /**
-     * Navigate immediately so the child does not wait on Firebase.
-     * The parent dashboard receives the mood instantly through params.
-     */
-    router.replace({
-      pathname: "/home",
-      params: {
-        mood: emotionId,
-      },
-    });
+    setSavingEmotion(emotionId);
 
-    /**
-     * Save check-in and activity progress in the background.
-     */
-    void (async () => {
-      try {
-        await createCheckIn(user.uid, activeChildId, {
+    try {
+      /*
+       * Wait for Firestore before leaving the screen. The service also
+       * refuses to create a second check-in for the same child and date.
+       */
+      const savedCheckIn = await saveDailyCheckIn(
+        user.uid,
+        activeChildId,
+        {
           emotion: emotionId,
-        });
+        },
+      );
 
-        const nameFeeling = ACTIVITIES_BY_ID.phase1_name_the_feeling;
+      /*
+       * If an older check-in already existed, use its saved emotion rather
+       * than the newly tapped card. This keeps the encouragement page and
+       * Firestore consistent.
+       */
+      const savedEmotion = isEmotionId(savedCheckIn.emotion)
+        ? savedCheckIn.emotion
+        : emotionId;
 
-        if (nameFeeling) {
-          await completeActivityAttempt(user.uid, activeChildId, nameFeeling);
-        } else {
-          await awardRewards(user.uid, activeChildId, { stars: 1 });
-        }
-      } catch {
-        console.log("Unable to save emotion progress.");
-      }
-    })();
+      router.replace({
+        pathname: "/emotion-encouragement",
+        params: {
+          emotion: savedEmotion,
+          childId: activeChildId,
+        },
+      } as Href);
+    } catch (saveError) {
+      console.error("Unable to save daily emotion:", saveError);
+
+      setError(
+        "We couldn’t save your feeling. Please try again.",
+      );
+    } finally {
+      setSavingEmotion(null);
+    }
   }
 
   return (
@@ -152,33 +180,48 @@ export default function DailyEmotionScreen() {
           daily courage map.
         </Text>
 
-        {emotions.map((emotion) => {
-          const position = emotionPositions[emotion.id];
+        {emotions.map((emotionOption) => {
+          const position = emotionPositions[emotionOption.id];
 
           return (
             <Pressable
-              key={emotion.id}
+              key={emotionOption.id}
               style={[
                 styles.emotionBlock,
                 {
                   left: x(position.left),
                   top: y(position.top),
                 },
+                savingEmotion && styles.disabledEmotion,
               ]}
-              onPress={() => handleSelectEmotion(emotion.id)}
+              onPress={() =>
+                void handleSelectEmotion(emotionOption.id)
+              }
+              disabled={savingEmotion !== null}
             >
               <View style={styles.emotionCardShadow}>
                 <View style={styles.emotionImageClip}>
                   <Image
-                    source={emotion.image}
+                    source={emotionOption.image}
                     style={styles.emotionImage}
                     resizeMode="cover"
                     fadeDuration={0}
                   />
+
+                  {savingEmotion === emotionOption.id ? (
+                    <View style={styles.savingOverlay}>
+                      <ActivityIndicator
+                        size="large"
+                        color={colors.primary}
+                      />
+                    </View>
+                  ) : null}
                 </View>
               </View>
 
-              <Text style={styles.emotionLabel}>{emotion.label}</Text>
+              <Text style={styles.emotionLabel}>
+                {emotionOption.label}
+              </Text>
             </Pressable>
           );
         })}
@@ -284,6 +327,21 @@ const styles = StyleSheet.create({
   emotionImage: {
     width: x(171),
     height: y(138),
+  },
+
+  savingOverlay: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.72)",
+  },
+
+  disabledEmotion: {
+    opacity: 0.7,
   },
 
   emotionLabel: {

@@ -1,14 +1,20 @@
 /**
- * Child welcome screen.
+ * Child welcome screen shown after a child profile is selected.
  *
- * Shows the selected child name and avatar.
- * It avoids showing Emma/panda before Firebase finishes loading.
+ * Resolves the active child from context, route parameters, or Firestore.
+ * Before entering the child dashboard, it checks whether the child has
+ * already completed today's emotion check-in.
  */
 
-import { router, useLocalSearchParams } from "expo-router";
+import {
+  router,
+  useLocalSearchParams,
+  type Href,
+} from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -26,8 +32,13 @@ import {
   type AvatarId,
 } from "@/constants/avatars";
 import { colors } from "@/constants/colors";
+import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getChild, listChildren } from "@/services/children";
+import { getTodayCheckIn } from "@/services/checkIns";
+import {
+  getChild,
+  listChildren,
+} from "@/services/children";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -40,22 +51,29 @@ type ChildWelcomeData = {
   childId: string | null;
   childName: string;
   avatarId: AvatarId;
-  stars: number;
-  gems: number;
-  badges: number;
 };
 
-function formatScore(value: number) {
-  return value.toString().padStart(2, "0");
-}
+/*
+ * Temporary values used until reward totals are loaded from the
+ * child's progression data.
+ */
+const TEMP_SCORES = {
+  stars: 15,
+  diamonds: 5,
+  badges: 3,
+};
 
-function starsUntilNextReward(stars: number) {
-  const remainder = stars % 5;
-  return remainder === 0 && stars > 0 ? 5 : 5 - remainder;
+function formatScore(value: number): string {
+  return value.toString().padStart(2, "0");
 }
 
 export default function ChildWelcomeScreen() {
   const { user } = useAuth();
+
+  const {
+    activeChild,
+    selectActiveChild,
+  } = useActiveChild();
 
   const {
     childId,
@@ -67,111 +85,263 @@ export default function ChildWelcomeScreen() {
     avatarId?: string;
   }>();
 
-  const hasImmediateData = Boolean(childName && avatarId);
+  /*
+   * Context is the preferred source. Route parameters allow the screen
+   * to render immediately after onboarding, before context is restored.
+   */
+  const hasImmediateData = Boolean(
+    activeChild ||
+      (childId && childName && avatarId),
+  );
 
-  const [audioEnabled, setAudioEnabled] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [audioEnabled, setAudioEnabled] =
+    useState(false);
 
-  const [childData, setChildData] = useState<ChildWelcomeData>({
-    childId: childId || null,
-    childName: childName || "",
-    avatarId: normalizeAvatarId(avatarId ?? defaultAvatarId),
-    stars: 0,
-    gems: 0,
-    badges: 0,
-  });
+  const [loading, setLoading] = useState(
+    !hasImmediateData,
+  );
+
+  const [
+    checkingDailyCheckIn,
+    setCheckingDailyCheckIn,
+  ] = useState(false);
+
+  const [childData, setChildData] =
+    useState<ChildWelcomeData>({
+      childId:
+        activeChild?.id ?? childId ?? null,
+
+      childName:
+        activeChild?.name ?? childName ?? "",
+
+      avatarId:
+        activeChild?.avatarId ??
+        normalizeAvatarId(
+          avatarId ?? defaultAvatarId,
+        ),
+    });
 
   useEffect(() => {
-    let stillMounted = true;
+    let isMounted = true;
 
     async function loadChild() {
       if (!user?.uid) {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
+
         return;
       }
 
-      /**
-       * If route params already include the correct child,
-       * render immediately and avoid the Emma/panda flash.
-       * Rewards still load from Firebase below.
+      /*
+       * The selected child in context is authoritative and avoids an
+       * unnecessary Firestore request when moving between child screens.
        */
-      if (childName && avatarId) {
-        setChildData((current) => ({
-          ...current,
-          childId: childId || null,
-          childName,
-          avatarId: normalizeAvatarId(avatarId),
-        }));
-        setLoading(false);
-      } else {
-        setLoading(true);
+      if (activeChild) {
+        if (isMounted) {
+          setChildData({
+            childId: activeChild.id,
+            childName: activeChild.name,
+            avatarId: activeChild.avatarId,
+          });
+
+          setLoading(false);
+        }
+
+        return;
       }
+
+      /*
+       * Route parameters are used after profile creation or child
+       * selection, then copied into context for the rest of child mode.
+       */
+      if (childId && childName && avatarId) {
+        const routeChild = {
+          id: childId,
+          name: childName,
+          avatarId:
+            normalizeAvatarId(avatarId),
+        };
+
+        selectActiveChild(routeChild);
+
+        if (isMounted) {
+          setChildData({
+            childId: routeChild.id,
+            childName: routeChild.name,
+            avatarId: routeChild.avatarId,
+          });
+
+          setLoading(false);
+        }
+
+        return;
+      }
+
+      setLoading(true);
 
       try {
         let child = null;
 
         if (childId) {
-          child = await getChild(user.uid, childId);
+          child = await getChild(
+            user.uid,
+            childId,
+          );
         } else {
-          const children = await listChildren(user.uid);
+          const children =
+            await listChildren(user.uid);
+
+          /*
+           * Child mode must not choose a profile automatically when the
+           * parent has more than one child.
+           */
+          if (children.length > 1) {
+            router.replace(
+              "/parent-verification",
+            );
+
+            return;
+          }
+
           child = children[0] ?? null;
         }
 
-        if (!stillMounted) {
+        if (!child || !isMounted) {
           return;
         }
 
-        if (!child) {
-          setChildData((current) => ({
-            ...current,
-            childId: childId || null,
-            childName: childName || current.childName,
-            avatarId: normalizeAvatarId(avatarId ?? current.avatarId),
-          }));
-          return;
-        }
+        const loadedChild = {
+          id: child.id,
+          name: child.name,
+          avatarId: normalizeAvatarId(
+            child.avatarId,
+          ),
+        };
+
+        selectActiveChild(loadedChild);
 
         setChildData({
-          childId: child.id,
-          childName: child.name,
-          avatarId: normalizeAvatarId(child.avatarId),
-          stars: child.stars,
-          gems: child.gems,
-          badges: child.badges.length,
+          childId: loadedChild.id,
+          childName: loadedChild.name,
+          avatarId: loadedChild.avatarId,
         });
-      } catch {
-        // Keep the last known state. Do not show a wrong fallback child.
+      } catch (loadError) {
+        console.error(
+          "Unable to load the selected child:",
+          loadError,
+        );
+
+        /*
+         * Do not display a placeholder profile because it could show
+         * another child's name or avatar.
+         */
       } finally {
-        if (stillMounted) {
+        if (isMounted) {
           setLoading(false);
         }
       }
     }
 
-    loadChild();
+    void loadChild();
 
     return () => {
-      stillMounted = false;
+      isMounted = false;
     };
-  }, [user?.uid, childId, childName, avatarId, hasImmediateData]);
+  }, [
+    activeChild,
+    avatarId,
+    childId,
+    childName,
+    selectActiveChild,
+    user?.uid,
+  ]);
 
-  const buddyImage = avatarImages[childData.avatarId];
+  const buddyImage =
+    avatarImages[childData.avatarId];
+
+  async function handleLetsGo() {
+    if (checkingDailyCheckIn) {
+      return;
+    }
+
+    if (!user?.uid || !childData.childId) {
+      Alert.alert(
+        "Child profile unavailable",
+        "Please return to parent mode and select a child again.",
+      );
+
+      return;
+    }
+
+    setCheckingDailyCheckIn(true);
+
+    try {
+      const todayCheckIn =
+        await getTodayCheckIn(
+          user.uid,
+          childData.childId,
+        );
+
+      /*
+       * The emotion screen is required once per local day. Children who
+       * already checked in can continue directly to their dashboard.
+       */
+      if (todayCheckIn) {
+        router.replace(
+          "/child-dashboard" as Href,
+        );
+
+        return;
+      }
+
+      router.replace({
+        pathname: "/daily-emotion",
+        params: {
+          childId: childData.childId,
+        },
+      });
+    } catch (checkInError) {
+      console.error(
+        "Unable to check today's emotion check-in:",
+        checkInError,
+      );
+
+      Alert.alert(
+        "Unable to continue",
+        "We couldn’t check today’s progress. Please try again.",
+      );
+    } finally {
+      setCheckingDailyCheckIn(false);
+    }
+  }
 
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={
+        styles.scrollContent
+      }
       showsVerticalScrollIndicator={false}
+      bounces={false}
+      alwaysBounceVertical={false}
+      overScrollMode="never"
     >
       <View style={styles.figmaFrame}>
         <BackButton fallback="/switch-to-child" />
 
         {loading ? (
-          <ActivityIndicator color={colors.primary} style={styles.loader} />
+          <ActivityIndicator
+            color={colors.primary}
+            style={styles.loader}
+          />
         ) : (
           <>
             <Text style={styles.title}>
-              Welcome back, {childData.childName || "friend"}!{"\n"}
+              Welcome back,{" "}
+              {childData.childName ||
+                "friend"}
+              !{"\n"}
               Tap your character!
             </Text>
 
@@ -180,53 +350,96 @@ export default function ChildWelcomeScreen() {
                 source={buddyImage}
                 style={styles.buddyImage}
                 resizeMode="contain"
+                fadeDuration={0}
               />
 
               <View style={styles.statsRow}>
-                <StarIcon width={x(32)} height={x(32)} />
-                <Text style={styles.statText}>{childData.stars}</Text>
+                <StarIcon
+                  width={x(32)}
+                  height={x(32)}
+                />
 
-                <DiamondIcon width={x(20)} height={x(20)} />
                 <Text style={styles.statText}>
-                  {formatScore(childData.gems)}
+                  {TEMP_SCORES.stars}
                 </Text>
 
-                <BadgeIcon width={x(28)} height={x(28)} />
+                <DiamondIcon
+                  width={x(20)}
+                  height={x(20)}
+                />
+
                 <Text style={styles.statText}>
-                  {formatScore(childData.badges)}
+                  {formatScore(
+                    TEMP_SCORES.diamonds,
+                  )}
+                </Text>
+
+                <BadgeIcon
+                  width={x(28)}
+                  height={x(28)}
+                />
+
+                <Text style={styles.statText}>
+                  {formatScore(
+                    TEMP_SCORES.badges,
+                  )}
                 </Text>
               </View>
 
               <Text style={styles.rewardText}>
-                {starsUntilNextReward(childData.stars)} more stars until your
-                next{"\n"}big reward!
+                5 more stars until your next
+                {"\n"}
+                big reward!
               </Text>
             </View>
 
             <Pressable
-              onPress={() => setAudioEnabled((current) => !current)}
-              style={styles.audioWrapper}
+              onPress={() =>
+                setAudioEnabled(
+                  (current) => !current,
+                )
+              }
+              style={({ pressed }) => [
+                styles.audioWrapper,
+                pressed &&
+                  styles.audioPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={
+                audioEnabled
+                  ? "Turn audio off"
+                  : "Turn audio on"
+              }
+              accessibilityState={{
+                selected: audioEnabled,
+              }}
             >
               {audioEnabled ? (
-                <AudioOnIcon width={x(70)} height={x(70)} />
+                <AudioOnIcon
+                  width={x(70)}
+                  height={x(70)}
+                />
               ) : (
-                <AudioOffIcon width={x(70)} height={x(70)} />
+                <AudioOffIcon
+                  width={x(70)}
+                  height={x(70)}
+                />
               )}
             </Pressable>
 
             <View style={styles.buttonWrapper}>
-              <AppButton
-                title="Let’s Go!"
-                onPress={() =>
-                  router.replace({
-                    pathname: "/daily-emotion",
-                    params: {
-                      childId: childData.childId ?? "",
-                    },
-                  })
-                }
-                style={styles.letsGoButton}
-              />
+              {checkingDailyCheckIn ? (
+                <ActivityIndicator
+                  size="large"
+                  color={colors.primary}
+                />
+              ) : (
+                <AppButton
+                  title="Let’s Go!"
+                  onPress={handleLetsGo}
+                  style={styles.letsGoButton}
+                />
+              )}
             </View>
           </>
         )}
@@ -247,9 +460,9 @@ const styles = StyleSheet.create({
   },
 
   figmaFrame: {
+    position: "relative",
     width: "100%",
     height: y(874),
-    position: "relative",
     backgroundColor: colors.background,
   },
 
@@ -279,7 +492,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
 
     shadowColor: "#000000",
-    shadowOffset: { width: 0, height: y(4) },
+    shadowOffset: {
+      width: 0,
+      height: y(4),
+    },
     shadowOpacity: 0.25,
     shadowRadius: x(4),
     elevation: 5,
@@ -336,12 +552,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  audioPressed: {
+    opacity: 0.65,
+  },
+
   buttonWrapper: {
     position: "absolute",
     left: x(96),
     top: y(759),
     width: x(210),
     height: y(52),
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   letsGoButton: {

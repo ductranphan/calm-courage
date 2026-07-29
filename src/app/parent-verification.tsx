@@ -7,7 +7,7 @@
  * parents/{authenticatedUserUid}
  */
 
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -22,7 +22,13 @@ import AppButton from "@/components/ui/AppButton";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import { colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
-import { verifyParentPin } from "@/services/auth";
+import { useParentAccess } from "@/contexts/ParentAccessContext";
+import {
+  completeOnboarding,
+  getUserProfile,
+  verifyParentPin,
+} from "@/services/auth";
+import { listChildren } from "@/services/children";
 import { isValidPin } from "@/utils/pin";
 import { x, y } from "@/utils/scaling";
 
@@ -43,6 +49,12 @@ export default function ParentVerificationScreen() {
     loading: authLoading,
   } = useAuth();
 
+  const {
+    childModeActive,
+    parentAccessGranted,
+    unlockParentAccess,
+  } = useParentAccess();
+
   const [pin, setPin] = useState("");
   const [
     audioEnabled,
@@ -55,11 +67,28 @@ export default function ParentVerificationScreen() {
   const [error, setError] =
     useState<string | null>(null);
 
+  const [destinationAfterUnlock, setDestinationAfterUnlock] =
+    useState<Href | null>(null);
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace("/login");
     }
   }, [authLoading, user]);
+
+  useEffect(() => {
+    if (
+      parentAccessGranted &&
+      destinationAfterUnlock
+    ) {
+      const destination = destinationAfterUnlock;
+      setDestinationAfterUnlock(null);
+      router.replace(destination);
+    }
+  }, [
+    destinationAfterUnlock,
+    parentAccessGranted,
+  ]);
 
   function handleNumberPress(number: string) {
     if (
@@ -91,9 +120,12 @@ export default function ParentVerificationScreen() {
   }
 
   function handleForgotPin() {
-    setError(
-      "PIN recovery is not available yet.",
-    );
+    if (verifying) {
+      return;
+    }
+
+    setError(null);
+    router.push("./forgot-pin-math");
   }
 
   async function handleVerifyPin() {
@@ -127,24 +159,43 @@ export default function ParentVerificationScreen() {
         return;
       }
 
+      const children = await listChildren(user.uid);
+
       /*
-      * Existing parent flow:
-      *
-      * Login
-      * → PIN verification
-      * → Parent dashboard
-      */
-      router.replace("/home");
+       * A verified parent account without a child profile has not
+       * finished onboarding yet. Continue from child setup instead
+       * of opening an empty parent dashboard.
+       */
+      if (children.length === 0) {
+        setDestinationAfterUnlock(
+          "/child-profile-info",
+        );
+        unlockParentAccess();
+        return;
+      }
+
+      /*
+       * Repair older accounts that already have a child but still
+       * contain onboardingComplete: false in Firestore.
+       */
+      const profile = await getUserProfile(user.uid);
+
+      if (profile && !profile.onboardingComplete) {
+        await completeOnboarding(user.uid);
+      }
+
+      setDestinationAfterUnlock("/home");
+      unlockParentAccess();
     } catch (verificationError) {
       console.error(
-        "Unable to verify parent PIN:",
+        "Unable to complete parent verification:",
         verificationError,
       );
 
       setError(
         verificationError instanceof Error
           ? verificationError.message
-          : "We couldn’t verify your PIN. Please try again.",
+          : "We couldn’t open the parent area. Please try again.",
       );
     } finally {
       setVerifying(false);
@@ -364,19 +415,21 @@ export default function ParentVerificationScreen() {
           )}
         </View>
 
-        <View
-          style={styles.backButtonWrapper}
-        >
-          <AppButton
-            title="Back to Child Mode"
-            onPress={() =>
-              router.replace(
-                "/child-welcome",
-              )
-            }
-            style={styles.actionButton}
-          />
-        </View>
+        {childModeActive ? (
+          <View
+            style={styles.backButtonWrapper}
+          >
+            <AppButton
+              title="Back to Child Mode"
+              onPress={() =>
+                router.replace(
+                  "/child-dashboard" as Href,
+                )
+              }
+              style={styles.actionButton}
+            />
+          </View>
+        ) : null}
       </View>
     </ScrollView>
   );

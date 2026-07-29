@@ -1,208 +1,104 @@
 /**
  * Application entry route.
  *
- * Sends users to onboarding, email verification, child setup, or home.
+ * Waits for Firebase Authentication to restore the saved session, then
+ * sends the user to the correct authentication screen.
  */
 
-import { Redirect, type Href } from "expo-router";
+import type { User } from "firebase/auth";
+import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Pressable,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 
 import { colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
-import { completeOnboarding, getUserProfile } from "@/services/auth";
-import { listChildren } from "@/services/children";
-
-type EntryRoute =
-  | "/onboarding"
-  | "/verify-email"
-  | "/child-profile-info"
-  | "/home";
 
 export default function Index() {
-  const { user, loading } = useAuth();
+  const {
+    user,
+    loading: authLoading,
+    reloadUser,
+  } = useAuth();
 
-  const [nextRoute, setNextRoute] = useState<Href | null>(null);
-  const [routeError, setRouteError] = useState<string | null>(null);
-  const [retryKey, setRetryKey] = useState(0);
+  const [resolvedUser, setResolvedUser] = useState<User | null>(null);
+  const [checkingVerification, setCheckingVerification] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function resolveRoute() {
-      if (loading) {
+    async function resolveCurrentUser() {
+      if (authLoading) {
         return;
       }
 
-      setNextRoute(null);
-      setRouteError(null);
+      if (!user) {
+        setResolvedUser(null);
+        setCheckingVerification(false);
+        return;
+      }
+
+      setCheckingVerification(true);
 
       try {
-        if (!user) {
-          if (!cancelled) {
-            setNextRoute("/onboarding");
-          }
+        const refreshedUser = await reloadUser();
 
-          return;
+        if (!cancelled) {
+          setResolvedUser(refreshedUser ?? user);
         }
-
-        const profile = await getUserProfile(user.uid);
-
-        if (cancelled) {
-          return;
-        }
-
-        /*
-         * Email verification must be completed before the parent
-         * can create child profiles or access the dashboard.
-         */
-        if (!user.emailVerified) {
-          setNextRoute("/verify-email");
-          return;
-        }
-
-        const children = await listChildren(user.uid);
-
-        if (cancelled) {
-          return;
-        }
-
-        /*
-         * Use the Figma-aligned child setup flow when the parent
-         * has no child profiles yet.
-         */
-        if (children.length === 0) {
-          setNextRoute("/child-profile-info");
-          return;
-        }
-
-        /*
-         * Heal profiles created before onboardingComplete was set on
-         * the Figma child-create path.
-         */
-        if (!profile?.onboardingComplete) {
-          await completeOnboarding(user.uid);
-
-          if (cancelled) {
-            return;
-          }
-        }
-
-        setNextRoute("/home");
       } catch (error) {
         console.error(
-          "Unable to determine the application route:",
+          "Unable to refresh the saved Firebase session:",
           error,
         );
 
         if (!cancelled) {
-          setNextRoute(null);
-          setRouteError(
-            "We couldn’t load your account information. Please try again.",
-          );
+          setResolvedUser(user);
+        }
+      } finally {
+        if (!cancelled) {
+          setCheckingVerification(false);
         }
       }
     }
 
-    void resolveRoute();
+    void resolveCurrentUser();
 
     return () => {
       cancelled = true;
     };
-  }, [user, loading, retryKey]);
+  }, [authLoading, user, reloadUser]);
 
-  if (loading || (!nextRoute && !routeError)) {
+  if (authLoading || checkingVerification) {
     return (
-      <View style={styles.stateScreen}>
+      <View style={styles.loadingScreen}>
         <ActivityIndicator
           size="large"
           color={colors.primary}
         />
-
-        <Text style={styles.stateText}>
-          Loading your account...
-        </Text>
       </View>
     );
   }
 
-  if (routeError) {
-    return (
-      <View style={styles.stateScreen}>
-        <Text style={styles.errorTitle}>
-          Unable to continue
-        </Text>
-
-        <Text style={styles.stateText}>
-          {routeError}
-        </Text>
-
-        <Pressable
-          style={styles.retryButton}
-          onPress={() =>
-            setRetryKey((current) => current + 1)
-          }
-          accessibilityRole="button"
-          accessibilityLabel="Try loading the account again"
-        >
-          <Text style={styles.retryButtonText}>
-            Try Again
-          </Text>
-        </Pressable>
-      </View>
-    );
+  if (!resolvedUser) {
+    return <Redirect href="/onboarding" />;
   }
 
-  return <Redirect href={nextRoute as EntryRoute} />;
+  if (!resolvedUser.emailVerified) {
+    return <Redirect href="/verify-email" />;
+  }
+
+  return <Redirect href="/parent-verification" />;
 }
 
 const styles = StyleSheet.create({
-  stateScreen: {
+  loadingScreen: {
     flex: 1,
-    paddingHorizontal: 30,
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  errorTitle: {
-    color: colors.primary,
-    fontFamily: "Quiche",
-    fontSize: 28,
-    lineHeight: 36,
-    textAlign: "center",
-  },
-
-  stateText: {
-    marginTop: 16,
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: 18,
-    lineHeight: 26,
-    textAlign: "center",
-  },
-
-  retryButton: {
-    minWidth: 140,
-    minHeight: 48,
-    marginTop: 24,
-    paddingHorizontal: 24,
-    borderRadius: 18,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  retryButtonText: {
-    color: colors.white,
-    fontFamily: "Literata",
-    fontSize: 17,
-    lineHeight: 23,
   },
 });

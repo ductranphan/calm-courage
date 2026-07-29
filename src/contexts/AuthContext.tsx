@@ -15,7 +15,6 @@ import type { User } from "firebase/auth";
 
 import {
   acceptTerms,
-  completeOnboarding,
   reloadCurrentUser,
   resetPassword,
   sendVerificationEmail,
@@ -23,7 +22,6 @@ import {
   signOutUser,
   signUp,
   subscribeToAuthChanges,
-  verifyPin,
 } from "@/services/auth";
 
 type AuthContextValue = {
@@ -36,8 +34,6 @@ type AuthContextValue = {
   sendVerificationEmail: typeof sendVerificationEmail;
   reloadUser: typeof reloadCurrentUser;
   acceptTerms: typeof acceptTerms;
-  completeOnboarding: typeof completeOnboarding;
-  verifyPin: typeof verifyPin;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -55,12 +51,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
-  async function reloadUser() {
-    const refreshedUser = await reloadCurrentUser();
-    setUser(refreshedUser);
-    return refreshedUser;
-  }
-
   const value = useMemo(
     () => ({
       user,
@@ -70,10 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut: signOutUser,
       resetPassword,
       sendVerificationEmail,
-      reloadUser,
+      reloadUser: reloadCurrentUser,
       acceptTerms,
-      completeOnboarding,
-      verifyPin,
     }),
     [user, loading]
   );

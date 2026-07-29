@@ -1,11 +1,15 @@
 /**
  * Child profile avatar screen.
  *
- * Used for both:
- * - creating a new child profile
- * - editing an existing child profile
+ * Final step of creating or editing a child profile.
  *
- * Saves the selected avatar to Firebase as avatarId.
+ * This screen:
+ * - receives the child’s name, age, and existing avatar
+ * - allows the parent to select an avatar
+ * - creates or updates the complete child profile in Firestore
+ *
+ * Profiles opened from Child Management return to the Children page.
+ * The first onboarding profile continues to the Switch to Child screen.
  */
 
 import { router, useLocalSearchParams } from "expo-router";
@@ -19,8 +23,8 @@ import {
   View,
 } from "react-native";
 
-import BackButton from "@/components/ui/BackButton";
 import AppButton from "@/components/ui/AppButton";
+import BackButton from "@/components/ui/BackButton";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import {
   avatarImages,
@@ -29,10 +33,13 @@ import {
   type AvatarId,
 } from "@/constants/avatars";
 import { colors } from "@/constants/colors";
+import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { seedPhaseActivities } from "@/services/activityAttempts";
-import { completeOnboarding } from "@/services/auth";
-import { createChild, getChild, updateChild } from "@/services/children";
+import {
+  createChild,
+  getChild,
+  updateChild,
+} from "@/services/children";
 import { x, y } from "@/utils/scaling";
 
 const avatarPositions: {
@@ -48,32 +55,51 @@ const avatarPositions: {
 
 export default function ChildProfileAvatarScreen() {
   const { user } = useAuth();
+  const { activeChild, selectActiveChild } = useActiveChild();
 
-  const { childId, name = "", age = "" } = useLocalSearchParams<{
+  const {
+    childId,
+    name = "",
+    age = "",
+    avatarId = "",
+    source,
+  } = useLocalSearchParams<{
     childId?: string;
     name?: string;
     age?: string;
+    avatarId?: string;
+    source?: string;
   }>();
 
   const editing = Boolean(childId);
+  const openedFromChildren = source === "children";
+  const hasCompleteRouteData = Boolean(
+    name.trim() && age.trim() && avatarId,
+  );
 
   const [childName, setChildName] = useState(name);
   const [childAge, setChildAge] = useState(age);
-  const [selectedAvatar, setSelectedAvatar] =
-    useState<AvatarId>(defaultAvatarId);
+  const [selectedAvatar, setSelectedAvatar] = useState<AvatarId>(
+    avatarId ? normalizeAvatarId(avatarId) : defaultAvatarId,
+  );
 
-  const [loading, setLoading] = useState(Boolean(childId));
+  const [loading, setLoading] = useState(
+    Boolean(childId && !hasCompleteRouteData),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let stillMounted = true;
 
-    async function loadExistingChild() {
-      if (!childId || !user?.uid) {
+    async function loadExistingChildWhenNeeded() {
+      if (!childId || !user?.uid || hasCompleteRouteData) {
         setLoading(false);
         return;
       }
+
+      setError(null);
+      setLoading(true);
 
       try {
         const child = await getChild(user.uid, childId);
@@ -86,11 +112,22 @@ export default function ChildProfileAvatarScreen() {
         }
 
         if (stillMounted) {
-          setChildName(child.name);
-          setChildAge(String(child.age));
-          setSelectedAvatar(normalizeAvatarId(child.avatarId));
+          
+          if (!name.trim()) {
+            setChildName(child.name);
+          }
+
+          if (!age.trim()) {
+            setChildAge(String(child.age));
+          }
+
+          if (!avatarId) {
+            setSelectedAvatar(normalizeAvatarId(child.avatarId));
+          }
         }
-      } catch {
+      } catch (loadError) {
+        console.error("Unable to load child profile:", loadError);
+
         if (stillMounted) {
           setError("Unable to load child profile.");
         }
@@ -101,12 +138,19 @@ export default function ChildProfileAvatarScreen() {
       }
     }
 
-    loadExistingChild();
+    void loadExistingChildWhenNeeded();
 
     return () => {
       stillMounted = false;
     };
-  }, [childId, user?.uid]);
+  }, [
+    age,
+    avatarId,
+    childId,
+    hasCompleteRouteData,
+    name,
+    user?.uid,
+  ]);
 
   async function handleSaveChild() {
     setError(null);
@@ -116,15 +160,21 @@ export default function ChildProfileAvatarScreen() {
       return;
     }
 
+    const trimmedName = childName.trim();
     const parsedAge = Number(childAge);
 
-    if (!childName.trim()) {
+    if (!trimmedName) {
       setError("Please enter the child’s name first.");
       return;
     }
 
-    if (!childAge.trim() || Number.isNaN(parsedAge) || parsedAge <= 0) {
-      setError("Please enter a valid age.");
+    if (
+      !childAge.trim() ||
+      Number.isNaN(parsedAge) ||
+      !Number.isInteger(parsedAge) ||
+      parsedAge <= 0
+    ) {
+      setError("Please enter a valid whole-number age.");
       return;
     }
 
@@ -135,32 +185,46 @@ export default function ChildProfileAvatarScreen() {
 
       if (editing && childId) {
         await updateChild(user.uid, childId, {
-          name: childName,
-          age: parsedAge,
-          avatarId: selectedAvatar,
-        });
-      } else {
-        savedChildId = await createChild(user.uid, {
-          name: childName,
+          name: trimmedName,
           age: parsedAge,
           avatarId: selectedAvatar,
         });
 
-        if (savedChildId) {
-          await seedPhaseActivities(user.uid, savedChildId, 1);
-          await completeOnboarding(user.uid);
+        /* Keep child-mode data synchronized if this was the active child. */
+        if (activeChild?.id === childId) {
+          selectActiveChild({
+            id: childId,
+            name: trimmedName,
+            avatarId: selectedAvatar,
+          });
         }
+      } else {
+        savedChildId = await createChild(user.uid, {
+          name: trimmedName,
+          age: parsedAge,
+          avatarId: selectedAvatar,
+        });
+      }
+
+      /*
+       * Editing and adding from Child Management return to the full list.
+       * The first onboarding child continues to the pass-device screen.
+       */
+      if (editing || openedFromChildren) {
+        router.replace("/children");
+        return;
       }
 
       router.replace({
         pathname: "/switch-to-child",
         params: {
           childId: savedChildId ?? "",
-          childName: childName.trim(),
+          childName: trimmedName,
           avatarId: selectedAvatar,
         },
       });
-    } catch {
+    } catch (saveError) {
+      console.error("Unable to save child profile:", saveError);
       setError("Unable to save child profile.");
     } finally {
       setSaving(false);
@@ -169,8 +233,8 @@ export default function ChildProfileAvatarScreen() {
 
   if (loading) {
     return (
-      <View style={styles.screen}>
-        <ActivityIndicator color={colors.primary} style={styles.loader} />
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -179,8 +243,8 @@ export default function ChildProfileAvatarScreen() {
     <View style={styles.screen}>
       <BackButton
         fallback={
-          editing
-            ? `/child-profile-info?childId=${childId}`
+          editing || openedFromChildren
+            ? "/children"
             : "/child-profile-info"
         }
       />
@@ -201,6 +265,9 @@ export default function ChildProfileAvatarScreen() {
           key={id}
           onPress={() => setSelectedAvatar(id)}
           style={[styles.avatarShadow, { left: x(left), top: y(top) }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Choose ${id} avatar`}
+          accessibilityState={{ selected: selectedAvatar === id }}
         >
           <View style={styles.avatarClip}>
             <Image
@@ -210,7 +277,9 @@ export default function ChildProfileAvatarScreen() {
             />
           </View>
 
-          {selectedAvatar === id ? <View style={styles.selectedBorder} /> : null}
+          {selectedAvatar === id ? (
+            <View style={styles.selectedBorder} />
+          ) : null}
         </Pressable>
       ))}
 
@@ -221,7 +290,13 @@ export default function ChildProfileAvatarScreen() {
           <ActivityIndicator color={colors.primary} />
         ) : (
           <AppButton
-            title={editing ? "Save Changes" : "Let’s Start!"}
+            title={
+              editing
+                ? "Save Changes"
+                : openedFromChildren
+                  ? "Save Child"
+                  : "Let’s Start!"
+            }
             onPress={handleSaveChild}
             style={styles.startButton}
           />
@@ -237,8 +312,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
-  loader: {
-    marginTop: y(400),
+  loadingScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background,
   },
 
   title: {

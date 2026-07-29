@@ -2,6 +2,8 @@
  * Reusable parent bottom navigation.
  *
  * Used on parent dashboard-related screens.
+ * The dashboard icon is built from a square plus two divider lines.
+ * The settings icon is built from the star/gear shape plus the center ellipse.
  */
 
 import { router } from "expo-router";
@@ -75,9 +77,7 @@ export default function ParentBottomNav({ activeTab = "dashboard" }: Props) {
       </Pressable>
 
       <Pressable
-        onPress={() => {
-          // Later: router.replace("/settings");
-        }}
+        onPress={() => router.push("/settings")}
         style={styles.navItem}
       >
         <View

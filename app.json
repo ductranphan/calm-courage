@@ -29,7 +29,8 @@
           "backgroundColor": "#F1F3F5"
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

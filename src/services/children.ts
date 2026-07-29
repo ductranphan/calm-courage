@@ -10,8 +10,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  runTransaction,
   serverTimestamp,
-  setDoc,
   updateDoc,
 } from "firebase/firestore";
 
@@ -23,9 +23,6 @@ export type ChildProfile = {
   name: string;
   age: number;
   avatarId: AvatarId;
-  stars: number;
-  gems: number;
-  badges: string[];
   createdAt?: unknown;
   updatedAt?: unknown;
 };
@@ -42,72 +39,124 @@ export type UpdateChildInput = {
   avatarId?: AvatarId;
 };
 
-export type AwardRewardsInput = {
-  stars?: number;
-  gems?: number;
-  badges?: string[];
-};
+function timestampToMilliseconds(value: unknown): number | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
 
-function mapChildDoc(
-  id: string,
-  data: Record<string, unknown>,
-): ChildProfile {
-  return {
-    id,
-    name: typeof data.name === "string" ? data.name : "",
-    age: typeof data.age === "number" ? data.age : 0,
-    avatarId: data.avatarId as AvatarId,
-    stars: typeof data.stars === "number" ? data.stars : 0,
-    gems: typeof data.gems === "number" ? data.gems : 0,
-    badges: Array.isArray(data.badges)
-      ? data.badges.filter(
-          (badge): badge is string => typeof badge === "string",
-        )
-      : [],
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt,
-  };
+  if (
+    "toMillis" in value &&
+    typeof (value as { toMillis?: unknown }).toMillis === "function"
+  ) {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+
+  if (
+    "seconds" in value &&
+    typeof (value as { seconds?: unknown }).seconds === "number"
+  ) {
+    return (value as { seconds: number }).seconds * 1000;
+  }
+
+  return null;
 }
 
-export async function listChildren(parentUid: string): Promise<ChildProfile[]> {
+/**
+ * Returns every child in a stable order.
+ *
+ * Firestore does not guarantee document order unless a query specifies one.
+ * Sorting locally keeps older test documents that may be missing createdAt,
+ * while still showing normally-created profiles from oldest to newest.
+ */
+export async function listChildren(
+  parentUid: string,
+): Promise<ChildProfile[]> {
   const snapshot = await getDocs(
     collection(db, "parents", parentUid, "children"),
   );
 
-  return snapshot.docs.map((childDoc) =>
-    mapChildDoc(childDoc.id, childDoc.data()),
-  );
+  const children = snapshot.docs.map((childDoc) => ({
+    id: childDoc.id,
+    ...(childDoc.data() as Omit<ChildProfile, "id">),
+  }));
+
+  return children.sort((firstChild, secondChild) => {
+    const firstCreatedAt = timestampToMilliseconds(firstChild.createdAt);
+    const secondCreatedAt = timestampToMilliseconds(secondChild.createdAt);
+
+    if (firstCreatedAt !== null && secondCreatedAt !== null) {
+      return firstCreatedAt - secondCreatedAt;
+    }
+
+    if (firstCreatedAt !== null) {
+      return -1;
+    }
+
+    if (secondCreatedAt !== null) {
+      return 1;
+    }
+
+    return firstChild.id.localeCompare(secondChild.id);
+  });
 }
 
 export async function getChild(
   parentUid: string,
   childId: string,
 ): Promise<ChildProfile | null> {
-  const childRef = doc(db, "parents", parentUid, "children", childId);
+  const childRef = doc(
+    db,
+    "parents",
+    parentUid,
+    "children",
+    childId,
+  );
+
   const snapshot = await getDoc(childRef);
 
   if (!snapshot.exists()) {
     return null;
   }
 
-  return mapChildDoc(snapshot.id, snapshot.data());
+  return {
+    id: snapshot.id,
+    ...(snapshot.data() as Omit<ChildProfile, "id">),
+  };
 }
 
 export async function createChild(
   parentUid: string,
   data: CreateChildInput,
 ): Promise<string> {
-  const childRef = doc(collection(db, "parents", parentUid, "children"));
+  const parentRef = doc(db, "parents", parentUid);
+  const childRef = doc(collection(parentRef, "children"));
 
-  await setDoc(childRef, {
-    name: data.name.trim(),
-    age: data.age,
-    avatarId: data.avatarId,
-    stars: 0,
-    gems: 0,
-    badges: [],
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+  /*
+   * Create the first child and complete onboarding atomically.
+   * This prevents a child profile from being created while the parent
+   * document incorrectly remains onboardingComplete: false.
+   */
+  await runTransaction(db, async (transaction) => {
+    const parentSnapshot = await transaction.get(parentRef);
+
+    if (!parentSnapshot.exists()) {
+      throw new Error("Parent profile not found.");
+    }
+
+    transaction.set(childRef, {
+      name: data.name.trim(),
+      age: data.age,
+      avatarId: data.avatarId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    if (parentSnapshot.data().onboardingComplete !== true) {
+      transaction.update(parentRef, {
+        onboardingComplete: true,
+        onboardingCompletedAt: serverTimestamp(),
+      });
+    }
   });
 
   return childRef.id;
@@ -118,7 +167,13 @@ export async function updateChild(
   childId: string,
   data: UpdateChildInput,
 ): Promise<void> {
-  const childRef = doc(db, "parents", parentUid, "children", childId);
+  const childRef = doc(
+    db,
+    "parents",
+    parentUid,
+    "children",
+    childId,
+  );
 
   const updateData: Record<
     string,
@@ -142,42 +197,17 @@ export async function updateChild(
   await updateDoc(childRef, updateData);
 }
 
-/**
- * Increment a child's reward totals after an activity or check-in.
- */
-export async function awardRewards(
-  parentUid: string,
-  childId: string,
-  rewards: AwardRewardsInput,
-): Promise<void> {
-  const child = await getChild(parentUid, childId);
-
-  if (!child) {
-    throw new Error("Child profile not found.");
-  }
-
-  const nextBadges = [...child.badges];
-
-  for (const badge of rewards.badges ?? []) {
-    if (!nextBadges.includes(badge)) {
-      nextBadges.push(badge);
-    }
-  }
-
-  const childRef = doc(db, "parents", parentUid, "children", childId);
-
-  await updateDoc(childRef, {
-    stars: child.stars + Math.max(0, rewards.stars ?? 0),
-    gems: child.gems + Math.max(0, rewards.gems ?? 0),
-    badges: nextBadges,
-    updatedAt: serverTimestamp(),
-  });
-}
-
 export async function deleteChild(
   parentUid: string,
   childId: string,
 ): Promise<void> {
-  const childRef = doc(db, "parents", parentUid, "children", childId);
+  const childRef = doc(
+    db,
+    "parents",
+    parentUid,
+    "children",
+    childId,
+  );
+
   await deleteDoc(childRef);
 }

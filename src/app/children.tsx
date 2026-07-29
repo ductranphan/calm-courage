@@ -1,15 +1,12 @@
 /**
  * Child Management screen.
  *
- * Shows child profile data from Firebase:
- * - name
- * - age
- * - avatarId
- * - latest mood from checkIns
+ * Shows every child profile saved under the authenticated parent and lets
+ * the parent edit a specific child or hand the device to that exact child.
  */
 
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -22,20 +19,19 @@ import {
 
 import ParentBottomNav from "@/components/dashboard/ParentBottomNav";
 import AppButton from "@/components/ui/AppButton";
+import ErrorMessage from "@/components/ui/ErrorMessage";
 import {
   avatarImages,
-  defaultAvatarId,
   normalizeAvatarId,
   type AvatarId,
 } from "@/constants/avatars";
 import { colors } from "@/constants/colors";
 import {
-  defaultEmotionId,
   formatEmotionLabel,
   normalizeEmotionId,
 } from "@/constants/emotions";
 import { useAuth } from "@/contexts/AuthContext";
-import { listCheckIns } from "@/services/checkIns";
+import { getTodayCheckIn } from "@/services/checkIns";
 import { listChildren } from "@/services/children";
 import { x, y } from "@/utils/scaling";
 
@@ -43,90 +39,130 @@ import AudioOffIcon from "../../assets/icons/audio-off.svg";
 import AudioOnIcon from "../../assets/icons/audio-on.svg";
 
 type ChildManagementData = {
-  childId: string | null;
+  childId: string;
   name: string;
   age: number;
   avatarId: AvatarId;
   moodLabel: string;
 };
 
-const FALLBACK_CHILD: ChildManagementData = {
-  childId: null,
-  name: "Emma",
-  age: 4,
-  avatarId: defaultAvatarId,
-  moodLabel: formatEmotionLabel(defaultEmotionId),
-};
-
 export default function ChildrenScreen() {
   const { user } = useAuth();
 
   const [audioEnabled, setAudioEnabled] = useState(false);
-  const [childData, setChildData] =
-    useState<ChildManagementData>(FALLBACK_CHILD);
+  const [childrenData, setChildrenData] = useState<ChildManagementData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let stillMounted = true;
+  useFocusEffect(
+    useCallback(() => {
+      let stillMounted = true;
 
-    async function loadChildData() {
-      if (!user?.uid) {
-        setChildData(FALLBACK_CHILD);
-        setLoading(false);
-        return;
-      }
+      async function loadChildrenData() {
+        setError(null);
 
-      setLoading(true);
-
-      try {
-        const children = await listChildren(user.uid);
-        const firstChild = children[0];
-
-        if (!firstChild) {
+        if (!user?.uid) {
           if (stillMounted) {
-            setChildData(FALLBACK_CHILD);
+            setChildrenData([]);
+            setLoading(false);
           }
           return;
         }
 
-        let moodLabel = formatEmotionLabel(defaultEmotionId);
+        setLoading(true);
 
         try {
-          const checkIns = await listCheckIns(user.uid, firstChild.id);
-          const latestMood = normalizeEmotionId(checkIns[0]?.emotion);
-          moodLabel = formatEmotionLabel(latestMood);
-        } catch {
-          moodLabel = formatEmotionLabel(defaultEmotionId);
-        }
+          const children = await listChildren(user.uid);
 
-        if (stillMounted) {
-          setChildData({
-            childId: firstChild.id,
-            name: firstChild.name,
-            age: firstChild.age,
-            avatarId: normalizeAvatarId(firstChild.avatarId),
-            moodLabel,
-          });
-        }
-      } catch {
-        if (stillMounted) {
-          setChildData(FALLBACK_CHILD);
-        }
-      } finally {
-        if (stillMounted) {
-          setLoading(false);
+          const loadedChildren = await Promise.all(
+            children.map(async (child): Promise<ChildManagementData> => {
+              let moodLabel = "Not checked in yet";
+
+              try {
+                const todayCheckIn = await getTodayCheckIn(
+                  user.uid,
+                  child.id,
+                );
+
+                if (todayCheckIn) {
+                  moodLabel = formatEmotionLabel(
+                    normalizeEmotionId(todayCheckIn.emotion),
+                  );
+                }
+              } catch (checkInError) {
+                console.error(
+                  `Unable to load today's check-in for child ${child.id}:`,
+                  checkInError,
+                );
+                moodLabel = "Unavailable";
+              }
+
+              return {
+                childId: child.id,
+                name: child.name,
+                age: child.age,
+                avatarId: normalizeAvatarId(child.avatarId),
+                moodLabel,
+              };
+            }),
+          );
+
+          if (stillMounted) {
+            setChildrenData(loadedChildren);
+          }
+        } catch (loadError) {
+          console.error("Unable to load child profiles:", loadError);
+
+          if (stillMounted) {
+            setChildrenData([]);
+            setError(
+              "We couldn’t load the child profiles. Please try again.",
+            );
+          }
+        } finally {
+          if (stillMounted) {
+            setLoading(false);
+          }
         }
       }
-    }
 
-    loadChildData();
+      void loadChildrenData();
 
-    return () => {
-      stillMounted = false;
-    };
-  }, [user?.uid]);
+      return () => {
+        stillMounted = false;
+      };
+    }, [user?.uid]),
+  );
 
-  const avatarImage = avatarImages[childData.avatarId];
+  function openAddChild() {
+    router.push({
+      pathname: "/child-profile-info",
+      params: {
+        source: "children",
+      },
+    });
+  }
+
+  function openEditChild(childId: string) {
+    router.push({
+      pathname: "/child-profile-info",
+      params: {
+        childId,
+        source: "children",
+      },
+    });
+  }
+
+  function openChildMode(child: ChildManagementData) {
+    router.push({
+      pathname: "/switch-to-child",
+      params: {
+        childId: child.childId,
+        childName: child.name,
+        avatarId: child.avatarId,
+      },
+    });
+  }
 
   return (
     <ScrollView
@@ -134,91 +170,91 @@ export default function ChildrenScreen() {
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.figmaFrame}>
-        <Pressable
-          style={styles.audioButton}
-          onPress={() => setAudioEnabled((current) => !current)}
-        >
-          {audioEnabled ? (
-            <AudioOnIcon width={x(35)} height={x(35)} />
-          ) : (
-            <AudioOffIcon width={x(35)} height={x(35)} />
-          )}
-        </Pressable>
-
-        <Text style={styles.title}>Child Management</Text>
-
-        <View style={styles.topLine} />
-
-        {loading ? (
-          <ActivityIndicator color={colors.primary} style={styles.loader} />
+      <Pressable
+        style={styles.audioButton}
+        onPress={() => setAudioEnabled((current) => !current)}
+        accessibilityRole="button"
+        accessibilityLabel={
+          audioEnabled ? "Turn audio off" : "Turn audio on"
+        }
+      >
+        {audioEnabled ? (
+          <AudioOnIcon width={x(35)} height={x(35)} />
         ) : (
-          <>
-            <View style={styles.avatarCard}>
-              <Image
-                source={avatarImage}
-                style={styles.avatarImage}
-                resizeMode="contain"
-              />
-            </View>
-
-            <View style={styles.childInfoWrapper}>
-              <Text style={styles.childInfoText}>Name: {childData.name}</Text>
-              <Text style={styles.childInfoText}>Age: {childData.age}</Text>
-              <Text style={styles.childInfoText}>Today’s Mood:</Text>
-              <Text style={styles.childInfoText}>{childData.moodLabel}</Text>
-            </View>
-
-            <View style={styles.editButtonWrapper}>
-              <AppButton
-                title="Edit"
-                onPress={() => {
-                  if (!childData.childId) {
-                    router.push("/child-profile-info");
-                    return;
-                  }
-
-                  router.push({
-                    pathname: "/child-profile-info",
-                    params: {
-                      childId: childData.childId,
-                    },
-                  });
-                }}
-                style={styles.editButton}
-              />
-            </View>
-          </>
+          <AudioOffIcon width={x(35)} height={x(35)} />
         )}
+      </Pressable>
 
-        <View style={styles.childInfoLine} />
+      <Text style={styles.title}>Child Management</Text>
+      <View style={styles.topLine} />
 
-        <Pressable
-          style={styles.addChildCard}
-          onPress={() => router.push("/child-profile-info")}
-        >
-          <Text style={styles.addChildText}>+ Add Multiple Child Profiles</Text>
-        </Pressable>
+      {loading ? (
+        <ActivityIndicator
+          size="large"
+          color={colors.primary}
+          style={styles.loader}
+        />
+      ) : (
+        <>
+          <ErrorMessage message={error} style={styles.error} />
 
-        <Pressable
-          onPress={() =>
-            router.push({
-              pathname: "/switch-to-child",
-              params: {
-                childId: childData.childId ?? "",
-                childName: childData.name,
-                avatarId: childData.avatarId,
-              },
-            })
-          }
-          style={styles.switchWrapper}
-        >
-          <Text style={styles.switchText}>Switch to Child Mode</Text>
-        </Pressable>
+          {!error && childrenData.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>No child profiles yet</Text>
+              <Text style={styles.emptyText}>
+                Add a child profile to begin their courage journey.
+              </Text>
+            </View>
+          ) : null}
 
-        <View style={styles.bottomNavWrapper}>
-          <ParentBottomNav activeTab="children" />
-        </View>
+          {childrenData.map((child) => (
+            <View key={child.childId} style={styles.childCard}>
+              <View style={styles.profileRow}>
+                <View style={styles.avatarCard}>
+                  <Image
+                    source={avatarImages[child.avatarId]}
+                    style={styles.avatarImage}
+                    resizeMode="contain"
+                  />
+                </View>
+
+                <View style={styles.childInfoWrapper}>
+                  <Text style={styles.childInfoText} numberOfLines={1}>
+                    Name: {child.name}
+                  </Text>
+                  <Text style={styles.childInfoText}>Age: {child.age}</Text>
+                  <Text style={styles.moodTitle}>Today’s Mood:</Text>
+                  <Text style={styles.moodText}>{child.moodLabel}</Text>
+                </View>
+
+                <View style={styles.actionsColumn}>
+                  <AppButton
+                    title="Edit"
+                    onPress={() => openEditChild(child.childId)}
+                    style={styles.editButton}
+                  />
+
+                  <Pressable
+                    onPress={() => openChildMode(child)}
+                    style={styles.childModeButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Switch to ${child.name}'s child mode`}
+                  >
+                    <Text style={styles.childModeText}>Child Mode</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          ))}
+
+          <Pressable style={styles.addChildCard} onPress={openAddChild}>
+            <Text style={styles.addChildText}>+ Add Another Child Profile</Text>
+          </Pressable>
+        </>
+      )}
+
+      <View style={styles.bottomNavWrapper}>
+        <ParentBottomNav activeTab="children" />
       </View>
     </ScrollView>
   );
@@ -232,32 +268,26 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     minHeight: y(900),
-    backgroundColor: colors.background,
-  },
-
-  figmaFrame: {
-    width: "100%",
-    height: y(900),
-    position: "relative",
+    paddingHorizontal: x(20),
+    paddingTop: y(123),
+    paddingBottom: y(45),
     backgroundColor: colors.background,
   },
 
   audioButton: {
     position: "absolute",
-    left: x(347),
+    right: x(20),
     top: y(48),
     width: x(35),
     height: x(35),
     alignItems: "center",
     justifyContent: "center",
+    zIndex: 10,
   },
 
   title: {
-    position: "absolute",
-    left: x(20),
-    top: y(123),
     width: x(362),
-    height: y(39),
+    minHeight: y(39),
     color: colors.primary,
     fontFamily: "Quiche",
     fontSize: x(30),
@@ -266,26 +296,69 @@ const styles = StyleSheet.create({
   },
 
   topLine: {
-    position: "absolute",
-    left: x(20),
-    top: y(188),
     width: x(362),
     height: StyleSheet.hairlineWidth,
+    marginTop: y(26),
+    marginBottom: y(23),
     backgroundColor: colors.primary,
   },
 
   loader: {
-    position: "absolute",
-    left: x(186),
-    top: y(260),
+    marginTop: y(90),
+    marginBottom: y(180),
+  },
+
+  error: {
+    marginBottom: y(20),
+  },
+
+  emptyCard: {
+    width: x(362),
+    minHeight: y(150),
+    borderRadius: x(20),
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.white,
+    paddingHorizontal: x(24),
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: y(24),
+  },
+
+  emptyTitle: {
+    color: colors.primary,
+    fontFamily: "Quiche",
+    fontSize: x(24),
+    lineHeight: y(31),
+    textAlign: "center",
+  },
+
+  emptyText: {
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(17),
+    lineHeight: y(23),
+    textAlign: "center",
+    marginTop: y(10),
+  },
+
+  childCard: {
+    width: x(362),
+    paddingVertical: y(22),
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.primary,
+  },
+
+  profileRow: {
+    width: "100%",
+    minHeight: y(140),
+    flexDirection: "row",
+    alignItems: "center",
   },
 
   avatarCard: {
-    position: "absolute",
-    left: x(20),
-    top: y(212),
-    width: x(132),
-    height: y(132),
+    width: x(118),
+    height: y(118),
     borderRadius: x(15),
     backgroundColor: colors.white,
     alignItems: "center",
@@ -294,54 +367,72 @@ const styles = StyleSheet.create({
   },
 
   avatarImage: {
-    width: x(132),
-    height: y(132),
+    width: x(118),
+    height: y(118),
   },
 
   childInfoWrapper: {
-    position: "absolute",
-    left: x(171),
-    top: y(213),
     width: x(150),
-    height: y(132),
+    minHeight: y(118),
+    marginLeft: x(14),
+    justifyContent: "center",
   },
 
   childInfoText: {
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(35),
+    fontSize: x(17),
+    lineHeight: y(27),
   },
 
-  editButtonWrapper: {
-    position: "absolute",
-    left: x(326),
-    top: y(294),
-    width: x(56),
-    height: y(52),
+  moodTitle: {
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(16),
+    lineHeight: y(24),
+    marginTop: y(2),
+  },
+
+  moodText: {
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(16),
+    lineHeight: y(22),
+  },
+
+  actionsColumn: {
+    width: x(70),
+    minHeight: y(118),
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   editButton: {
-    width: x(56),
-    height: y(52),
+    width: x(62),
+    height: y(48),
     borderRadius: x(15),
   },
 
-  childInfoLine: {
-    position: "absolute",
-    left: x(20),
-    top: y(364),
-    width: x(362),
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.primary,
+  childModeButton: {
+    width: x(70),
+    minHeight: y(42),
+    marginTop: y(12),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  childModeText: {
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(14),
+    lineHeight: y(18),
+    textAlign: "center",
+    textDecorationLine: "underline",
   },
 
   addChildCard: {
-    position: "absolute",
-    left: x(20),
-    top: y(438),
     width: x(362),
-    height: y(271),
+    minHeight: y(150),
     borderRadius: x(20),
     borderWidth: 1,
     borderStyle: "dashed",
@@ -349,6 +440,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     alignItems: "center",
     justifyContent: "center",
+    marginTop: y(34),
+    marginBottom: y(35),
 
     shadowColor: "#000000",
     shadowOffset: { width: 0, height: y(4) },
@@ -365,28 +458,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  switchWrapper: {
-    position: "absolute",
-    left: x(20),
-    top: y(750),
-    width: x(206),
-    height: y(24),
-    justifyContent: "center",
-  },
-
-  switchText: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textDecorationLine: "underline",
-  },
-
   bottomNavWrapper: {
-    position: "absolute",
-    left: x(20),
-    top: y(783),
     width: x(362),
     height: y(72),
+    marginTop: "auto",
   },
 });

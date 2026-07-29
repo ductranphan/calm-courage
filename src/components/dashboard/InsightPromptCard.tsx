@@ -2,7 +2,6 @@
  * Reusable insight prompt card.
  *
  * Shows the evening conversation prompt on the parent dashboard.
- * Uses the selected child's real name and handles missing mood data.
  */
 
 import { StyleSheet, Text, View } from "react-native";
@@ -16,7 +15,7 @@ import QuoteRightIcon from "../../../assets/icons/double-quotes-R.svg";
 
 type Props = {
   childName: string;
-  moodLabel?: string | null;
+  moodLabel: string;
   onViewMore?: () => void;
 };
 
@@ -25,13 +24,6 @@ export default function InsightPromptCard({
   moodLabel,
   onViewMore,
 }: Props) {
-  const displayName = childName.trim() || "Your child";
-
-  const normalizedMood = moodLabel?.trim();
-  const hasMood =
-    Boolean(normalizedMood) &&
-    normalizedMood?.toLowerCase() !== "no check-in yet";
-
   return (
     <View style={styles.card}>
       <View style={styles.quoteLeft}>
@@ -39,20 +31,10 @@ export default function InsightPromptCard({
       </View>
 
       <Text style={styles.promptText}>
-        {hasMood ? (
-          <>
-            {displayName} felt {normalizedMood?.toLowerCase()} today.
-            {"\n"}
-          </>
-        ) : (
-          <>
-            {displayName} has not completed today&apos;s check-in yet.
-            {"\n"}
-          </>
-        )}
+        {childName} felt {moodLabel.toLowerCase()} today.{"\n"}
         Before bedtime, try talking{"\n"}
         about a moment when{"\n"}
-        {displayName} showed courage.
+        Oliver showed courage.
       </Text>
 
       <View style={styles.quoteRight}>

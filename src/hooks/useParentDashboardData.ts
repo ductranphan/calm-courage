@@ -4,90 +4,104 @@
  * Reads real child profile data from Firebase:
  * - child name
  * - child age
- * - child avatarId
- * - latest mood/check-in
- * - Phase 1 activity progress
+ * - child avatar
+ * - today's emotion check-in
  */
 
 import { useEffect, useMemo, useState } from "react";
 
+import type { AvatarId } from "@/constants/avatars";
+import { normalizeAvatarId } from "@/constants/avatars";
 import {
-  defaultAvatarId,
-  normalizeAvatarId,
-  type AvatarId,
-} from "@/constants/avatars";
-import {
-  defaultEmotionId,
   formatEmotionLabel,
-  normalizeEmotionId,
+  isEmotionId,
   type EmotionId,
 } from "@/constants/emotions";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  getChildActivityProgress,
-  seedPhaseActivities,
-} from "@/services/activityAttempts";
-import { listCheckIns } from "@/services/checkIns";
+import { getTodayCheckIn } from "@/services/checkIns";
 import { listChildren } from "@/services/children";
 
+type ProgressData = {
+  phase: number;
+  completedActivities: number;
+  totalActivities: number;
+};
+
 type DashboardData = {
-  childId: string | null;
+  childId: string;
   childName: string;
   childAge: number;
   avatarId: AvatarId;
-  todaysMood: EmotionId;
-  progress: {
-    phase: number;
-    completedActivities: number;
-    totalActivities: number;
-  };
+  todaysMood: EmotionId | null;
+
+  /*
+   * This remains null until activity progress is connected
+   * to the backend.
+   */
+  progress: ProgressData | null;
 };
 
 type Options = {
   moodOverride?: unknown;
 };
 
-const FALLBACK_DATA: DashboardData = {
-  childId: null,
-  childName: "Emma",
-  childAge: 4,
-  avatarId: defaultAvatarId,
-  todaysMood: defaultEmotionId,
-  progress: {
-    phase: 1,
-    completedActivities: 0,
-    totalActivities: 5,
-  },
-};
+function getValidEmotionId(value: unknown): EmotionId | null {
+  if (typeof value !== "string") {
+    return null;
+  }
 
-export function useParentDashboardData(options: Options = {}) {
+  const normalized = value.trim().toLowerCase();
+
+  return isEmotionId(normalized)
+    ? normalized
+    : null;
+}
+
+export function useParentDashboardData(options?: Options) {
   const { user } = useAuth();
 
-  const moodOverride = options?.moodOverride
-    ? normalizeEmotionId(options.moodOverride)
-    : null;
+  const moodOverride = useMemo(
+    () => getValidEmotionId(options?.moodOverride),
+    [options?.moodOverride],
+  );
 
-  const [data, setData] = useState<DashboardData>({
-    ...FALLBACK_DATA,
-    todaysMood: moodOverride ?? FALLBACK_DATA.todaysMood,
-  });
+  const [data, setData] =
+    useState<DashboardData | null>(null);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
+
+  const [empty, setEmpty] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
 
   useEffect(() => {
     let stillMounted = true;
 
     async function loadDashboardData() {
+      /*
+       * Clear the previous dashboard information before loading.
+       * This prevents data from another user or child flashing briefly.
+       */
+      if (stillMounted) {
+        setData(null);
+        setEmpty(false);
+        setError(null);
+      }
+
       if (!user?.uid) {
-        setData({
-          ...FALLBACK_DATA,
-          todaysMood: moodOverride ?? FALLBACK_DATA.todaysMood,
-        });
-        setLoading(false);
+        if (stillMounted) {
+          setLoading(false);
+        }
+
         return;
       }
 
-      setLoading(true);
+      if (stillMounted) {
+        setLoading(true);
+      }
 
       try {
         const children = await listChildren(user.uid);
@@ -95,48 +109,58 @@ export function useParentDashboardData(options: Options = {}) {
 
         if (!firstChild) {
           if (stillMounted) {
-            setData({
-              ...FALLBACK_DATA,
-              todaysMood: moodOverride ?? FALLBACK_DATA.todaysMood,
-            });
+            setEmpty(true);
           }
+
           return;
         }
 
-        let latestMood: EmotionId = defaultEmotionId;
+        let todaysMood: EmotionId | null =
+          moodOverride;
 
-        try {
-          const checkIns = await listCheckIns(user.uid, firstChild.id);
-          latestMood = normalizeEmotionId(checkIns[0]?.emotion);
-        } catch {
-          latestMood = defaultEmotionId;
+        /*
+         * Only read today's check-in.
+         * An old emotion should not appear as today's mood.
+         */
+        if (!todaysMood) {
+          const todayCheckIn =
+            await getTodayCheckIn(
+              user.uid,
+              firstChild.id,
+            );
+
+          todaysMood = getValidEmotionId(
+            todayCheckIn?.emotion,
+          );
         }
-
-        // Ensure Phase 1 attempts exist for children created before seeding.
-        await seedPhaseActivities(user.uid, firstChild.id, 1);
-
-        const progress = await getChildActivityProgress(
-          user.uid,
-          firstChild.id,
-          1,
-        );
 
         if (stillMounted) {
           setData({
             childId: firstChild.id,
             childName: firstChild.name,
             childAge: firstChild.age,
-            avatarId: normalizeAvatarId(firstChild.avatarId),
-            todaysMood: moodOverride ?? latestMood,
-            progress,
+            avatarId: normalizeAvatarId(
+              firstChild.avatarId,
+            ),
+            todaysMood,
+
+            /*
+             * Activity progress has not been connected
+             * to Firebase yet.
+             */
+            progress: null,
           });
         }
-      } catch {
+      } catch (loadError) {
+        console.error(
+          "Unable to load parent dashboard:",
+          loadError,
+        );
+
         if (stillMounted) {
-          setData({
-            ...FALLBACK_DATA,
-            todaysMood: moodOverride ?? FALLBACK_DATA.todaysMood,
-          });
+          setError(
+            "We couldn’t load the dashboard. Please try again.",
+          );
         }
       } finally {
         if (stillMounted) {
@@ -145,7 +169,7 @@ export function useParentDashboardData(options: Options = {}) {
       }
     }
 
-    loadDashboardData();
+    void loadDashboardData();
 
     return () => {
       stillMounted = false;
@@ -153,21 +177,50 @@ export function useParentDashboardData(options: Options = {}) {
   }, [user?.uid, moodOverride]);
 
   const progressPercent = useMemo(() => {
-    if (data.progress.totalActivities === 0) {
+    if (
+      !data?.progress ||
+      data.progress.totalActivities === 0
+    ) {
       return 0;
     }
 
-    return data.progress.completedActivities / data.progress.totalActivities;
-  }, [data.progress.completedActivities, data.progress.totalActivities]);
+    return (
+      data.progress.completedActivities /
+      data.progress.totalActivities
+    );
+  }, [data?.progress]);
 
-  const roundedProgressPercent = Math.round(progressPercent * 100);
+  const progressAvailable =
+    data?.progress !== null &&
+    data?.progress !== undefined;
+
+  const roundedProgressPercent =
+    Math.round(progressPercent * 100);
 
   return {
-    ...data,
+    childId: data?.childId ?? null,
+    childName: data?.childName ?? null,
+    childAge: data?.childAge ?? null,
+    avatarId: data?.avatarId ?? null,
+    todaysMood: data?.todaysMood ?? null,
+
     loading,
-    moodLabel: formatEmotionLabel(data.todaysMood),
+    empty,
+    error,
+
+    moodLabel: data?.todaysMood
+      ? formatEmotionLabel(data.todaysMood)
+      : "Not checked in yet",
+
+    progressAvailable,
     progressPercent,
-    progressLabel: `Phase ${data.progress.phase}: ${roundedProgressPercent}% complete`,
-    activitiesLabel: `(${data.progress.completedActivities}/${data.progress.totalActivities} Activities Done)`,
+
+    progressLabel: data?.progress
+      ? `Phase ${data.progress.phase}: ${roundedProgressPercent}% complete`
+      : "Progress tracking is not available yet",
+
+    activitiesLabel: data?.progress
+      ? `(${data.progress.completedActivities}/${data.progress.totalActivities} Activities Done)`
+      : "",
   };
 }

@@ -4,7 +4,8 @@
  * Shows the parent that it is time to pass the device to the child.
  * Matches Figma Screen 4.0.
  *
- * The child name is loaded from Firebase instead of being hardcoded.
+ * The exact selected child is stored in ActiveChildContext before the
+ * device enters child mode.
  */
 
 import { router, useLocalSearchParams } from "expo-router";
@@ -21,51 +22,124 @@ import {
 
 import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
+import ErrorMessage from "@/components/ui/ErrorMessage";
 import { passDeviceImage } from "@/constants/assets";
+import {
+  normalizeAvatarId,
+  type AvatarId,
+} from "@/constants/avatars";
 import { colors } from "@/constants/colors";
+import {
+  useActiveChild,
+  type ActiveChild,
+} from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { listChildren } from "@/services/children";
+import { useParentAccess } from "@/contexts/ParentAccessContext";
+import {
+  getChild,
+  listChildren,
+} from "@/services/children";
 import { x, y } from "@/utils/scaling";
 
 export default function SwitchToChildScreen() {
   const { user } = useAuth();
+  const { enterChildMode } = useParentAccess();
+  const { selectActiveChild } = useActiveChild();
 
-  const { childId, childName, avatarId } = useLocalSearchParams<{
-    childId?: string;
-    childName?: string;
-    avatarId?: string;
-  }>();
+  const { childId, childName, avatarId } =
+    useLocalSearchParams<{
+      childId?: string;
+      childName?: string;
+      avatarId?: string;
+    }>();
 
-  const [name, setName] = useState(childName || "");
-  const [loading, setLoading] = useState(!childName);
+  const [selectedChild, setSelectedChild] =
+    useState<ActiveChild | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] =
+    useState<string | null>(null);
 
   useEffect(() => {
     let stillMounted = true;
 
-    async function loadChildName() {
-      if (childName) {
-        setName(childName);
-        setLoading(false);
-        return;
-      }
+    async function loadSelectedChild() {
+      setError(null);
 
       if (!user?.uid) {
-        setLoading(false);
+        if (stillMounted) {
+          setLoading(false);
+          setError("You must be signed in to continue.");
+        }
         return;
       }
 
-      try {
-        const children = await listChildren(user.uid);
-
-        const selectedChild = childId
-          ? children.find((child) => child.id === childId)
-          : children[0];
-
-        if (stillMounted && selectedChild) {
-          setName(selectedChild.name);
+      /*
+       * Use complete route data immediately when it is available.
+       * This avoids an unnecessary Firestore request and prevents a
+       * temporary wrong child name/avatar from appearing.
+       */
+      if (childId && childName && avatarId) {
+        if (stillMounted) {
+          setSelectedChild({
+            id: childId,
+            name: childName,
+            avatarId: normalizeAvatarId(avatarId),
+          });
+          setLoading(false);
         }
-      } catch {
-        // Keep empty name instead of showing the wrong child name.
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        let child = childId
+          ? await getChild(user.uid, childId)
+          : null;
+
+        if (!childId) {
+          const children = await listChildren(user.uid);
+
+          /*
+           * Never choose an arbitrary profile when several children exist.
+           * Send the parent to Child Management so they can select the exact
+           * child who will use the device.
+           */
+          if (children.length > 1) {
+            router.replace("/children");
+            return;
+          }
+
+          child = children[0] ?? null;
+        }
+
+        if (!stillMounted) {
+          return;
+        }
+
+        if (!child) {
+          setSelectedChild(null);
+          setError("No child profile found.");
+          return;
+        }
+
+        setSelectedChild({
+          id: child.id,
+          name: child.name,
+          avatarId: normalizeAvatarId(child.avatarId),
+        });
+      } catch (loadError) {
+        console.error(
+          "Unable to load the selected child:",
+          loadError,
+        );
+
+        if (stillMounted) {
+          setSelectedChild(null);
+          setError(
+            "We couldn’t load the child profile. Please try again.",
+          );
+        }
       } finally {
         if (stillMounted) {
           setLoading(false);
@@ -73,12 +147,40 @@ export default function SwitchToChildScreen() {
       }
     }
 
-    loadChildName();
+    void loadSelectedChild();
 
     return () => {
       stillMounted = false;
     };
-  }, [user?.uid, childId, childName]);
+  }, [
+    user?.uid,
+    childId,
+    childName,
+    avatarId,
+  ]);
+
+  function handleReadyToPlay() {
+    if (!selectedChild) {
+      setError("No child profile found.");
+      return;
+    }
+
+    /*
+     * Save the exact child before locking parent-only screens and
+     * handing the device over.
+     */
+    selectActiveChild(selectedChild);
+    enterChildMode();
+
+    router.replace({
+      pathname: "/child-welcome",
+      params: {
+        childId: selectedChild.id,
+        childName: selectedChild.name,
+        avatarId: selectedChild.avatarId,
+      },
+    });
+  }
 
   return (
     <ScrollView
@@ -87,15 +189,18 @@ export default function SwitchToChildScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.figmaFrame}>
-        <BackButton fallback="/child-profile-avatar" />
+        <BackButton fallback="/children" />
 
         {loading ? (
-          <ActivityIndicator color={colors.primary} style={styles.loader} />
+          <ActivityIndicator
+            color={colors.primary}
+            style={styles.loader}
+          />
         ) : (
           <>
             <Text style={styles.title}>
               Pass the device to{"\n"}
-              {name || "your child"}!
+              {selectedChild?.name || "your child"}!
             </Text>
 
             <Text style={styles.subtitle}>
@@ -112,28 +217,28 @@ export default function SwitchToChildScreen() {
               />
             </View>
 
+            <ErrorMessage
+              message={error}
+              style={styles.error}
+            />
+
             <View style={styles.buttonWrapper}>
               <AppButton
                 title="Ready to Play!"
-                onPress={() =>
-                  router.replace({
-                    pathname: "/child-welcome",
-                    params: {
-                      childId: childId ?? "",
-                      childName: name,
-                      avatarId: avatarId ?? "",
-                    },
-                  })
-                }
+                onPress={handleReadyToPlay}
                 style={styles.readyButton}
               />
             </View>
 
             <Pressable
-              onPress={() => router.replace("/home")}
+              onPress={() =>
+                router.replace("/home")
+              }
               style={styles.dashboardLinkWrapper}
             >
-              <Text style={styles.dashboardLink}>Go to Parent Dashboard</Text>
+              <Text style={styles.dashboardLink}>
+                Go to Parent Dashboard
+              </Text>
             </Pressable>
           </>
         )}
@@ -202,6 +307,13 @@ const styles = StyleSheet.create({
   image: {
     width: "100%",
     height: "100%",
+  },
+
+  error: {
+    position: "absolute",
+    left: x(20),
+    top: y(724),
+    width: x(362),
   },
 
   buttonWrapper: {

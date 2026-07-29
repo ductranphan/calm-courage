@@ -256,9 +256,6 @@ export async function completeOnboarding(
   }
 }
 
-/** Alias used by AuthContext; same behavior as verifyParentPin. */
-export const verifyPin = verifyParentPin;
-
 /**
  * Creates the Firebase Authentication account and then creates the
  * corresponding parent profile in Firestore.

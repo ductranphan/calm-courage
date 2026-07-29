@@ -6,7 +6,7 @@
  * then signs them in with Firebase Authentication.
  */
 
-import { router, type Href } from "expo-router";
+import { router } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -51,10 +51,25 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      await signIn(email.trim(), password);
-      router.replace("/parent-verification" as Href);
+      const signedInUser = await signIn(
+        email.trim(),
+        password,
+      );
+
+      /*
+       * Do not allow an unverified account to bypass
+       * the email-verification screen by logging in.
+       */
+      if (!signedInUser.emailVerified) {
+        router.replace("/verify-email");
+        return;
+      }
+
+      router.replace("/parent-verification");
     } catch {
-      setError("Unable to log in. Please check your email and password.");
+      setError(
+        "Unable to log in. Please check your email and password.",
+      );
     } finally {
       setLoading(false);
     }
@@ -109,7 +124,10 @@ export default function LoginScreen() {
             <Text style={styles.forgotPasswordText}>Forgot?</Text>
           </Pressable>
 
-          <ErrorMessage message={error} style={styles.errorText} />
+          <ErrorMessage
+            message={error}
+            style={styles.errorText}
+          />
 
           <View style={styles.buttonWrapper}>
             {loading ? (
@@ -127,15 +145,24 @@ export default function LoginScreen() {
 
           <View style={styles.socialRow}>
             <Pressable style={styles.socialButton}>
-              <GoogleIcon width={x(55)} height={x(55)} />
+              <GoogleIcon
+                width={x(55)}
+                height={x(55)}
+              />
             </Pressable>
 
             <Pressable style={styles.socialButton}>
-              <AppleIcon width={x(55)} height={x(55)} />
+              <AppleIcon
+                width={x(55)}
+                height={x(55)}
+              />
             </Pressable>
 
             <Pressable style={styles.socialButton}>
-              <FacebookIcon width={x(55)} height={x(55)} />
+              <FacebookIcon
+                width={x(55)}
+                height={x(55)}
+              />
             </Pressable>
           </View>
 
@@ -143,7 +170,9 @@ export default function LoginScreen() {
             onPress={() => router.push("/create-account")}
             style={styles.createAccountWrapper}
           >
-            <Text style={styles.createAccountText}>Don’t have an account?</Text>
+            <Text style={styles.createAccountText}>
+              Don’t have an account?
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
