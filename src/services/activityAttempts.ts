@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 
 import {
+  ACTIVITIES_BY_ID,
   getActivitiesForPhase,
   type CatalogActivity,
 } from "@/constants/activities";
@@ -119,6 +120,26 @@ export async function seedPhaseActivities(
         }),
       ),
   );
+}
+
+/**
+ * Complete a catalog activity by ID (no-op if the ID is unknown).
+ */
+export async function completeActivityById(
+  parentUid: string,
+  childId: string,
+  activityId: string,
+): Promise<void> {
+  const activity = ACTIVITIES_BY_ID[activityId];
+
+  if (!activity) {
+    console.warn(
+      `Skipping unknown activity completion: ${activityId}`,
+    );
+    return;
+  }
+
+  await completeActivityAttempt(parentUid, childId, activity);
 }
 
 /**

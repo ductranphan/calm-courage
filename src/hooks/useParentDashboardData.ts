@@ -18,6 +18,10 @@ import {
   type EmotionId,
 } from "@/constants/emotions";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  getChildActivityProgress,
+  seedPhaseActivities,
+} from "@/services/activityAttempts";
 import { getTodayCheckIn } from "@/services/checkIns";
 import { listChildren } from "@/services/children";
 
@@ -33,11 +37,6 @@ type DashboardData = {
   childAge: number;
   avatarId: AvatarId;
   todaysMood: EmotionId | null;
-
-  /*
-   * This remains null until activity progress is connected
-   * to the backend.
-   */
   progress: ProgressData | null;
 };
 
@@ -134,6 +133,20 @@ export function useParentDashboardData(options?: Options) {
           );
         }
 
+        /*
+         * Older children created before seeding may have no attempts yet.
+         * Idempotent seed keeps the progress bar accurate.
+         */
+        await seedPhaseActivities(
+          user.uid,
+          firstChild.id,
+        );
+
+        const progress = await getChildActivityProgress(
+          user.uid,
+          firstChild.id,
+        );
+
         if (stillMounted) {
           setData({
             childId: firstChild.id,
@@ -143,12 +156,7 @@ export function useParentDashboardData(options?: Options) {
               firstChild.avatarId,
             ),
             todaysMood,
-
-            /*
-             * Activity progress has not been connected
-             * to Firebase yet.
-             */
-            progress: null,
+            progress,
           });
         }
       } catch (loadError) {

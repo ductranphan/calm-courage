@@ -25,6 +25,9 @@ export type ChildProfile = {
   avatarId: AvatarId;
   createdAt?: unknown;
   updatedAt?: unknown;
+  stars: number;
+  gems: number;
+  badges: string[];
 };
 
 export type CreateChildInput = {
@@ -37,6 +40,12 @@ export type UpdateChildInput = {
   name?: string;
   age?: number;
   avatarId?: AvatarId;
+};
+
+export type AwardRewardsInput = {
+  stars?: number;
+  gems?: number;
+  badges?: string[];
 };
 
 function timestampToMilliseconds(value: unknown): number | null {
@@ -61,6 +70,25 @@ function timestampToMilliseconds(value: unknown): number | null {
   return null;
 }
 
+function mapChildDoc(
+  id: string,
+  data: Record<string, unknown>,
+): ChildProfile {
+  return {
+    id,
+    name: typeof data.name === "string" ? data.name : "",
+    age: typeof data.age === "number" ? data.age : 0,
+    avatarId: data.avatarId as AvatarId,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+    stars: typeof data.stars === "number" ? data.stars : 0,
+    gems: typeof data.gems === "number" ? data.gems : 0,
+    badges: Array.isArray(data.badges)
+      ? (data.badges as string[])
+      : [],
+  };
+}
+
 /**
  * Returns every child in a stable order.
  *
@@ -75,10 +103,9 @@ export async function listChildren(
     collection(db, "parents", parentUid, "children"),
   );
 
-  const children = snapshot.docs.map((childDoc) => ({
-    id: childDoc.id,
-    ...(childDoc.data() as Omit<ChildProfile, "id">),
-  }));
+  const children = snapshot.docs.map((childDoc) =>
+    mapChildDoc(childDoc.id, childDoc.data()),
+  );
 
   return children.sort((firstChild, secondChild) => {
     const firstCreatedAt = timestampToMilliseconds(firstChild.createdAt);
@@ -118,10 +145,7 @@ export async function getChild(
     return null;
   }
 
-  return {
-    id: snapshot.id,
-    ...(snapshot.data() as Omit<ChildProfile, "id">),
-  };
+  return mapChildDoc(snapshot.id, snapshot.data());
 }
 
 export async function createChild(
@@ -147,6 +171,9 @@ export async function createChild(
       name: data.name.trim(),
       age: data.age,
       avatarId: data.avatarId,
+      stars: 0,
+      gems: 0,
+      badges: [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -160,6 +187,55 @@ export async function createChild(
   });
 
   return childRef.id;
+}
+
+/**
+ * Atomically increments stars/gems and merges new badge IDs onto the child.
+ */
+export async function awardRewards(
+  parentUid: string,
+  childId: string,
+  rewards: AwardRewardsInput,
+): Promise<void> {
+  const childRef = doc(
+    db,
+    "parents",
+    parentUid,
+    "children",
+    childId,
+  );
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(childRef);
+
+    if (!snapshot.exists()) {
+      throw new Error("Child profile not found.");
+    }
+
+    const data = snapshot.data();
+    const currentStars =
+      typeof data.stars === "number" ? data.stars : 0;
+    const currentGems =
+      typeof data.gems === "number" ? data.gems : 0;
+    const currentBadges = Array.isArray(data.badges)
+      ? (data.badges as string[])
+      : [];
+
+    const nextBadges = [...currentBadges];
+
+    for (const badgeId of rewards.badges ?? []) {
+      if (!nextBadges.includes(badgeId)) {
+        nextBadges.push(badgeId);
+      }
+    }
+
+    transaction.update(childRef, {
+      stars: currentStars + (rewards.stars ?? 0),
+      gems: currentGems + (rewards.gems ?? 0),
+      badges: nextBadges,
+      updatedAt: serverTimestamp(),
+    });
+  });
 }
 
 export async function updateChild(
