@@ -100,12 +100,20 @@ export default function ParentVerificationScreen() {
 
     setError(null);
 
-    setPin((current) =>
-      `${current}${number}`.slice(
-        0,
-        PIN_LENGTH,
-      ),
+    const nextPin = `${pin}${number}`.slice(
+      0,
+      PIN_LENGTH,
     );
+
+    setPin(nextPin);
+
+    /*
+     * Auto-submit once all four digits are entered so parents do not
+     * need to find the Verify button below the keypad.
+     */
+    if (nextPin.length === PIN_LENGTH) {
+      void handleVerifyPin(nextPin);
+    }
   }
 
   function handleDelete() {
@@ -128,7 +136,9 @@ export default function ParentVerificationScreen() {
     router.push("./forgot-pin-math");
   }
 
-  async function handleVerifyPin() {
+  async function handleVerifyPin(
+    pinToVerify: string = pin,
+  ) {
     if (verifying) {
       return;
     }
@@ -140,7 +150,7 @@ export default function ParentVerificationScreen() {
       return;
     }
 
-    if (!isValidPin(pin)) {
+    if (!isValidPin(pinToVerify)) {
       setError("Please enter your four-digit PIN.");
       return;
     }
@@ -150,7 +160,7 @@ export default function ParentVerificationScreen() {
     try {
       const pinIsCorrect = await verifyParentPin(
         user.uid,
-        pin,
+        pinToVerify,
       );
 
       if (!pinIsCorrect) {
@@ -409,7 +419,9 @@ export default function ParentVerificationScreen() {
           ) : (
             <AppButton
               title="Verify & Enter"
-              onPress={handleVerifyPin}
+              onPress={() => {
+                void handleVerifyPin();
+              }}
               style={styles.actionButton}
             />
           )}

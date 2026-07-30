@@ -33,6 +33,7 @@ import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { saveDailyCheckIn } from "@/services/checkIns";
 import { getChild } from "@/services/children";
+import { completeActivityById } from "@/services/activityAttempts";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -124,6 +125,23 @@ export default function DailyEmotionScreen() {
           emotion: emotionId,
         },
       );
+
+      /*
+       * Daily check-in completes the Phase 1 "Name the Feeling" activity.
+       * completeActivityById is idempotent if already completed today.
+       */
+      try {
+        await completeActivityById(
+          user.uid,
+          activeChildId,
+          "phase1_name_the_feeling",
+        );
+      } catch (rewardError) {
+        console.error(
+          "Unable to complete Name the Feeling activity:",
+          rewardError,
+        );
+      }
 
       /*
        * If an older check-in already existed, use its saved emotion rather

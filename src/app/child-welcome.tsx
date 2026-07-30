@@ -34,6 +34,7 @@ import {
 import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useChildRewards } from "@/hooks/useChildRewards";
 import { getTodayCheckIn } from "@/services/checkIns";
 import {
   getChild,
@@ -51,16 +52,6 @@ type ChildWelcomeData = {
   childId: string | null;
   childName: string;
   avatarId: AvatarId;
-};
-
-/*
- * Temporary values used until reward totals are loaded from the
- * child's progression data.
- */
-const TEMP_SCORES = {
-  stars: 15,
-  diamonds: 5,
-  badges: 3,
 };
 
 function formatScore(value: number): string {
@@ -120,6 +111,8 @@ export default function ChildWelcomeScreen() {
           avatarId ?? defaultAvatarId,
         ),
     });
+
+  const rewards = useChildRewards(childData.childId);
 
   useEffect(() => {
     let isMounted = true;
@@ -360,7 +353,7 @@ export default function ChildWelcomeScreen() {
                 />
 
                 <Text style={styles.statText}>
-                  {TEMP_SCORES.stars}
+                  {rewards.stars}
                 </Text>
 
                 <DiamondIcon
@@ -370,7 +363,7 @@ export default function ChildWelcomeScreen() {
 
                 <Text style={styles.statText}>
                   {formatScore(
-                    TEMP_SCORES.diamonds,
+                    rewards.gems,
                   )}
                 </Text>
 
@@ -381,15 +374,15 @@ export default function ChildWelcomeScreen() {
 
                 <Text style={styles.statText}>
                   {formatScore(
-                    TEMP_SCORES.badges,
+                    rewards.badges.length,
                   )}
                 </Text>
               </View>
 
               <Text style={styles.rewardText}>
-                5 more stars until your next
-                {"\n"}
-                big reward!
+                {rewards.stars === 0
+                  ? "Complete today’s check-in to earn your first stars!"
+                  : "Keep going — every brave step earns more rewards!"}
               </Text>
             </View>
 

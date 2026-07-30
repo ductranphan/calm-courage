@@ -20,6 +20,7 @@ import {
 import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
+import { useChildRewards } from "@/hooks/useChildRewards";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -38,13 +39,7 @@ import KindVoiceBadge from "../../assets/images/kind-voice.svg";
 const FIGMA_CONTENT_HEIGHT = 1100;
 const FOOTER_SPACE = 125;
 const PAGE_BACKGROUND = "#F1F3F5";
-
-const TEMP_REWARDS = {
-  stars: 15,
-  gems: 5,
-  collectedBadges: 3,
-  totalBadges: 15,
-};
+const TOTAL_BADGE_SLOTS = 15;
 
 const LOCKED_BADGES = Array.from(
   { length: 12 },
@@ -54,6 +49,7 @@ const LOCKED_BADGES = Array.from(
 export default function RewardsScreen() {
   const { activeChild } = useActiveChild();
   const { childModeActive } = useParentAccess();
+  const rewards = useChildRewards(activeChild?.id);
 
   const [audioEnabled, setAudioEnabled] =
     useState(false);
@@ -131,7 +127,7 @@ export default function RewardsScreen() {
             />
 
             <Text style={styles.summaryText}>
-              {TEMP_REWARDS.stars} Stars
+              {rewards.stars} Stars
             </Text>
           </View>
 
@@ -142,7 +138,7 @@ export default function RewardsScreen() {
             />
 
             <Text style={styles.summaryText}>
-              {TEMP_REWARDS.gems} Gems
+              {rewards.gems} Gems
             </Text>
           </View>
 
@@ -159,8 +155,8 @@ export default function RewardsScreen() {
           </Text>
 
           <Text style={styles.badgeCountText}>
-            {TEMP_REWARDS.collectedBadges}/
-            {TEMP_REWARDS.totalBadges}
+            {rewards.badges.length}/
+            {TOTAL_BADGE_SLOTS}
           </Text>
 
           <View style={styles.collectedBadgeRow}>

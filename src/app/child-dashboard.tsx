@@ -25,6 +25,7 @@ import {
 import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
+import { useChildRewards } from "@/hooks/useChildRewards";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -51,12 +52,6 @@ const PATH_VERTICAL_SHIFT = -28;
 
 const FIGMA_CONTENT_HEIGHT = 1378;
 const FOOTER_SPACE = 125;
-
-const TEMP_REWARDS = {
-  stars: 15,
-  gems: 5,
-  badges: 3,
-};
 
 const ACTIVITY_TILES = [
   {
@@ -125,6 +120,7 @@ function getChallengeTimeLeft(): string {
 export default function ChildDashboardScreen() {
   const { activeChild } = useActiveChild();
   const { childModeActive } = useParentAccess();
+  const rewards = useChildRewards(activeChild?.id);
 
   const [audioEnabled, setAudioEnabled] =
     useState(false);
@@ -274,7 +270,7 @@ export default function ChildDashboardScreen() {
             />
 
             <Text style={styles.statText}>
-              {TEMP_REWARDS.stars}
+              {rewards.stars}
             </Text>
 
             <DiamondIcon
@@ -284,7 +280,7 @@ export default function ChildDashboardScreen() {
 
             <Text style={styles.statText}>
               {formatScore(
-                TEMP_REWARDS.gems,
+                rewards.gems,
               )}
             </Text>
 
@@ -295,7 +291,7 @@ export default function ChildDashboardScreen() {
 
             <Text style={styles.statText}>
               {formatScore(
-                TEMP_REWARDS.badges,
+                rewards.badges.length,
               )}
             </Text>
           </View>
