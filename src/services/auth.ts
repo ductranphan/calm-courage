@@ -9,9 +9,11 @@
  */
 
 import {
+  EmailAuthProvider,
   createUserWithEmailAndPassword,
   deleteUser,
   onAuthStateChanged,
+  reauthenticateWithCredential,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
@@ -19,17 +21,27 @@ import {
   type User,
 } from "firebase/auth";
 import {
+  collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocs,
   serverTimestamp,
   setDoc,
   updateDoc,
 } from "firebase/firestore";
 
 import { auth, db } from "@/config/firebase";
+import { CONSENT_VERSION } from "@/constants/consent";
 import { hashPin } from "@/utils/pin";
 
 const PARENT_COLLECTION = "parents";
+
+export type SignUpConsent = {
+  termsOfUse: boolean;
+  privacyPolicy: boolean;
+  parentGuardianConsent: boolean;
+};
 
 export type UserProfile = {
   email: string;
@@ -39,6 +51,13 @@ export type UserProfile = {
   onboardingCompletedAt?: unknown;
   termsAccepted: boolean;
   termsAcceptedAt?: unknown;
+  termsOfUseAccepted: boolean;
+  termsOfUseAcceptedAt?: unknown;
+  privacyPolicyAccepted: boolean;
+  privacyPolicyAcceptedAt?: unknown;
+  parentGuardianConsentAccepted: boolean;
+  parentGuardianConsentAcceptedAt?: unknown;
+  consentVersion?: string;
 };
 
 /**
@@ -133,7 +152,10 @@ function parentDocument(userId: string) {
 async function createParentProfile(
   user: User,
   pinHash: string,
+  consent: SignUpConsent,
 ): Promise<void> {
+  const acceptedAt = serverTimestamp();
+
   await setDoc(parentDocument(user.uid), {
     email: user.email ?? "",
     pinHash,
@@ -142,11 +164,25 @@ async function createParentProfile(
     onboardingComplete: false,
 
     /*
-     * The sign-up screen requires the checkbox before account creation,
-     * so the accepted terms can be stored immediately.
+     * Three consent agreements are required at sign-up and recorded
+     * individually for Privacy Policy / store disclosures.
      */
-    termsAccepted: true,
-    termsAcceptedAt: serverTimestamp(),
+    termsOfUseAccepted: consent.termsOfUse,
+    termsOfUseAcceptedAt: acceptedAt,
+    privacyPolicyAccepted: consent.privacyPolicy,
+    privacyPolicyAcceptedAt: acceptedAt,
+    parentGuardianConsentAccepted: consent.parentGuardianConsent,
+    parentGuardianConsentAcceptedAt: acceptedAt,
+    consentVersion: CONSENT_VERSION,
+
+    /*
+     * Legacy combined flag kept for older screens that still read it.
+     */
+    termsAccepted:
+      consent.termsOfUse &&
+      consent.privacyPolicy &&
+      consent.parentGuardianConsent,
+    termsAcceptedAt: acceptedAt,
   });
 }
 
@@ -178,6 +214,29 @@ export async function getUserProfile(
 
       termsAcceptedAt:
         data.termsAcceptedAt,
+
+      termsOfUseAccepted:
+        data.termsOfUseAccepted === true,
+
+      termsOfUseAcceptedAt:
+        data.termsOfUseAcceptedAt,
+
+      privacyPolicyAccepted:
+        data.privacyPolicyAccepted === true,
+
+      privacyPolicyAcceptedAt:
+        data.privacyPolicyAcceptedAt,
+
+      parentGuardianConsentAccepted:
+        data.parentGuardianConsentAccepted === true,
+
+      parentGuardianConsentAcceptedAt:
+        data.parentGuardianConsentAcceptedAt,
+
+      consentVersion:
+        typeof data.consentVersion === "string"
+          ? data.consentVersion
+          : undefined,
     };
   } catch (error) {
     throw new Error(getErrorMessage(error));
@@ -234,9 +293,18 @@ export async function acceptTerms(
   userId: string,
 ): Promise<void> {
   try {
+    const acceptedAt = serverTimestamp();
+
     await updateDoc(parentDocument(userId), {
       termsAccepted: true,
-      termsAcceptedAt: serverTimestamp(),
+      termsAcceptedAt: acceptedAt,
+      termsOfUseAccepted: true,
+      termsOfUseAcceptedAt: acceptedAt,
+      privacyPolicyAccepted: true,
+      privacyPolicyAcceptedAt: acceptedAt,
+      parentGuardianConsentAccepted: true,
+      parentGuardianConsentAcceptedAt: acceptedAt,
+      consentVersion: CONSENT_VERSION,
     });
   } catch (error) {
     throw new Error(getErrorMessage(error));
@@ -264,8 +332,19 @@ export async function signUp(
   email: string,
   password: string,
   pin: string,
+  consent: SignUpConsent,
 ): Promise<User> {
   let createdUser: User | null = null;
+
+  if (
+    !consent.termsOfUse ||
+    !consent.privacyPolicy ||
+    !consent.parentGuardianConsent
+  ) {
+    throw new Error(
+      "Please agree to the Terms of Use, Privacy Policy, and Parent/Guardian Consent.",
+    );
+  }
 
   try {
     const normalizedEmail = email
@@ -290,6 +369,7 @@ export async function signUp(
     await createParentProfile(
       credential.user,
       pinHash,
+      consent,
     );
 
     return credential.user;
@@ -388,6 +468,79 @@ export async function reloadCurrentUser(): Promise<User | null> {
     await user.reload();
 
     return auth.currentUser;
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+async function deleteQueryDocuments(
+  parentUid: string,
+  childId: string,
+  subcollection: string,
+): Promise<void> {
+  const snapshot = await getDocs(
+    collection(
+      db,
+      PARENT_COLLECTION,
+      parentUid,
+      "children",
+      childId,
+      subcollection,
+    ),
+  );
+
+  await Promise.all(
+    snapshot.docs.map((documentSnapshot) =>
+      deleteDoc(documentSnapshot.ref),
+    ),
+  );
+}
+
+/**
+ * Permanently deletes the signed-in parent's Auth account and all
+ * Firestore data under parents/{uid}, including children, check-ins,
+ * and activity attempts.
+ *
+ * Requires the account password so Firebase can reauthenticate before
+ * deleting the Auth user.
+ */
+export async function deleteParentAccount(
+  password: string,
+): Promise<void> {
+  const user = auth.currentUser;
+
+  if (!user?.email) {
+    throw new Error("You must be signed in to delete your account.");
+  }
+
+  if (!password.trim()) {
+    throw new Error("Please enter your password to delete your account.");
+  }
+
+  try {
+    const credential = EmailAuthProvider.credential(
+      user.email,
+      password,
+    );
+
+    await reauthenticateWithCredential(user, credential);
+
+    const childrenSnapshot = await getDocs(
+      collection(db, PARENT_COLLECTION, user.uid, "children"),
+    );
+
+    for (const childDoc of childrenSnapshot.docs) {
+      await deleteQueryDocuments(user.uid, childDoc.id, "checkIns");
+      await deleteQueryDocuments(
+        user.uid,
+        childDoc.id,
+        "activityAttempts",
+      );
+      await deleteDoc(childDoc.ref);
+    }
+
+    await deleteDoc(parentDocument(user.uid));
+    await deleteUser(user);
   } catch (error) {
     throw new Error(getErrorMessage(error));
   }

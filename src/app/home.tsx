@@ -41,7 +41,7 @@ export default function ParentDashboardScreen() {
   const [audioEnabled, setAudioEnabled] =
     useState(false);
 
-  if (dashboardData.loading) {
+  if (dashboardData.loading && !dashboardData.childId) {
     return (
       <View style={styles.statusScreen}>
         <ActivityIndicator
@@ -56,7 +56,7 @@ export default function ParentDashboardScreen() {
     );
   }
 
-  if (dashboardData.error) {
+  if (dashboardData.error && !dashboardData.childId) {
     return (
       <View style={styles.statusScreen}>
         <Text style={styles.statusTitle}>
@@ -142,6 +142,58 @@ export default function ParentDashboardScreen() {
         </Text>
 
         <View style={styles.dividerTop} />
+
+        {dashboardData.children.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.childSelector}
+            contentContainerStyle={
+              styles.childSelectorContent
+            }
+          >
+            {dashboardData.children.map((child) => {
+              const selected =
+                child.id ===
+                dashboardData.selectedChildId;
+
+              return (
+                <Pressable
+                  key={child.id}
+                  onPress={() => {
+                    void dashboardData.selectChild(
+                      child.id,
+                    );
+                  }}
+                  style={[
+                    styles.childChip,
+                    selected &&
+                      styles.childChipSelected,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    selected,
+                  }}
+                  accessibilityLabel={`View ${child.name}`}
+                >
+                  <Text
+                    style={[
+                      styles.childChipText,
+                      selected &&
+                        styles.childChipTextSelected,
+                    ]}
+                  >
+                    {child.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : (
+          <Text style={styles.selectedChildLabel}>
+            Viewing: {dashboardData.childName}
+          </Text>
+        )}
 
         <View
           style={styles.progressReportWrapper}
@@ -303,13 +355,13 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-    minHeight: y(900),
+    minHeight: y(960),
     backgroundColor: colors.background,
   },
 
   figmaFrame: {
     width: "100%",
-    height: y(900),
+    height: y(960),
     position: "relative",
     backgroundColor: colors.background,
   },
@@ -346,10 +398,60 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
 
+  childSelector: {
+    position: "absolute",
+    left: x(20),
+    top: y(198),
+    width: x(362),
+    maxHeight: y(44),
+  },
+
+  childSelectorContent: {
+    alignItems: "center",
+    gap: x(8),
+    paddingRight: x(8),
+  },
+
+  childChip: {
+    paddingHorizontal: x(14),
+    paddingVertical: y(8),
+    borderRadius: x(20),
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.white,
+  },
+
+  childChipSelected: {
+    backgroundColor: colors.primary,
+  },
+
+  childChipText: {
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(16),
+    lineHeight: y(20),
+  },
+
+  childChipTextSelected: {
+    color: colors.white,
+  },
+
+  selectedChildLabel: {
+    position: "absolute",
+    left: x(20),
+    top: y(198),
+    width: x(362),
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(16),
+    lineHeight: y(22),
+    textAlign: "center",
+  },
+
   progressReportWrapper: {
     position: "absolute",
     left: x(20),
-    top: y(208),
+    top: y(250),
     width: x(362),
     height: y(61),
     alignItems: "center",
@@ -378,7 +480,7 @@ const styles = StyleSheet.create({
   moodImageWrapper: {
     position: "absolute",
     left: x(171),
-    top: y(281),
+    top: y(323),
     width: x(60),
     height: x(60),
     alignItems: "center",
@@ -393,7 +495,7 @@ const styles = StyleSheet.create({
   progressBarWrapper: {
     position: "absolute",
     left: x(20),
-    top: y(333),
+    top: y(375),
     width: x(362),
     height: y(19),
   },
@@ -401,7 +503,7 @@ const styles = StyleSheet.create({
   phaseText: {
     position: "absolute",
     left: x(20),
-    top: y(356),
+    top: y(398),
     width: x(218),
     height: y(35),
     color: colors.primary,
@@ -413,7 +515,7 @@ const styles = StyleSheet.create({
   activitiesText: {
     position: "absolute",
     left: x(249),
-    top: y(359),
+    top: y(401),
     width: x(133),
     height: y(35),
     color: colors.primary,
@@ -426,7 +528,7 @@ const styles = StyleSheet.create({
   progressUnavailableText: {
     position: "absolute",
     left: x(20),
-    top: y(342),
+    top: y(384),
     width: x(362),
     color: colors.primary,
     fontFamily: "Literata",
@@ -438,7 +540,7 @@ const styles = StyleSheet.create({
   dividerMiddle: {
     position: "absolute",
     left: x(20),
-    top: y(410),
+    top: y(452),
     width: x(362),
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.primary,
@@ -447,7 +549,7 @@ const styles = StyleSheet.create({
   promptTitle: {
     position: "absolute",
     left: x(20),
-    top: y(422),
+    top: y(464),
     width: x(362),
     height: y(35),
     color: colors.primary,
@@ -460,7 +562,7 @@ const styles = StyleSheet.create({
   promptCardWrapper: {
     position: "absolute",
     left: x(20),
-    top: y(460),
+    top: y(502),
     width: x(362),
     height: y(271),
   },
@@ -468,7 +570,7 @@ const styles = StyleSheet.create({
   switchWrapper: {
     position: "absolute",
     left: x(20),
-    top: y(750),
+    top: y(792),
     width: x(206),
     height: y(24),
     justifyContent: "center",
@@ -485,7 +587,7 @@ const styles = StyleSheet.create({
   bottomNavWrapper: {
     position: "absolute",
     left: x(20),
-    top: y(783),
+    top: y(825),
     width: x(362),
     height: y(72),
   },

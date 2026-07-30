@@ -2,7 +2,7 @@
  * Email sign-up screen.
  *
  * Matches Figma Screen 2.0: Parent Sign-Up & Security.
- * Collects the parent's email, password, PIN, and terms agreement.
+ * Collects the parent's email, password, PIN, and three consent agreements.
  */
 
 import { router } from "expo-router";
@@ -25,10 +25,19 @@ import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import FloatingTextInput from "@/components/ui/FloatingTextInput";
 import PinInput from "@/components/ui/PinInput";
+import {
+  type ConsentDocumentKind,
+} from "@/constants/consent";
 import { colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { isValidPin } from "@/utils/pin";
 import { x, y } from "@/utils/scaling";
+
+type ConsentState = {
+  termsOfUse: boolean;
+  privacyPolicy: boolean;
+  parentGuardianConsent: boolean;
+};
 
 export default function EmailSignupScreen() {
   const {
@@ -44,21 +53,30 @@ export default function EmailSignupScreen() {
   ] = useState("");
 
   const [pin, setPin] = useState("");
-  const [
-    termsAccepted,
-    setTermsAccepted,
-  ] = useState(false);
+  const [consent, setConsent] = useState<ConsentState>({
+    termsOfUse: false,
+    privacyPolicy: false,
+    parentGuardianConsent: false,
+  });
 
   const [
-    termsModalVisible,
-    setTermsModalVisible,
-  ] = useState(false);
+    consentModalDocument,
+    setConsentModalDocument,
+  ] = useState<ConsentDocumentKind | null>(null);
 
   const [error, setError] =
     useState<string | null>(null);
 
   const [loading, setLoading] =
     useState(false);
+
+  function toggleConsent(key: keyof ConsentState) {
+    setConsent((current) => ({
+      ...current,
+      [key]: !current[key],
+    }));
+    setError(null);
+  }
 
   function validateForm(): string | null {
     const normalizedEmail = email
@@ -89,8 +107,16 @@ export default function EmailSignupScreen() {
       return "Please create a 4-digit PIN.";
     }
 
-    if (!termsAccepted) {
-      return "Please agree to the Terms of Service and Privacy Policy.";
+    if (!consent.termsOfUse) {
+      return "Please agree to the Terms of Use.";
+    }
+
+    if (!consent.privacyPolicy) {
+      return "Please agree to the Privacy Policy.";
+    }
+
+    if (!consent.parentGuardianConsent) {
+      return "Please provide Parent/Guardian Consent.";
     }
 
     return null;
@@ -117,16 +143,11 @@ export default function EmailSignupScreen() {
     setLoading(true);
 
     try {
-      /*
-       * signUp creates both:
-       *
-       * 1. Firebase Authentication user
-       * 2. Firestore parents/{uid} profile
-       */
       await signUp(
         normalizedEmail,
         password,
         pin,
+        consent,
       );
     } catch (signUpError) {
       console.error(
@@ -145,12 +166,6 @@ export default function EmailSignupScreen() {
     }
 
     try {
-      /*
-       * The account already exists at this point.
-       *
-       * If email sending fails, the parent can still continue to
-       * the verification page and press Resend link.
-       */
       await sendVerificationEmail();
     } catch (verificationError) {
       console.error(
@@ -162,6 +177,54 @@ export default function EmailSignupScreen() {
     }
 
     router.replace("/verify-email");
+  }
+
+  function renderConsentRow(
+    key: keyof ConsentState,
+    document: ConsentDocumentKind,
+    label: string,
+  ) {
+    const checked = consent[key];
+
+    return (
+      <View style={styles.consentRow}>
+        <Pressable
+          onPress={() => toggleConsent(key)}
+          disabled={loading}
+          style={[
+            styles.checkbox,
+            loading && styles.disabledControl,
+          ]}
+          accessibilityRole="checkbox"
+          accessibilityLabel={label}
+          accessibilityState={{
+            checked,
+            disabled: loading,
+          }}
+        >
+          {checked ? (
+            <CheckIcon
+              width={x(14)}
+              height={x(14)}
+            />
+          ) : null}
+        </Pressable>
+
+        <Pressable
+          onPress={() =>
+            setConsentModalDocument(document)
+          }
+          disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel={`Read ${label}`}
+          style={styles.consentLabelPressable}
+        >
+          <Text style={styles.termsText}>
+            {label}
+          </Text>
+        </Pressable>
+      </View>
+    );
   }
 
   return (
@@ -269,49 +332,22 @@ export default function EmailSignupScreen() {
             </View>
           </View>
 
-          <View style={styles.termsRow}>
-            <Pressable
-              onPress={() => {
-                setTermsAccepted(
-                  (current) => !current,
-                );
-                setError(null);
-              }}
-              disabled={loading}
-              style={[
-                styles.checkbox,
-                loading &&
-                  styles.disabledControl,
-              ]}
-              accessibilityRole="checkbox"
-              accessibilityLabel="Agree to Terms of Service and Privacy Policy"
-              accessibilityState={{
-                checked: termsAccepted,
-                disabled: loading,
-              }}
-            >
-              {termsAccepted ? (
-                <CheckIcon
-                  width={x(14)}
-                  height={x(14)}
-                />
-              ) : null}
-            </Pressable>
-
-            <Pressable
-              onPress={() =>
-                setTermsModalVisible(true)
-              }
-              disabled={loading}
-              accessibilityRole="button"
-              accessibilityLabel="Read Terms of Service and Privacy Policy"
-            >
-              <Text style={styles.termsText}>
-                I agree to the Terms of Service
-                and{"\n"}
-                Privacy Policy.
-              </Text>
-            </Pressable>
+          <View style={styles.consentSection}>
+            {renderConsentRow(
+              "termsOfUse",
+              "termsOfUse",
+              "I agree to the Terms of Use",
+            )}
+            {renderConsentRow(
+              "privacyPolicy",
+              "privacyPolicy",
+              "I agree to the Privacy Policy",
+            )}
+            {renderConsentRow(
+              "parentGuardianConsent",
+              "parentGuardianConsent",
+              "I provide Parent/Guardian Consent",
+            )}
           </View>
 
           {error ? (
@@ -341,9 +377,10 @@ export default function EmailSignupScreen() {
           </View>
 
           <TermsModal
-            visible={termsModalVisible}
+            visible={consentModalDocument !== null}
+            document={consentModalDocument}
             onClose={() =>
-              setTermsModalVisible(false)
+              setConsentModalDocument(null)
             }
           />
         </View>
@@ -359,13 +396,13 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-    minHeight: y(960),
+    minHeight: y(1100),
     backgroundColor: colors.background,
   },
 
   figmaFrame: {
     width: "100%",
-    height: y(960),
+    height: y(1100),
     position: "relative",
     backgroundColor: colors.background,
   },
@@ -388,50 +425,43 @@ const styles = StyleSheet.create({
     left: x(20),
     top: y(188),
     width: x(362),
-    height: y(48),
+    minHeight: y(48),
     color: colors.primary,
     fontFamily: "Literata",
     fontSize: x(20),
     lineHeight: y(24),
+    textAlign: "center",
   },
 
   emailInput: {
     position: "absolute",
     left: x(20),
-    top: y(262),
+    top: y(280),
+    width: x(362),
   },
 
   passwordInput: {
     position: "absolute",
     left: x(20),
     top: y(370),
+    width: x(362),
   },
 
   confirmInput: {
     position: "absolute",
     left: x(20),
-    top: y(478),
+    top: y(460),
+    width: x(362),
   },
 
-  /*
-   * Both password inputs use exactly the same font and spacing.
-   *
-   * iOS can display secure characters differently when a custom
-   * font or password autofill is active. Using the system font for
-   * secure fields keeps their dots visually identical.
-   */
   secureInput: {
-    fontFamily:
-      Platform.OS === "ios"
-        ? "System"
-        : "Literata",
     letterSpacing: 0,
   },
 
   pinSection: {
     position: "absolute",
     left: x(20),
-    top: y(583),
+    top: y(560),
     width: x(361),
     height: y(122),
   },
@@ -449,12 +479,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  termsRow: {
+  consentSection: {
     position: "absolute",
     left: x(20),
-    top: y(758),
+    top: y(720),
+    width: x(362),
+    gap: y(14),
+  },
+
+  consentRow: {
     flexDirection: "row",
     alignItems: "flex-start",
+  },
+
+  consentLabelPressable: {
+    flex: 1,
   },
 
   checkbox: {
@@ -466,6 +505,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: x(8),
+    marginTop: y(2),
   },
 
   disabledControl: {
@@ -473,11 +513,9 @@ const styles = StyleSheet.create({
   },
 
   termsText: {
-    width: x(328),
-    minHeight: y(48),
     color: colors.primary,
     fontFamily: "Literata",
-    fontSize: x(20),
+    fontSize: x(18),
     lineHeight: y(24),
     textDecorationLine: "underline",
   },
@@ -485,7 +523,7 @@ const styles = StyleSheet.create({
   error: {
     position: "absolute",
     left: x(20),
-    top: y(812),
+    top: y(880),
     width: x(362),
     color: "#B00020",
     fontFamily: "Literata",
@@ -497,7 +535,7 @@ const styles = StyleSheet.create({
   buttonWrapper: {
     position: "absolute",
     left: x(96),
-    top: y(850),
+    top: y(930),
     width: x(210),
     height: y(84),
     alignItems: "center",

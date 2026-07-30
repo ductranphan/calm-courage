@@ -1,24 +1,32 @@
 /**
- * Terms of Service and Privacy Policy overlay.
- *
- * Figma-style grey overlay displayed inside the email sign-up screen.
- * The grey card stays fixed, while the terms text can scroll if needed.
+ * Consent document overlay for parent registration.
  */
 
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import {
+  consentDocuments,
+  type ConsentDocumentKind,
+} from "@/constants/consent";
 import { colors } from "@/constants/colors";
 import { x, y } from "@/utils/scaling";
 
 type Props = {
   visible: boolean;
+  document: ConsentDocumentKind | null;
   onClose: () => void;
 };
 
-export default function TermsModal({ visible, onClose }: Props) {
-  if (!visible) {
+export default function TermsModal({
+  visible,
+  document,
+  onClose,
+}: Props) {
+  if (!visible || !document) {
     return null;
   }
+
+  const content = consentDocuments[document];
 
   return (
     <View style={styles.card}>
@@ -32,24 +40,8 @@ export default function TermsModal({ visible, onClose }: Props) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Terms of Service & Privacy Policy</Text>
-
-        <Text style={styles.text}>
-          Welcome to Calm Courage Co.{"\n"}
-          
-          Please review how we protect your family{"'"}s data:{"\n\n"}
-
-          1. Data Protection & Privacy{"\n"}
-          • We do not share your child{"'"}s emotional data or drawings with any third parties.{"\n"}
-          • All voice recordings and canvas activities are encrypted and securely stored.{"\n\n"}
-
-          2. Parental Control{"\n"}
-          • Parents maintain full access to view, edit, or delete their child{"'"}s profile and progress reports.{"\n\n"}
-
-          3. Subscription & Billing{"\n"}
-          • Phase 1 features include free trials, followed by our monthly membership plan ($7.99/mo).{"\n"}
-          • Cancel anytime through your Parent Settings.
-        </Text>
+        <Text style={styles.title}>{content.title}</Text>
+        <Text style={styles.text}>{content.body}</Text>
       </ScrollView>
     </View>
   );

@@ -1,7 +1,7 @@
 /**
  * Parent settings screen.
  *
- * Contains notification preferences and the membership plan section.
+ * Contains notification preferences, membership plan, and account deletion.
  *
  * Notification toggles are currently stored in frontend state.
  * Subscription functionality will be connected later.
@@ -10,16 +10,20 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 
 import ParentBottomNav from "@/components/dashboard/ParentBottomNav";
 import AppButton from "@/components/ui/AppButton";
 import { colors } from "@/constants/colors";
+import { useAuth } from "@/contexts/AuthContext";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -31,17 +35,6 @@ type SettingsToggleProps = {
   accessibilityLabel: string;
 };
 
-/**
- * Reusable settings toggle.
- *
- * Disabled:
- * - grey background
- * - blue circle on the left
- *
- * Enabled:
- * - blue background
- * - grey circle on the right
- */
 function SettingsToggle({
   enabled,
   onChange,
@@ -76,17 +69,78 @@ function SettingsToggle({
 }
 
 export default function SettingsScreen() {
+  const { deleteAccount } = useAuth();
+
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [pushNotifications, setPushNotifications] =
     useState(false);
   const [weeklyEmailReports, setWeeklyEmailReports] =
     useState(false);
+  const [deletePassword, setDeletePassword] =
+    useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] =
+    useState<string | null>(null);
 
   function handleSubscribe() {
     /*
      * Subscription and payment functionality
-     * will be implemented later.
+     * will be implemented later with store-compliant IAP.
      */
+  }
+
+  function handleDeleteAccountPress() {
+    if (deleting) {
+      return;
+    }
+
+    setDeleteError(null);
+
+    if (!deletePassword.trim()) {
+      setDeleteError(
+        "Enter your password to delete your account.",
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Delete Account",
+      "This permanently deletes your parent account, all child profiles, check-ins, and progress. This cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void confirmDeleteAccount();
+          },
+        },
+      ],
+    );
+  }
+
+  async function confirmDeleteAccount() {
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await deleteAccount(deletePassword);
+      setDeletePassword("");
+      router.replace("/onboarding");
+    } catch (error) {
+      console.error("Unable to delete account:", error);
+
+      setDeleteError(
+        error instanceof Error
+          ? error.message
+          : "Unable to delete account. Please try again.",
+      );
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -94,6 +148,7 @@ export default function SettingsScreen() {
       style={styles.screen}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
       <View style={styles.figmaFrame}>
         <Pressable
@@ -192,6 +247,56 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        <Text style={styles.accountTitle}>
+          Account
+        </Text>
+
+        <Text style={styles.accountHint}>
+          Enter your password to permanently delete
+          {"\n"}
+          your account and all child data.
+        </Text>
+
+        <TextInput
+          value={deletePassword}
+          onChangeText={(value) => {
+            setDeletePassword(value);
+            setDeleteError(null);
+          }}
+          placeholder="Password"
+          placeholderTextColor={colors.muted}
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!deleting}
+          style={styles.deletePasswordInput}
+          accessibilityLabel="Password for account deletion"
+        />
+
+        {deleteError ? (
+          <Text
+            style={styles.deleteError}
+            accessibilityRole="alert"
+          >
+            {deleteError}
+          </Text>
+        ) : null}
+
+        <View style={styles.deleteButtonWrapper}>
+          {deleting ? (
+            <ActivityIndicator
+              size="large"
+              color={colors.primary}
+            />
+          ) : (
+            <AppButton
+              title="Delete Account"
+              onPress={handleDeleteAccountPress}
+              style={styles.deleteButton}
+            />
+          )}
+        </View>
+
         <Pressable
           style={styles.switchToChildWrapper}
           onPress={() =>
@@ -220,13 +325,13 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-    minHeight: y(900),
+    minHeight: y(1180),
     backgroundColor: colors.background,
   },
 
   figmaFrame: {
     width: "100%",
-    height: y(900),
+    height: y(1180),
     position: "relative",
     backgroundColor: colors.background,
   },
@@ -430,10 +535,78 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
 
+  accountTitle: {
+    position: "absolute",
+    left: x(20),
+    top: y(730),
+    width: x(285),
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(20),
+    lineHeight: y(24),
+    fontWeight: "700",
+  },
+
+  accountHint: {
+    position: "absolute",
+    left: x(20),
+    top: y(764),
+    width: x(362),
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(16),
+    lineHeight: y(22),
+  },
+
+  deletePasswordInput: {
+    position: "absolute",
+    left: x(20),
+    top: y(820),
+    width: x(362),
+    height: y(52),
+    borderRadius: x(16),
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.white,
+    paddingHorizontal: x(16),
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(18),
+  },
+
+  deleteError: {
+    position: "absolute",
+    left: x(20),
+    top: y(880),
+    width: x(362),
+    color: "#B00020",
+    fontFamily: "Literata",
+    fontSize: x(14),
+    lineHeight: y(18),
+    textAlign: "center",
+  },
+
+  deleteButtonWrapper: {
+    position: "absolute",
+    left: x(96),
+    top: y(910),
+    width: x(210),
+    height: y(52),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  deleteButton: {
+    width: x(210),
+    height: y(52),
+    borderRadius: x(20),
+    backgroundColor: "#B00020",
+  },
+
   switchToChildWrapper: {
     position: "absolute",
     left: x(20),
-    top: y(750),
+    top: y(990),
     minWidth: x(226),
     height: y(28),
     justifyContent: "center",
@@ -450,7 +623,7 @@ const styles = StyleSheet.create({
   bottomNavWrapper: {
     position: "absolute",
     left: x(20),
-    top: y(783),
+    top: y(1040),
     width: x(362),
     height: y(72),
   },
