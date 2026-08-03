@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     width: x(362),
     height: y(39),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(30),
     lineHeight: y(39),
     textAlign: "center",

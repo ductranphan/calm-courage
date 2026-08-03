@@ -35,12 +35,12 @@ import {
 import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { seedPhaseActivities } from "@/services/activityAttempts";
 import {
   createChild,
   getChild,
   updateChild,
 } from "@/services/children";
-import { seedPhaseActivities } from "@/services/activityAttempts";
 import { x, y } from "@/utils/scaling";
 
 const avatarPositions: {
@@ -206,13 +206,11 @@ export default function ChildProfileAvatarScreen() {
           avatarId: selectedAvatar,
         });
 
-        /*
-         * Seed Phase 1 activity attempts so the parent dashboard can track
-         * progress and completions can award stars/gems.
-         */
-        if (savedChildId) {
-          await seedPhaseActivities(user.uid, savedChildId);
-        }
+        await seedPhaseActivities(
+          user.uid,
+          savedChildId,
+          1,
+        );
       }
 
       /*
@@ -335,7 +333,7 @@ const styles = StyleSheet.create({
     width: x(330),
     minHeight: y(90),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(30),
     lineHeight: y(39),
   },

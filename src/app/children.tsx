@@ -1,12 +1,18 @@
 /**
- * Child Management screen.
+ * Parent-facing child management screen.
  *
- * Shows every child profile saved under the authenticated parent and lets
- * the parent edit a specific child or hand the device to that exact child.
+ * Lists every child under the authenticated parent. Selecting a profile opens
+ * that child's parent dashboard; Edit and Child Mode remain separate actions.
  */
 
-import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import {
+  router,
+  useFocusEffect,
+} from "expo-router";
+import {
+  useCallback,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Image,
@@ -30,6 +36,7 @@ import {
   formatEmotionLabel,
   normalizeEmotionId,
 } from "@/constants/emotions";
+import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { getTodayCheckIn } from "@/services/checkIns";
 import { listChildren } from "@/services/children";
@@ -37,6 +44,10 @@ import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
 import AudioOnIcon from "../../assets/icons/audio-on.svg";
+
+const FIXED_NAV_HEIGHT = 72;
+const FIXED_NAV_BOTTOM = 20;
+const SCROLL_BOTTOM_SPACE = 125;
 
 type ChildManagementData = {
   childId: string;
@@ -49,10 +60,24 @@ type ChildManagementData = {
 export default function ChildrenScreen() {
   const { user } = useAuth();
 
-  const [audioEnabled, setAudioEnabled] = useState(false);
-  const [childrenData, setChildrenData] = useState<ChildManagementData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { selectActiveChild } =
+    useActiveChild();
+
+  const [
+    audioEnabled,
+    setAudioEnabled,
+  ] = useState(false);
+
+  const [
+    childrenData,
+    setChildrenData,
+  ] = useState<ChildManagementData[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -66,55 +91,80 @@ export default function ChildrenScreen() {
             setChildrenData([]);
             setLoading(false);
           }
+
           return;
         }
 
         setLoading(true);
 
         try {
-          const children = await listChildren(user.uid);
+          const children =
+            await listChildren(user.uid);
 
-          const loadedChildren = await Promise.all(
-            children.map(async (child): Promise<ChildManagementData> => {
-              let moodLabel = "Not checked in yet";
+          const loadedChildren =
+            await Promise.all(
+              children.map(
+                async (
+                  child,
+                ): Promise<ChildManagementData> => {
+                  let moodLabel =
+                    "Not checked in yet";
 
-              try {
-                const todayCheckIn = await getTodayCheckIn(
-                  user.uid,
-                  child.id,
-                );
+                  try {
+                    const todayCheckIn =
+                      await getTodayCheckIn(
+                        user.uid,
+                        child.id,
+                      );
 
-                if (todayCheckIn) {
-                  moodLabel = formatEmotionLabel(
-                    normalizeEmotionId(todayCheckIn.emotion),
-                  );
-                }
-              } catch (checkInError) {
-                console.error(
-                  `Unable to load today's check-in for child ${child.id}:`,
-                  checkInError,
-                );
-                moodLabel = "Unavailable";
-              }
+                    if (todayCheckIn) {
+                      moodLabel =
+                        formatEmotionLabel(
+                          normalizeEmotionId(
+                            todayCheckIn.emotion,
+                          ),
+                        );
+                    }
+                  } catch (
+                    checkInError
+                  ) {
+                    console.error(
+                      `Unable to load today's check-in for child ${child.id}:`,
+                      checkInError,
+                    );
 
-              return {
-                childId: child.id,
-                name: child.name,
-                age: child.age,
-                avatarId: normalizeAvatarId(child.avatarId),
-                moodLabel,
-              };
-            }),
+                    moodLabel =
+                      "Unavailable";
+                  }
+
+                  return {
+                    childId: child.id,
+                    name: child.name,
+                    age: child.age,
+                    avatarId:
+                      normalizeAvatarId(
+                        child.avatarId,
+                      ),
+                    moodLabel,
+                  };
+                },
+              ),
+            );
+
+          if (stillMounted) {
+            setChildrenData(
+              loadedChildren,
+            );
+          }
+        } catch (loadError) {
+          console.error(
+            "Unable to load child profiles:",
+            loadError,
           );
 
           if (stillMounted) {
-            setChildrenData(loadedChildren);
-          }
-        } catch (loadError) {
-          console.error("Unable to load child profiles:", loadError);
-
-          if (stillMounted) {
             setChildrenData([]);
+
             setError(
               "We couldn’t load the child profiles. Please try again.",
             );
@@ -143,7 +193,9 @@ export default function ChildrenScreen() {
     });
   }
 
-  function openEditChild(childId: string) {
+  function openEditChild(
+    childId: string,
+  ) {
     router.push({
       pathname: "/child-profile-info",
       params: {
@@ -153,7 +205,30 @@ export default function ChildrenScreen() {
     });
   }
 
-  function openChildMode(child: ChildManagementData) {
+  function openParentDashboard(
+    child: ChildManagementData,
+  ) {
+    /*
+     * Keep the selected child available when moving between
+     * the parent dashboard, children, and settings tabs.
+     */
+    selectActiveChild({
+      id: child.childId,
+      name: child.name,
+      avatarId: child.avatarId,
+    });
+
+    router.replace({
+      pathname: "/home",
+      params: {
+        childId: child.childId,
+      },
+    });
+  }
+
+  function openChildMode(
+    child: ChildManagementData,
+  ) {
     router.push({
       pathname: "/switch-to-child",
       params: {
@@ -165,113 +240,268 @@ export default function ChildrenScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
-    >
-      <Pressable
-        style={styles.audioButton}
-        onPress={() => setAudioEnabled((current) => !current)}
-        accessibilityRole="button"
-        accessibilityLabel={
-          audioEnabled ? "Turn audio off" : "Turn audio on"
+    <View style={styles.screen}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={
+          styles.scrollContent
         }
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        alwaysBounceVertical={false}
+        overScrollMode="never"
+        contentInsetAdjustmentBehavior="never"
       >
-        {audioEnabled ? (
-          <AudioOnIcon width={x(35)} height={x(35)} />
+        <Pressable
+          style={({ pressed }) => [
+            styles.audioButton,
+            pressed &&
+              styles.controlPressed,
+          ]}
+          onPress={() =>
+            setAudioEnabled(
+              (current) => !current,
+            )
+          }
+          accessibilityRole="button"
+          accessibilityLabel={
+            audioEnabled
+              ? "Turn audio off"
+              : "Turn audio on"
+          }
+          accessibilityState={{
+            selected: audioEnabled,
+          }}
+          hitSlop={8}
+        >
+          {audioEnabled ? (
+            <AudioOnIcon
+              width={x(35)}
+              height={x(35)}
+            />
+          ) : (
+            <AudioOffIcon
+              width={x(35)}
+              height={x(35)}
+            />
+          )}
+        </Pressable>
+
+        <Text style={styles.title}>
+          Child Management
+        </Text>
+
+        <View style={styles.topLine} />
+
+        {loading ? (
+          <ActivityIndicator
+            size="large"
+            color={colors.primary}
+            style={styles.loader}
+          />
         ) : (
-          <AudioOffIcon width={x(35)} height={x(35)} />
-        )}
-      </Pressable>
+          <>
+            <ErrorMessage
+              message={error}
+              style={styles.error}
+            />
 
-      <Text style={styles.title}>Child Management</Text>
-      <View style={styles.topLine} />
+            {!error &&
+            childrenData.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text
+                  style={styles.emptyTitle}
+                >
+                  No child profiles yet
+                </Text>
 
-      {loading ? (
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-          style={styles.loader}
-        />
-      ) : (
-        <>
-          <ErrorMessage message={error} style={styles.error} />
+                <Text
+                  style={styles.emptyText}
+                >
+                  Add a child profile to begin
+                  their courage journey.
+                </Text>
+              </View>
+            ) : null}
 
-          {!error && childrenData.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>No child profiles yet</Text>
-              <Text style={styles.emptyText}>
-                Add a child profile to begin their courage journey.
-              </Text>
-            </View>
-          ) : null}
-
-          {childrenData.map((child) => (
-            <View key={child.childId} style={styles.childCard}>
-              <View style={styles.profileRow}>
-                <View style={styles.avatarCard}>
-                  <Image
-                    source={avatarImages[child.avatarId]}
-                    style={styles.avatarImage}
-                    resizeMode="contain"
-                  />
-                </View>
-
-                <View style={styles.childInfoWrapper}>
-                  <Text style={styles.childInfoText} numberOfLines={1}>
-                    Name: {child.name}
-                  </Text>
-                  <Text style={styles.childInfoText}>Age: {child.age}</Text>
-                  <Text style={styles.moodTitle}>Today’s Mood:</Text>
-                  <Text style={styles.moodText}>{child.moodLabel}</Text>
-                </View>
-
-                <View style={styles.actionsColumn}>
-                  <AppButton
-                    title="Edit"
-                    onPress={() => openEditChild(child.childId)}
-                    style={styles.editButton}
-                  />
-
+            {childrenData.map((child) => (
+              <View
+                key={child.childId}
+                style={styles.childCard}
+              >
+                <View
+                  style={styles.profileRow}
+                >
                   <Pressable
-                    onPress={() => openChildMode(child)}
-                    style={styles.childModeButton}
+                    style={({ pressed }) => [
+                      styles.dashboardSelection,
+                      pressed &&
+                        styles.profilePressed,
+                    ]}
+                    onPress={() =>
+                      openParentDashboard(
+                        child,
+                      )
+                    }
                     accessibilityRole="button"
-                    accessibilityLabel={`Switch to ${child.name}'s child mode`}
+                    accessibilityLabel={`Open ${child.name}'s parent dashboard`}
                   >
-                    <Text style={styles.childModeText}>Child Mode</Text>
+                    <View
+                      style={styles.avatarCard}
+                    >
+                      <Image
+                        source={
+                          avatarImages[
+                            child.avatarId
+                          ]
+                        }
+                        style={
+                          styles.avatarImage
+                        }
+                        resizeMode="contain"
+                        fadeDuration={0}
+                      />
+                    </View>
+
+                    <View
+                      style={
+                        styles.childInfoWrapper
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.childInfoText
+                        }
+                        numberOfLines={1}
+                      >
+                        Name: {child.name}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.childInfoText
+                        }
+                      >
+                        Age: {child.age}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.moodTitle
+                        }
+                      >
+                        Today’s Mood:
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.moodText
+                        }
+                        numberOfLines={1}
+                      >
+                        {child.moodLabel}
+                      </Text>
+                    </View>
                   </Pressable>
+
+                  <View
+                    style={
+                      styles.actionsColumn
+                    }
+                  >
+                    <AppButton
+                      title="Edit"
+                      onPress={() =>
+                        openEditChild(
+                          child.childId,
+                        )
+                      }
+                      style={
+                        styles.editButton
+                      }
+                    />
+
+                    <Pressable
+                      onPress={() =>
+                        openChildMode(child)
+                      }
+                      style={({
+                        pressed,
+                      }) => [
+                        styles.childModeButton,
+                        pressed &&
+                          styles.controlPressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Switch to ${child.name}'s child mode`}
+                    >
+                      <Text
+                        style={
+                          styles.childModeText
+                        }
+                      >
+                        Child Mode
+                      </Text>
+                    </Pressable>
+                  </View>
                 </View>
               </View>
-            </View>
-          ))}
+            ))}
 
-          <Pressable style={styles.addChildCard} onPress={openAddChild}>
-            <Text style={styles.addChildText}>+ Add Another Child Profile</Text>
-          </Pressable>
-        </>
-      )}
+            <Pressable
+              style={({ pressed }) => [
+                styles.addChildCard,
+                pressed &&
+                  styles.profilePressed,
+              ]}
+              onPress={openAddChild}
+              accessibilityRole="button"
+              accessibilityLabel="Add another child profile"
+            >
+              <Text
+                style={styles.addChildText}
+              >
+                + Add Another Child Profile
+              </Text>
+            </Pressable>
+          </>
+        )}
+      </ScrollView>
 
-      <View style={styles.bottomNavWrapper}>
-        <ParentBottomNav activeTab="children" />
+      <View
+        style={styles.fixedNavbarWrapper}
+      >
+        <ParentBottomNav
+          activeTab="children"
+        />
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.background,
+    position: "relative",
+    backgroundColor:
+      colors.background,
+  },
+
+  scrollView: {
+    flex: 1,
+    backgroundColor:
+      colors.background,
   },
 
   scrollContent: {
     minHeight: y(900),
     paddingHorizontal: x(20),
     paddingTop: y(123),
-    paddingBottom: y(45),
-    backgroundColor: colors.background,
+    paddingBottom: y(
+      SCROLL_BOTTOM_SPACE,
+    ),
+    backgroundColor:
+      colors.background,
   },
 
   audioButton: {
@@ -289,7 +519,7 @@ const styles = StyleSheet.create({
     width: x(362),
     minHeight: y(39),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(30),
     lineHeight: y(39),
     textAlign: "center",
@@ -297,7 +527,8 @@ const styles = StyleSheet.create({
 
   topLine: {
     width: x(362),
-    height: StyleSheet.hairlineWidth,
+    height:
+      StyleSheet.hairlineWidth,
     marginTop: y(26),
     marginBottom: y(23),
     backgroundColor: colors.primary,
@@ -315,43 +546,53 @@ const styles = StyleSheet.create({
   emptyCard: {
     width: x(362),
     minHeight: y(150),
+    marginBottom: y(24),
+    paddingHorizontal: x(24),
     borderRadius: x(20),
     borderWidth: 1,
     borderColor: colors.primary,
     backgroundColor: colors.white,
-    paddingHorizontal: x(24),
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: y(24),
   },
 
   emptyTitle: {
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(24),
     lineHeight: y(31),
     textAlign: "center",
   },
 
   emptyText: {
+    marginTop: y(10),
     color: colors.primary,
     fontFamily: "Literata",
     fontSize: x(17),
     lineHeight: y(23),
     textAlign: "center",
-    marginTop: y(10),
   },
 
   childCard: {
     width: x(362),
     paddingVertical: y(22),
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.primary,
+    borderBottomWidth:
+      StyleSheet.hairlineWidth,
+    borderBottomColor:
+      colors.primary,
   },
 
   profileRow: {
     width: "100%",
     minHeight: y(140),
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  dashboardSelection: {
+    width: x(282),
+    minHeight: y(118),
     flexDirection: "row",
     alignItems: "center",
   },
@@ -386,11 +627,11 @@ const styles = StyleSheet.create({
   },
 
   moodTitle: {
+    marginTop: y(2),
     color: colors.primary,
     fontFamily: "Literata",
     fontSize: x(16),
     lineHeight: y(24),
-    marginTop: y(2),
   },
 
   moodText: {
@@ -433,6 +674,8 @@ const styles = StyleSheet.create({
   addChildCard: {
     width: x(362),
     minHeight: y(150),
+    marginTop: y(34),
+    marginBottom: y(35),
     borderRadius: x(20),
     borderWidth: 1,
     borderStyle: "dashed",
@@ -440,11 +683,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: y(34),
-    marginBottom: y(35),
 
     shadowColor: "#000000",
-    shadowOffset: { width: 0, height: y(4) },
+    shadowOffset: {
+      width: 0,
+      height: y(4),
+    },
     shadowOpacity: 0.25,
     shadowRadius: x(4),
     elevation: 5,
@@ -458,9 +702,33 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  bottomNavWrapper: {
+  fixedNavbarWrapper: {
+    position: "absolute",
+    left: x(20),
+    bottom: y(FIXED_NAV_BOTTOM),
     width: x(362),
-    height: y(72),
-    marginTop: "auto",
+    height: y(FIXED_NAV_HEIGHT),
+    borderRadius: x(50),
+    backgroundColor:
+      colors.background,
+    overflow: "hidden",
+    zIndex: 50,
+    elevation: 12,
+
+    shadowColor: colors.black,
+    shadowOffset: {
+      width: 0,
+      height: y(4),
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: x(5),
+  },
+
+  profilePressed: {
+    opacity: 0.78,
+  },
+
+  controlPressed: {
+    opacity: 0.65,
   },
 });

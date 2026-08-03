@@ -2,7 +2,13 @@
  * Consent document overlay for parent registration.
  */
 
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import {
   consentDocuments,
@@ -30,7 +36,13 @@ export default function TermsModal({
 
   return (
     <View style={styles.card}>
-      <Pressable onPress={onClose} style={styles.closeButton}>
+      <Pressable
+        onPress={onClose}
+        style={styles.closeButton}
+        accessibilityRole="button"
+        accessibilityLabel={`Close ${content.title}`}
+        hitSlop={8}
+      >
         <View style={styles.closeLineOne} />
         <View style={styles.closeLineTwo} />
       </Pressable>
@@ -39,6 +51,8 @@ export default function TermsModal({
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
       >
         <Text style={styles.title}>{content.title}</Text>
         <Text style={styles.text}>{content.body}</Text>
@@ -102,10 +116,9 @@ const styles = StyleSheet.create({
   title: {
     width: x(300),
     color: colors.primary,
-    fontFamily: "Literata",
+    fontFamily: "LiterataBold",
     fontSize: x(20),
     lineHeight: y(24),
-    fontWeight: "700",
     marginBottom: y(32),
   },
 

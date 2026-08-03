@@ -112,7 +112,9 @@ export default function ChildWelcomeScreen() {
         ),
     });
 
-  const rewards = useChildRewards(childData.childId);
+  const rewards = useChildRewards(
+    childData.childId,
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -470,7 +472,7 @@ const styles = StyleSheet.create({
     width: x(362),
     height: y(78),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(30),
     lineHeight: y(39),
   },

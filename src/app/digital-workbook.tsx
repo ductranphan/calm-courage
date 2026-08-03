@@ -30,6 +30,7 @@ import {
   useState,
 } from "react";
 import {
+  ActivityIndicator,
   Alert,
   PanResponder,
   Pressable,
@@ -43,9 +44,12 @@ import Svg, {
   Polygon,
 } from "react-native-svg";
 
+import DigitalWorkbookAges9To10 from "@/components/workbook/DigitalWorkbookAges9To10";
 import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
+import { getChild } from "@/services/children";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -112,6 +116,11 @@ type WorkbookDrawingPages =
 
 type WorkbookAudioPages =
   Array<string | null>;
+
+type WorkbookVariant =
+  | "loading"
+  | "drawing"
+  | "ages-9-10";
 
 function createEmptyDrawingPages(): WorkbookDrawingPages {
   return Array.from(
@@ -229,6 +238,8 @@ function ArrowIcon({
 }
 
 export default function DigitalWorkbookScreen() {
+  const { user } = useAuth();
+
   const { activeChild } =
     useActiveChild();
 
@@ -255,6 +266,9 @@ export default function DigitalWorkbookScreen() {
     useRef<ReturnType<typeof setTimeout> | null>(
       null,
     );
+
+  const [workbookVariant, setWorkbookVariant] =
+    useState<WorkbookVariant>("loading");
 
   const [audioEnabled, setAudioEnabled] =
     useState(false);
@@ -299,6 +313,62 @@ export default function DigitalWorkbookScreen() {
       );
     }
   }, [activeChild, childModeActive]);
+
+  useEffect(() => {
+    let stillMounted = true;
+
+    async function resolveWorkbookVariant() {
+      if (
+        !childModeActive ||
+        !activeChild ||
+        !user?.uid
+      ) {
+        if (stillMounted) {
+          setWorkbookVariant("drawing");
+        }
+
+        return;
+      }
+
+      setWorkbookVariant("loading");
+
+      try {
+        const child = await getChild(
+          user.uid,
+          activeChild.id,
+        );
+
+        if (!stillMounted) {
+          return;
+        }
+
+        setWorkbookVariant(
+          child?.age === 9 || child?.age === 10
+            ? "ages-9-10"
+            : "drawing",
+        );
+      } catch (loadError) {
+        console.error(
+          "Unable to load child age for the workbook:",
+          loadError,
+        );
+
+        if (stillMounted) {
+          setWorkbookVariant("drawing");
+        }
+      }
+    }
+
+    void resolveWorkbookVariant();
+
+    return () => {
+      stillMounted = false;
+    };
+  }, [
+    activeChild?.id,
+    childModeActive,
+    user?.uid,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -838,6 +908,25 @@ export default function DigitalWorkbookScreen() {
     return null;
   }
 
+  if (workbookVariant === "loading") {
+    return (
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator
+          size="large"
+          color={colors.primary}
+        />
+
+        <Text style={styles.loadingText}>
+          Loading workbook...
+        </Text>
+      </View>
+    );
+  }
+
+  if (workbookVariant === "ages-9-10") {
+    return <DigitalWorkbookAges9To10 />;
+  }
+
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -1267,6 +1356,21 @@ export default function DigitalWorkbookScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: PAGE_BACKGROUND,
+  },
+
+  loadingText: {
+    marginTop: y(14),
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(17),
+    lineHeight: y(24),
+  },
+
   screen: {
     flex: 1,
     position: "relative",
@@ -1327,7 +1431,7 @@ const styles = StyleSheet.create({
     width: x(362),
     height: y(39),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(30),
     lineHeight: y(39),
     textAlign: "center",
@@ -1483,7 +1587,7 @@ const styles = StyleSheet.create({
 
   saveButtonText: {
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(20),
     lineHeight: y(26),
   },
