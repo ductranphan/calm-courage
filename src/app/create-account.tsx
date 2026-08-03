@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: x(30),
     lineHeight: y(39),
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
   },
 
   emailButton: {

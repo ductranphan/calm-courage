@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
     width: x(362),
     height: y(39),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(30),
     lineHeight: y(39),
     textAlign: "center",
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
 
   numberText: {
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(30),
     lineHeight: y(39),
     textAlign: "center",
@@ -647,7 +647,7 @@ const styles = StyleSheet.create({
 
   specialButtonText: {
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(18),
     lineHeight: y(21),
     textAlign: "center",
@@ -655,7 +655,7 @@ const styles = StyleSheet.create({
 
   deleteText: {
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(20),
     lineHeight: y(25),
     textAlign: "center",

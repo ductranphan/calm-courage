@@ -21,9 +21,7 @@ import {
 
 import { colors } from "@/constants/colors";
 import { preloadQuestImages } from "@/constants/questAssets";
-import {
-  ActiveChildProvider,
-} from "@/contexts/ActiveChildContext";
+import { ActiveChildProvider } from "@/contexts/ActiveChildContext";
 import {
   AuthProvider,
   useAuth,
@@ -34,9 +32,6 @@ import {
 } from "@/contexts/ParentAccessContext";
 import { preloadImages } from "@/utils/preloadAssets";
 
-/*
- * Keep the native splash screen visible while fonts and images load.
- */
 void SplashScreen.preventAutoHideAsync().catch(
   (error: unknown) => {
     console.warn(
@@ -88,9 +83,7 @@ function AppStack() {
     user &&
     !user.emailVerified
   ) {
-    return (
-      <Redirect href="/verify-email" />
-    );
+    return <Redirect href="/verify-email" />;
   }
 
   if (
@@ -125,25 +118,50 @@ export default function RootLayout() {
       try {
         await Promise.all([
           Font.loadAsync({
+            /*
+             * Body font.
+             */
             Literata: require(
               "../../assets/fonts/Literata-Regular.ttf",
+            ),
+            LiterataMedium: require(
+              "../../assets/fonts/Literata-Medium.ttf",
+            ),
+            LiterataSemiBold: require(
+              "../../assets/fonts/Literata-SemiBold.ttf",
             ),
             LiterataBold: require(
               "../../assets/fonts/Literata-Bold.ttf",
             ),
-            Quiche: require(
-              "../../assets/fonts/Quiche-Regular.ttf",
+            LiterataItalic: require(
+              "../../assets/fonts/Literata-Italic.ttf",
             ),
-            QuicheBlack: require(
-              "../../assets/fonts/Quiche-Black.otf",
+
+            /*
+             * Display font.
+             */
+            Outfit: require(
+              "../../assets/fonts/Outfit-Regular.ttf",
+            ),
+            OutfitMedium: require(
+              "../../assets/fonts/Outfit-Medium.ttf",
+            ),
+            OutfitSemiBold: require(
+              "../../assets/fonts/Outfit-SemiBold.ttf",
+            ),
+            OutfitBold: require(
+              "../../assets/fonts/Outfit-Bold.ttf",
+            ),
+            OutfitExtraBold: require(
+              "../../assets/fonts/Outfit-ExtraBold.ttf",
+            ),
+            OutfitBlack: require(
+              "../../assets/fonts/Outfit-Black.ttf",
             ),
           }),
 
           preloadImages(),
 
-          /*
-           * Loads Quest Board images before the app appears.
-           */
           preloadQuestImages(),
         ]);
       } catch (error) {

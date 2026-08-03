@@ -39,6 +39,10 @@ import KindVoiceBadge from "../../assets/images/kind-voice.svg";
 const FIGMA_CONTENT_HEIGHT = 1100;
 const FOOTER_SPACE = 125;
 const PAGE_BACKGROUND = "#F1F3F5";
+
+const SUMMARY_STAR_WIDTH = 65;
+const SUMMARY_STAR_HEIGHT = 42;
+
 const TOTAL_BADGE_SLOTS = 15;
 
 const LOCKED_BADGES = Array.from(
@@ -83,10 +87,14 @@ export default function RewardsScreen() {
         bounces={false}
         alwaysBounceVertical={false}
         overScrollMode="never"
+        contentInsetAdjustmentBehavior="never"
       >
         <View style={styles.figmaContent}>
           <Pressable
-            style={styles.audioButton}
+            style={({ pressed }) => [
+              styles.audioButton,
+              pressed && styles.controlPressed,
+            ]}
             onPress={() =>
               setAudioEnabled(
                 (current) => !current,
@@ -106,12 +114,12 @@ export default function RewardsScreen() {
             {audioEnabled ? (
               <AudioOnIcon
                 width={x(35)}
-                height={x(35)}
+                height={y(35)}
               />
             ) : (
               <AudioOffIcon
                 width={x(35)}
-                height={x(35)}
+                height={y(35)}
               />
             )}
           </Pressable>
@@ -121,10 +129,12 @@ export default function RewardsScreen() {
           </Text>
 
           <View style={styles.starSummary}>
-            <StarIcon
-              width={x(65)}
-              height={x(65)}
-            />
+            <View style={styles.summaryStarWrapper}>
+              <StarIcon
+                width={x(SUMMARY_STAR_WIDTH)}
+                height={y(SUMMARY_STAR_HEIGHT)}
+              />
+            </View>
 
             <Text style={styles.summaryText}>
               {rewards.stars} Stars
@@ -146,7 +156,7 @@ export default function RewardsScreen() {
 
           <BadgeIcon
             width={x(46)}
-            height={x(46)}
+            height={y(46)}
             style={styles.badgeHeaderIcon}
           />
 
@@ -160,53 +170,29 @@ export default function RewardsScreen() {
           </Text>
 
           <View style={styles.collectedBadgeRow}>
-            <View
-              style={
-                styles.collectedBadgeShadow
-              }
-            >
-              <View
-                style={
-                  styles.collectedBadgeCard
-                }
-              >
+            <View style={styles.collectedBadgeShadow}>
+              <View style={styles.collectedBadgeCard}>
                 <BraveSpeakerBadge
                   width={x(107)}
-                  height={x(107)}
+                  height={y(107)}
                 />
               </View>
             </View>
 
-            <View
-              style={
-                styles.collectedBadgeShadow
-              }
-            >
-              <View
-                style={
-                  styles.collectedBadgeCard
-                }
-              >
+            <View style={styles.collectedBadgeShadow}>
+              <View style={styles.collectedBadgeCard}>
                 <KindVoiceBadge
                   width={x(107)}
-                  height={x(107)}
+                  height={y(107)}
                 />
               </View>
             </View>
 
-            <View
-              style={
-                styles.collectedBadgeShadow
-              }
-            >
-              <View
-                style={
-                  styles.collectedBadgeCard
-                }
-              >
+            <View style={styles.collectedBadgeShadow}>
+              <View style={styles.collectedBadgeCard}>
                 <HelperFriendBadge
                   width={x(107)}
-                  height={x(107)}
+                  height={y(107)}
                 />
               </View>
             </View>
@@ -217,14 +203,13 @@ export default function RewardsScreen() {
               (badgeIndex) => (
                 <View
                   key={badgeIndex}
-                  style={
-                    styles.lockedBadgeCard
-                  }
+                  style={styles.lockedBadgeCard}
                 >
                   <LockIcon
                     width={x(34)}
                     height={y(45)}
-                    style={styles.lockIcon}
+                    color={colors.primary}
+                    opacity={0.5}
                   />
                 </View>
               ),
@@ -235,7 +220,10 @@ export default function RewardsScreen() {
 
       <View style={styles.fixedFooter}>
         <Pressable
-          style={styles.parentModeLink}
+          style={({ pressed }) => [
+            styles.parentModeLink,
+            pressed && styles.controlPressed,
+          ]}
           onPress={handleParentMode}
           accessibilityRole="button"
           accessibilityLabel="Switch to Parent Mode"
@@ -281,7 +269,7 @@ export default function RewardsScreen() {
             <View style={styles.inactiveNavIcon}>
               <HouseIcon
                 width={x(40)}
-                height={x(40)}
+                height={y(40)}
               />
             </View>
 
@@ -303,7 +291,7 @@ export default function RewardsScreen() {
           >
             <StarIcon
               width={x(42)}
-              height={x(42)}
+              height={y(42)}
             />
 
             <Text style={styles.navLabel}>
@@ -329,15 +317,18 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-    minHeight: y(FIGMA_CONTENT_HEIGHT + FOOTER_SPACE),
+    minHeight: y(
+      FIGMA_CONTENT_HEIGHT +
+        FOOTER_SPACE,
+    ),
     paddingBottom: y(FOOTER_SPACE),
     backgroundColor: PAGE_BACKGROUND,
   },
 
   figmaContent: {
+    position: "relative",
     width: "100%",
     height: y(FIGMA_CONTENT_HEIGHT),
-    position: "relative",
     backgroundColor: PAGE_BACKGROUND,
   },
 
@@ -346,7 +337,7 @@ const styles = StyleSheet.create({
     left: x(347),
     top: y(48),
     width: x(35),
-    height: x(35),
+    height: y(35),
     alignItems: "center",
     justifyContent: "center",
     zIndex: 10,
@@ -359,7 +350,7 @@ const styles = StyleSheet.create({
     width: x(362),
     height: y(39),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(30),
     lineHeight: y(39),
     textAlign: "center",
@@ -373,7 +364,15 @@ const styles = StyleSheet.create({
     height: y(65),
     flexDirection: "row",
     alignItems: "center",
-    columnGap: x(10),
+  },
+
+  summaryStarWrapper: {
+    width: x(SUMMARY_STAR_WIDTH),
+    height: y(SUMMARY_STAR_HEIGHT),
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    marginRight: x(10),
   },
 
   gemSummary: {
@@ -446,7 +445,7 @@ const styles = StyleSheet.create({
 
   collectedBadgeShadow: {
     width: x(107),
-    height: x(107),
+    height: y(107),
     borderRadius: x(20),
     backgroundColor: colors.white,
 
@@ -498,16 +497,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
 
-  lockIcon: {
-    opacity: 0.5,
-  },
-
-  /*
-   * Same footer and navbar structure as Scenario Challenges.
-   * The outer footer is transparent, so the white background
-   * fits only inside the rounded navbar rectangle.
-   */
-
   fixedFooter: {
     position: "absolute",
     left: x(20),
@@ -546,7 +535,6 @@ const styles = StyleSheet.create({
     borderRadius: x(50),
     backgroundColor: PAGE_BACKGROUND,
     overflow: "hidden",
-
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
@@ -565,11 +553,15 @@ const styles = StyleSheet.create({
   },
 
   navLabel: {
+    marginTop: y(1),
     color: colors.primary,
     fontFamily: "Literata",
     fontSize: x(10),
     lineHeight: y(12),
-    marginTop: y(1),
     textAlign: "center",
+  },
+
+  controlPressed: {
+    opacity: 0.65,
   },
 });

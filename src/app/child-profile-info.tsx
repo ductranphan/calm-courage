@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
     width: x(330),
     minHeight: y(95),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(30),
     lineHeight: y(39),
   },

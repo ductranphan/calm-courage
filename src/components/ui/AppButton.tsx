@@ -3,7 +3,7 @@
  *
  * Matches the Calm Courage Figma button style:
  * lavender background, rounded corners, soft shadow,
- * and Quiche font for the button text.
+ * and Outfit font for the button text.
  */
 
 import {
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
 
   text: {
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(20),
     lineHeight: y(24),
     textAlign: "center",

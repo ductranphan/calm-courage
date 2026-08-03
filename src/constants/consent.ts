@@ -5,7 +5,7 @@
  * is recorded so legal updates can be tracked later.
  */
 
-export const CONSENT_VERSION = "2026-07-30";
+export const CONSENT_VERSION = "2026-08-03";
 
 export type ConsentDocumentKind =
   | "termsOfUse"
@@ -14,23 +14,31 @@ export type ConsentDocumentKind =
 
 export const consentDocuments: Record<
   ConsentDocumentKind,
-  { title: string; body: string }
+  {
+    title: string;
+    body: string;
+  }
 > = {
   termsOfUse: {
-    title: "Terms of Use",
+    title: "Terms of Service & Privacy Policy",
     body: [
       "Welcome to Calm Courage Co.",
       "",
-      "By creating a parent account, you agree to use Calm Courage for your family in accordance with these Terms of Use.",
+      "Please review how we protect your family's data:",
       "",
-      "• You must be a parent or legal guardian to create an account.",
-      "• Child profiles are managed only under your parent account.",
-      "• You are responsible for safeguarding your password and parent PIN.",
-      "• Subscription features, when enabled, are billed through the Apple App Store or Google Play Store.",
+      "1. Data Protection & Privacy",
+      "• We do not share your child's emotional data or drawings with any third parties.",
+      "• All voice recordings and canvas activities are encrypted and securely stored.",
       "",
-      "Calm Courage may update these terms. Continued use after updates constitutes acceptance of the revised terms.",
+      "2. Parental Control",
+      "• Parents maintain full access to view, edit, or delete their child's profile and progress reports.",
+      "",
+      "3. Subscription & Billing",
+      "• Phase 1 features include free trials, followed by our monthly membership plan ($7.99/mo).",
+      "• Cancel anytime through your Parent Settings.",
     ].join("\n"),
   },
+
   privacyPolicy: {
     title: "Privacy Policy",
     body: [
@@ -47,6 +55,7 @@ export const consentDocuments: Record<
       "You may request deletion of your account and associated child data from Parent Settings.",
     ].join("\n"),
   },
+
   parentGuardianConsent: {
     title: "Parent / Guardian Consent",
     body: [

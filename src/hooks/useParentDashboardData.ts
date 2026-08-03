@@ -1,42 +1,39 @@
 /**
- * Parent dashboard data hook.
+ * Loads the child profile and daily data shown on the parent dashboard.
  *
- * Loads every child for the signed-in parent, remembers which child is
- * selected for the dashboard, and returns that child's mood + progress.
+ * A child explicitly requested by the route takes priority. Otherwise the
+ * hook uses the child selected in ActiveChildContext, then falls back to the
+ * first profile for accounts that have not selected a child yet.
  */
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
-import type { AvatarId } from "@/constants/avatars";
-import { normalizeAvatarId } from "@/constants/avatars";
+import {
+  normalizeAvatarId,
+  type AvatarId,
+} from "@/constants/avatars";
 import {
   formatEmotionLabel,
   isEmotionId,
   type EmotionId,
 } from "@/constants/emotions";
+import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   getChildActivityProgress,
   seedPhaseActivities,
 } from "@/services/activityAttempts";
 import { getTodayCheckIn } from "@/services/checkIns";
-import {
-  listChildren,
-  type ChildProfile,
-} from "@/services/children";
+import { listChildren } from "@/services/children";
 
 type ProgressData = {
   phase: number;
   completedActivities: number;
   totalActivities: number;
-};
-
-export type DashboardChildOption = {
-  id: string;
-  name: string;
-  age: number;
-  avatarId: AvatarId;
 };
 
 type DashboardData = {
@@ -45,49 +42,66 @@ type DashboardData = {
   childAge: number;
   avatarId: AvatarId;
   todaysMood: EmotionId | null;
+
+  /* Activity progress will be populated when attempts are connected. */
   progress: ProgressData | null;
 };
 
 type Options = {
+  childId?: unknown;
   moodOverride?: unknown;
 };
 
-function selectedChildStorageKey(parentUid: string) {
-  return `parentDashboardSelectedChild:${parentUid}`;
-}
-
-function getValidEmotionId(value: unknown): EmotionId | null {
+function getValidEmotionId(
+  value: unknown,
+): EmotionId | null {
   if (typeof value !== "string") {
     return null;
   }
 
-  const normalized = value.trim().toLowerCase();
+  const normalized = value
+    .trim()
+    .toLowerCase();
 
   return isEmotionId(normalized)
     ? normalized
     : null;
 }
 
-function toDashboardOption(child: ChildProfile): DashboardChildOption {
-  return {
-    id: child.id,
-    name: child.name,
-    age: child.age,
-    avatarId: normalizeAvatarId(child.avatarId),
-  };
+function getValidChildId(
+  value: unknown,
+): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+
+  return normalized.length > 0
+    ? normalized
+    : null;
 }
 
-export function useParentDashboardData(options?: Options) {
+export function useParentDashboardData(
+  options?: Options,
+) {
   const { user } = useAuth();
+  const { activeChild } = useActiveChild();
+
+  const requestedChildId = useMemo(
+    () =>
+      getValidChildId(options?.childId),
+    [options?.childId],
+  );
 
   const moodOverride = useMemo(
-    () => getValidEmotionId(options?.moodOverride),
+    () =>
+      getValidEmotionId(
+        options?.moodOverride,
+      ),
     [options?.moodOverride],
   );
 
-  const [children, setChildren] = useState<DashboardChildOption[]>([]);
-  const [selectedChildId, setSelectedChildId] =
-    useState<string | null>(null);
   const [data, setData] =
     useState<DashboardData | null>(null);
 
@@ -100,33 +114,10 @@ export function useParentDashboardData(options?: Options) {
   const [error, setError] =
     useState<string | null>(null);
 
-  const selectChild = useCallback(
-    async (childId: string) => {
-      if (!user?.uid) {
-        return;
-      }
-
-      setSelectedChildId(childId);
-
-      try {
-        await AsyncStorage.setItem(
-          selectedChildStorageKey(user.uid),
-          childId,
-        );
-      } catch (storageError) {
-        console.warn(
-          "Unable to persist selected dashboard child:",
-          storageError,
-        );
-      }
-    },
-    [user?.uid],
-  );
-
   useEffect(() => {
     let stillMounted = true;
 
-    async function loadChildrenList() {
+    async function loadDashboardData() {
       if (stillMounted) {
         setData(null);
         setEmpty(false);
@@ -135,8 +126,6 @@ export function useParentDashboardData(options?: Options) {
 
       if (!user?.uid) {
         if (stillMounted) {
-          setChildren([]);
-          setSelectedChildId(null);
           setLoading(false);
         }
 
@@ -148,125 +137,92 @@ export function useParentDashboardData(options?: Options) {
       }
 
       try {
-        const loadedChildren = await listChildren(user.uid);
+        const children =
+          await listChildren(user.uid);
 
-        if (!stillMounted) {
+        if (children.length === 0) {
+          if (stillMounted) {
+            setEmpty(true);
+          }
+
           return;
         }
 
-        if (loadedChildren.length === 0) {
-          setChildren([]);
-          setSelectedChildId(null);
-          setEmpty(true);
-          setLoading(false);
-          return;
-        }
+        /*
+         * Selection order:
+         * 1. Child requested through the route
+         * 2. Child already selected in context
+         * 3. First profile as a safe initial fallback
+         */
+        const selectedChild =
+          (requestedChildId
+            ? children.find(
+                (child) =>
+                  child.id ===
+                  requestedChildId,
+              )
+            : undefined) ??
+          (activeChild
+            ? children.find(
+                (child) =>
+                  child.id ===
+                  activeChild.id,
+              )
+            : undefined) ??
+          children[0];
 
-        const options = loadedChildren.map(toDashboardOption);
-        setChildren(options);
+        let todaysMood:
+          | EmotionId
+          | null = moodOverride;
 
-        let preferredId: string | null = null;
-
-        try {
-          preferredId = await AsyncStorage.getItem(
-            selectedChildStorageKey(user.uid),
-          );
-        } catch {
-          preferredId = null;
-        }
-
-        const preferredExists = options.some(
-          (child) => child.id === preferredId,
-        );
-
-        setSelectedChildId(
-          preferredExists && preferredId
-            ? preferredId
-            : options[0].id,
-        );
-      } catch (loadError) {
-        console.error(
-          "Unable to load parent dashboard children:",
-          loadError,
-        );
-
-        if (stillMounted) {
-          setError(
-            "We couldn’t load the dashboard. Please try again.",
-          );
-          setLoading(false);
-        }
-      }
-    }
-
-    void loadChildrenList();
-
-    return () => {
-      stillMounted = false;
-    };
-  }, [user?.uid]);
-
-  useEffect(() => {
-    let stillMounted = true;
-
-    async function loadSelectedChildData() {
-      if (!user?.uid || !selectedChildId) {
-        return;
-      }
-
-      if (stillMounted) {
-        setLoading(true);
-        setError(null);
-      }
-
-      try {
-        let todaysMood: EmotionId | null =
-          moodOverride;
-
+        /* Old check-ins must not be displayed as today's mood. */
         if (!todaysMood) {
           const todayCheckIn =
             await getTodayCheckIn(
               user.uid,
-              selectedChildId,
+              selectedChild.id,
             );
 
-          todaysMood = getValidEmotionId(
-            todayCheckIn?.emotion,
-          );
+          todaysMood =
+            getValidEmotionId(
+              todayCheckIn?.emotion,
+            );
         }
 
+        /*
+         * Ensure older child profiles also receive the Phase 1 catalog,
+         * then calculate live progress from their completed attempts.
+         */
         await seedPhaseActivities(
           user.uid,
-          selectedChildId,
+          selectedChild.id,
+          1,
         );
 
-        const progress = await getChildActivityProgress(
-          user.uid,
-          selectedChildId,
-        );
-
-        const selectedChild = children.find(
-          (child) => child.id === selectedChildId,
-        );
-
-        if (!selectedChild) {
-          return;
-        }
+        const progress =
+          await getChildActivityProgress(
+            user.uid,
+            selectedChild.id,
+            1,
+          );
 
         if (stillMounted) {
           setData({
             childId: selectedChild.id,
-            childName: selectedChild.name,
+            childName:
+              selectedChild.name,
             childAge: selectedChild.age,
-            avatarId: selectedChild.avatarId,
+            avatarId:
+              normalizeAvatarId(
+                selectedChild.avatarId,
+              ),
             todaysMood,
             progress,
           });
-          setEmpty(false);
         }
       } catch (loadError) {
         console.error(
-          "Unable to load selected child dashboard data:",
+          "Unable to load parent dashboard:",
           loadError,
         );
 
@@ -282,16 +238,16 @@ export function useParentDashboardData(options?: Options) {
       }
     }
 
-    void loadSelectedChildData();
+    void loadDashboardData();
 
     return () => {
       stillMounted = false;
     };
   }, [
-    user?.uid,
-    selectedChildId,
+    activeChild?.id,
     moodOverride,
-    children,
+    requestedChildId,
+    user?.uid,
   ]);
 
   const progressPercent = useMemo(() => {
@@ -316,22 +272,21 @@ export function useParentDashboardData(options?: Options) {
     Math.round(progressPercent * 100);
 
   return {
-    children,
-    selectedChildId,
-    selectChild,
-
     childId: data?.childId ?? null,
     childName: data?.childName ?? null,
     childAge: data?.childAge ?? null,
     avatarId: data?.avatarId ?? null,
-    todaysMood: data?.todaysMood ?? null,
+    todaysMood:
+      data?.todaysMood ?? null,
 
     loading,
     empty,
     error,
 
     moodLabel: data?.todaysMood
-      ? formatEmotionLabel(data.todaysMood)
+      ? formatEmotionLabel(
+          data.todaysMood,
+        )
       : "Not checked in yet",
 
     progressAvailable,

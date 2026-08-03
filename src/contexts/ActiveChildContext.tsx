@@ -2,8 +2,10 @@
  * Active child session state.
  *
  * Keeps track of the exact child selected by the parent before the device
- * is handed over. The state is intentionally stored only in memory and is
- * cleared whenever the authenticated Firebase account changes.
+ * is handed over to child mode.
+ *
+ * The selection is stored only in memory and is cleared whenever the
+ * authenticated Firebase account changes.
  */
 
 import {
@@ -27,40 +29,53 @@ export type ActiveChild = {
 
 type ActiveChildContextValue = {
   activeChild: ActiveChild | null;
-  selectActiveChild: (child: ActiveChild) => void;
+  selectActiveChild: (
+    child: ActiveChild,
+  ) => void;
   clearActiveChild: () => void;
 };
 
 const ActiveChildContext =
-  createContext<ActiveChildContextValue | null>(null);
+  createContext<ActiveChildContextValue | null>(
+    null,
+  );
+
+type ActiveChildProviderProps = {
+  children: ReactNode;
+};
 
 export function ActiveChildProvider({
   children,
-}: {
-  children: ReactNode;
-}) {
+}: ActiveChildProviderProps) {
   const { user } = useAuth();
-  const [activeChild, setActiveChild] =
-    useState<ActiveChild | null>(null);
+
+  const [
+    activeChild,
+    setActiveChild,
+  ] = useState<ActiveChild | null>(
+    null,
+  );
 
   /*
-   * A different Firebase account must never inherit the child selected
-   * by the previous account.
+   * A different Firebase account must never inherit
+   * the child selected by the previous account.
    */
   useEffect(() => {
     setActiveChild(null);
   }, [user?.uid]);
 
-  const selectActiveChild = useCallback(
-    (child: ActiveChild) => {
-      setActiveChild(child);
-    },
-    [],
-  );
+  const selectActiveChild =
+    useCallback(
+      (child: ActiveChild) => {
+        setActiveChild(child);
+      },
+      [],
+    );
 
-  const clearActiveChild = useCallback(() => {
-    setActiveChild(null);
-  }, []);
+  const clearActiveChild =
+    useCallback(() => {
+      setActiveChild(null);
+    }, []);
 
   const value = useMemo(
     () => ({
@@ -70,20 +85,24 @@ export function ActiveChildProvider({
     }),
     [
       activeChild,
-      clearActiveChild,
       selectActiveChild,
+      clearActiveChild,
     ],
   );
 
   return (
-    <ActiveChildContext.Provider value={value}>
+    <ActiveChildContext.Provider
+      value={value}
+    >
       {children}
     </ActiveChildContext.Provider>
   );
 }
 
 export function useActiveChild() {
-  const context = useContext(ActiveChildContext);
+  const context = useContext(
+    ActiveChildContext,
+  );
 
   if (!context) {
     throw new Error(

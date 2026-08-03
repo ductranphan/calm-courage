@@ -947,7 +947,7 @@ const styles = StyleSheet.create({
     width: x(206),
     height: y(40),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(25),
     lineHeight: y(40),
     textAlign: "center",
@@ -1049,7 +1049,7 @@ const styles = StyleSheet.create({
   buttonText: {
     width: x(194),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(20),
     lineHeight: y(26),
     textAlign: "center",

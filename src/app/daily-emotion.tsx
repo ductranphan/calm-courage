@@ -9,7 +9,11 @@
  * leaving the screen, so failed writes are never shown as successful.
  */
 
-import { router, useLocalSearchParams, type Href } from "expo-router";
+import {
+  router,
+  useLocalSearchParams,
+  type Href,
+} from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -31,59 +35,129 @@ import {
 } from "@/constants/emotions";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { completeActivityById } from "@/services/activityAttempts";
 import { saveDailyCheckIn } from "@/services/checkIns";
 import { getChild } from "@/services/children";
-import { completeActivityById } from "@/services/activityAttempts";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
 import AudioOnIcon from "../../assets/icons/audio-on.svg";
+
 const LogoImage = require("../../assets/images/logo.png");
 
-const emotionPositions: Record<EmotionId, { left: number; top: number }> = {
-  happy: { left: 20, top: 379 },
-  nervous: { left: 211, top: 379 },
+/*
+ * The last emotion card begins at 1054 and has a height of 171.
+ * A small bottom gap is added after it, avoiding excessive empty scrolling.
+ */
+const CONTENT_HEIGHT = 1245;
 
-  excited: { left: 20, top: 604 },
-  sad: { left: 211, top: 604 },
+const emotionPositions: Record<
+  EmotionId,
+  {
+    left: number;
+    top: number;
+  }
+> = {
+  happy: {
+    left: 20,
+    top: 379,
+  },
+  nervous: {
+    left: 211,
+    top: 379,
+  },
 
-  frustrated: { left: 20, top: 829 },
-  calm: { left: 211, top: 829 },
+  excited: {
+    left: 20,
+    top: 604,
+  },
+  sad: {
+    left: 211,
+    top: 604,
+  },
 
-  proud: { left: 20, top: 1054 },
+  frustrated: {
+    left: 20,
+    top: 829,
+  },
+  calm: {
+    left: 211,
+    top: 829,
+  },
+
+  proud: {
+    left: 20,
+    top: 1054,
+  },
 };
 
 export default function DailyEmotionScreen() {
   const { user } = useAuth();
-  const { activeChild, selectActiveChild } = useActiveChild();
-  const { childId } = useLocalSearchParams<{ childId?: string }>();
 
-  const activeChildId = activeChild?.id ?? childId ?? null;
-  const [audioEnabled, setAudioEnabled] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [savingEmotion, setSavingEmotion] =
-    useState<EmotionId | null>(null);
+  const {
+    activeChild,
+    selectActiveChild,
+  } = useActiveChild();
+
+  const { childId } =
+    useLocalSearchParams<{
+      childId?: string;
+    }>();
+
+  const activeChildId =
+    activeChild?.id ??
+    childId ??
+    null;
+
+  const [
+    audioEnabled,
+    setAudioEnabled,
+  ] = useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const [
+    savingEmotion,
+    setSavingEmotion,
+  ] = useState<EmotionId | null>(
+    null,
+  );
 
   useEffect(() => {
     let stillMounted = true;
 
     async function restoreSelectedChild() {
-      if (activeChild || !childId || !user?.uid) {
+      if (
+        activeChild ||
+        !childId ||
+        !user?.uid
+      ) {
         return;
       }
 
       try {
-        const child = await getChild(user.uid, childId);
+        const child = await getChild(
+          user.uid,
+          childId,
+        );
 
-        if (stillMounted && child) {
+        if (
+          stillMounted &&
+          child
+        ) {
           selectActiveChild({
             id: child.id,
             name: child.name,
-            avatarId: child.avatarId,
+            avatarId:
+              child.avatarId,
           });
         }
       } catch {
-        // The existing error message is shown if an emotion is tapped.
+        /*
+         * The existing error message is shown
+         * if an emotion is selected.
+         */
       }
     }
 
@@ -99,15 +173,23 @@ export default function DailyEmotionScreen() {
     selectActiveChild,
   ]);
 
-  async function handleSelectEmotion(emotionId: EmotionId) {
+  async function handleSelectEmotion(
+    emotionId: EmotionId,
+  ) {
     if (savingEmotion) {
       return;
     }
 
     setError(null);
 
-    if (!user?.uid || !activeChildId) {
-      setError("No child profile found.");
+    if (
+      !user?.uid ||
+      !activeChildId
+    ) {
+      setError(
+        "No child profile found.",
+      );
+
       return;
     }
 
@@ -115,52 +197,54 @@ export default function DailyEmotionScreen() {
 
     try {
       /*
-       * Wait for Firestore before leaving the screen. The service also
-       * refuses to create a second check-in for the same child and date.
+       * Wait for Firestore before leaving the screen.
+       * The service also refuses to create a second
+       * check-in for the same child and date.
        */
-      const savedCheckIn = await saveDailyCheckIn(
-        user.uid,
-        activeChildId,
-        {
-          emotion: emotionId,
-        },
-      );
-
-      /*
-       * Daily check-in completes the Phase 1 "Name the Feeling" activity.
-       * completeActivityById is idempotent if already completed today.
-       */
-      try {
-        await completeActivityById(
+      const savedCheckIn =
+        await saveDailyCheckIn(
           user.uid,
           activeChildId,
-          "phase1_name_the_feeling",
+          {
+            emotion: emotionId,
+          },
         );
-      } catch (rewardError) {
-        console.error(
-          "Unable to complete Name the Feeling activity:",
-          rewardError,
-        );
-      }
 
       /*
-       * If an older check-in already existed, use its saved emotion rather
-       * than the newly tapped card. This keeps the encouragement page and
-       * Firestore consistent.
+       * If an older check-in already existed, use its
+       * saved emotion rather than the newly selected card.
        */
-      const savedEmotion = isEmotionId(savedCheckIn.emotion)
-        ? savedCheckIn.emotion
-        : emotionId;
+      const savedEmotion =
+        isEmotionId(
+          savedCheckIn.emotion,
+        )
+          ? savedCheckIn.emotion
+          : emotionId;
+
+      /*
+       * The daily emotion check-in completes the first Phase 1 activity.
+       * The service prevents duplicate rewards if this activity was already
+       * completed for the child.
+       */
+      await completeActivityById(
+        user.uid,
+        activeChildId,
+        "phase1_name_the_feeling",
+      );
 
       router.replace({
-        pathname: "/emotion-encouragement",
+        pathname:
+          "/emotion-encouragement",
         params: {
           emotion: savedEmotion,
           childId: activeChildId,
         },
       } as Href);
     } catch (saveError) {
-      console.error("Unable to save daily emotion:", saveError);
+      console.error(
+        "Unable to save daily emotion:",
+        saveError,
+      );
 
       setError(
         "We couldn’t save your feeling. Please try again.",
@@ -173,76 +257,166 @@ export default function DailyEmotionScreen() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
+      contentContainerStyle={
+        styles.scrollContent
+      }
+      showsVerticalScrollIndicator={
+        false
+      }
+      bounces={false}
+      alwaysBounceVertical={false}
+      overScrollMode="never"
+      contentInsetAdjustmentBehavior="never"
     >
       <View style={styles.figmaFrame}>
-        <BackButton fallback="/child-welcome" />
+        <BackButton
+          fallback="/child-welcome"
+        />
 
         <Pressable
-          style={styles.audioButton}
-          onPress={() => setAudioEnabled((current) => !current)}
+          style={({ pressed }) => [
+            styles.audioButton,
+            pressed &&
+              styles.controlPressed,
+          ]}
+          onPress={() =>
+            setAudioEnabled(
+              (current) => !current,
+            )
+          }
+          accessibilityRole="button"
+          accessibilityLabel={
+            audioEnabled
+              ? "Turn audio off"
+              : "Turn audio on"
+          }
+          accessibilityState={{
+            selected: audioEnabled,
+          }}
+          hitSlop={8}
         >
           {audioEnabled ? (
-            <AudioOnIcon width={x(35)} height={x(35)} />
+            <AudioOnIcon
+              width={x(35)}
+              height={x(35)}
+            />
           ) : (
-            <AudioOffIcon width={x(35)} height={x(35)} />
+            <AudioOffIcon
+              width={x(35)}
+              height={x(35)}
+            />
           )}
         </Pressable>
 
-        <Text style={styles.title}>How are you feeling{"\n"}today?</Text>
+        <Text style={styles.title}>
+          How are you feeling{"\n"}
+          today?
+        </Text>
 
         <Text style={styles.subtitle}>
-          Select the emotion that best matches{"\n"}
-          your heart right now to open your{"\n"}
+          Select the emotion that best
+          matches{"\n"}
+          your heart right now to open
+          your{"\n"}
           daily courage map.
         </Text>
 
-        {emotions.map((emotionOption) => {
-          const position = emotionPositions[emotionOption.id];
+        <ErrorMessage
+          message={error}
+          style={styles.error}
+        />
 
-          return (
-            <Pressable
-              key={emotionOption.id}
-              style={[
-                styles.emotionBlock,
-                {
-                  left: x(position.left),
-                  top: y(position.top),
-                },
-                savingEmotion && styles.disabledEmotion,
-              ]}
-              onPress={() =>
-                void handleSelectEmotion(emotionOption.id)
-              }
-              disabled={savingEmotion !== null}
-            >
-              <View style={styles.emotionCardShadow}>
-                <View style={styles.emotionImageClip}>
-                  <Image
-                    source={emotionOption.image}
-                    style={styles.emotionImage}
-                    resizeMode="cover"
-                    fadeDuration={0}
-                  />
+        {emotions.map(
+          (emotionOption) => {
+            const position =
+              emotionPositions[
+                emotionOption.id
+              ];
 
-                  {savingEmotion === emotionOption.id ? (
-                    <View style={styles.savingOverlay}>
-                      <ActivityIndicator
-                        size="large"
-                        color={colors.primary}
-                      />
-                    </View>
-                  ) : null}
+            return (
+              <Pressable
+                key={emotionOption.id}
+                style={[
+                  styles.emotionBlock,
+                  {
+                    left: x(
+                      position.left,
+                    ),
+                    top: y(
+                      position.top,
+                    ),
+                  },
+                  savingEmotion &&
+                    styles.disabledEmotion,
+                ]}
+                onPress={() =>
+                  void handleSelectEmotion(
+                    emotionOption.id,
+                  )
+                }
+                disabled={
+                  savingEmotion !== null
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`Select ${emotionOption.label}`}
+                accessibilityState={{
+                  disabled:
+                    savingEmotion !==
+                    null,
+                }}
+              >
+                <View
+                  style={
+                    styles.emotionCardShadow
+                  }
+                >
+                  <View
+                    style={
+                      styles.emotionImageClip
+                    }
+                  >
+                    <Image
+                      source={
+                        emotionOption.image
+                      }
+                      style={
+                        styles.emotionImage
+                      }
+                      resizeMode="cover"
+                      fadeDuration={0}
+                    />
+
+                    {savingEmotion ===
+                    emotionOption.id ? (
+                      <View
+                        style={
+                          styles.savingOverlay
+                        }
+                      >
+                        <ActivityIndicator
+                          size="large"
+                          color={
+                            colors.primary
+                          }
+                        />
+                      </View>
+                    ) : null}
+                  </View>
                 </View>
-              </View>
 
-              <Text style={styles.emotionLabel}>
-                {emotionOption.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+                <Text
+                  style={
+                    styles.emotionLabel
+                  }
+                >
+                  {
+                    emotionOption.label
+                  }
+                </Text>
+              </Pressable>
+            );
+          },
+        )}
 
         <View style={styles.logoWrapper}>
           <Image
@@ -252,8 +426,6 @@ export default function DailyEmotionScreen() {
             fadeDuration={0}
           />
         </View>
-
-        <ErrorMessage message={error} style={styles.error} />
       </View>
     </ScrollView>
   );
@@ -262,19 +434,22 @@ export default function DailyEmotionScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor:
+      colors.background,
   },
 
   scrollContent: {
-    minHeight: y(1358),
-    backgroundColor: colors.background,
+    flexGrow: 1,
+    backgroundColor:
+      colors.background,
   },
 
   figmaFrame: {
-    width: "100%",
-    height: y(1358),
     position: "relative",
-    backgroundColor: colors.background,
+    width: "100%",
+    height: y(CONTENT_HEIGHT),
+    backgroundColor:
+      colors.background,
   },
 
   audioButton: {
@@ -285,6 +460,7 @@ const styles = StyleSheet.create({
     height: x(35),
     alignItems: "center",
     justifyContent: "center",
+    zIndex: 10,
   },
 
   title: {
@@ -292,9 +468,9 @@ const styles = StyleSheet.create({
     left: x(20),
     top: y(123),
     width: x(323),
-    height: y(78),
+    minHeight: y(78),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(30),
     lineHeight: y(33),
   },
@@ -304,11 +480,19 @@ const styles = StyleSheet.create({
     left: x(20),
     top: y(242),
     width: x(362),
-    height: y(72),
+    minHeight: y(72),
     color: colors.primary,
     fontFamily: "Literata",
     fontSize: x(20),
     lineHeight: y(20),
+  },
+
+  error: {
+    position: "absolute",
+    left: x(20),
+    top: y(326),
+    width: x(362),
+    zIndex: 20,
   },
 
   emotionBlock: {
@@ -322,7 +506,8 @@ const styles = StyleSheet.create({
     width: x(171),
     height: y(138),
     borderRadius: x(20),
-    backgroundColor: colors.white,
+    backgroundColor:
+      colors.white,
 
     shadowColor: "#000000",
     shadowOffset: {
@@ -338,7 +523,8 @@ const styles = StyleSheet.create({
     width: x(171),
     height: y(138),
     borderRadius: x(20),
-    backgroundColor: colors.white,
+    backgroundColor:
+      colors.white,
     overflow: "hidden",
   },
 
@@ -355,7 +541,8 @@ const styles = StyleSheet.create({
     left: 0,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.72)",
+    backgroundColor:
+      "rgba(255, 255, 255, 0.72)",
   },
 
   disabledEmotion: {
@@ -366,12 +553,13 @@ const styles = StyleSheet.create({
     width: x(168.52),
     height: y(33),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(25),
     lineHeight: y(33),
     textAlign: "center",
 
-    textShadowColor: "rgba(0, 0, 0, 0.25)",
+    textShadowColor:
+      "rgba(0, 0, 0, 0.25)",
     textShadowOffset: {
       width: 0,
       height: y(4),
@@ -393,9 +581,7 @@ const styles = StyleSheet.create({
     opacity: 1,
   },
 
-  error: {
-    position: "absolute",
-    left: x(20),
-    top: y(1280),
+  controlPressed: {
+    opacity: 0.65,
   },
 });

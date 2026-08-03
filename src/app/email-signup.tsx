@@ -30,14 +30,68 @@ import {
 } from "@/constants/consent";
 import { colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
+import type { SignUpConsent } from "@/services/auth";
 import { isValidPin } from "@/utils/pin";
 import { x, y } from "@/utils/scaling";
 
-type ConsentState = {
-  termsOfUse: boolean;
-  privacyPolicy: boolean;
-  parentGuardianConsent: boolean;
+const CONTENT_HEIGHT = 1100;
+
+type ConsentRowProps = {
+  checked: boolean;
+  disabled: boolean;
+  label: string;
+  accessibilityLabel: string;
+  onToggle: () => void;
+  onOpenDocument: () => void;
+  style: object;
 };
+
+function ConsentRow({
+  checked,
+  disabled,
+  label,
+  accessibilityLabel,
+  onToggle,
+  onOpenDocument,
+  style,
+}: ConsentRowProps) {
+  return (
+    <View style={[styles.consentRow, style]}>
+      <Pressable
+        onPress={onToggle}
+        disabled={disabled}
+        style={[
+          styles.checkbox,
+          disabled && styles.disabledControl,
+        ]}
+        accessibilityRole="checkbox"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityState={{
+          checked,
+          disabled,
+        }}
+      >
+        {checked ? (
+          <CheckIcon
+            width={x(14)}
+            height={x(14)}
+          />
+        ) : null}
+      </Pressable>
+
+      <Pressable
+        onPress={onOpenDocument}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel={`Read ${label}`}
+      >
+        <Text style={styles.consentText}>
+          {label}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
 
 export default function EmailSignupScreen() {
   const {
@@ -47,30 +101,24 @@ export default function EmailSignupScreen() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [
-    confirmPassword,
-    setConfirmPassword,
-  ] = useState("");
-
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [pin, setPin] = useState("");
-  const [consent, setConsent] = useState<ConsentState>({
+
+  const [consent, setConsent] = useState<SignUpConsent>({
     termsOfUse: false,
     privacyPolicy: false,
     parentGuardianConsent: false,
   });
 
-  const [
-    consentModalDocument,
-    setConsentModalDocument,
-  ] = useState<ConsentDocumentKind | null>(null);
+  const [consentModalDocument, setConsentModalDocument] =
+    useState<ConsentDocumentKind | null>(null);
 
-  const [error, setError] =
-    useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const [loading, setLoading] =
-    useState(false);
-
-  function toggleConsent(key: keyof ConsentState) {
+  function updateConsent(
+    key: keyof SignUpConsent,
+  ) {
     setConsent((current) => ({
       ...current,
       [key]: !current[key],
@@ -79,19 +127,13 @@ export default function EmailSignupScreen() {
   }
 
   function validateForm(): string | null {
-    const normalizedEmail = email
-      .trim()
-      .toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail) {
       return "Please enter your email address.";
     }
 
-    if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-        normalizedEmail,
-      )
-    ) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       return "Please enter a valid email address.";
     }
 
@@ -107,16 +149,12 @@ export default function EmailSignupScreen() {
       return "Please create a 4-digit PIN.";
     }
 
-    if (!consent.termsOfUse) {
-      return "Please agree to the Terms of Use.";
-    }
-
-    if (!consent.privacyPolicy) {
-      return "Please agree to the Privacy Policy.";
-    }
-
-    if (!consent.parentGuardianConsent) {
-      return "Please provide Parent/Guardian Consent.";
+    if (
+      !consent.termsOfUse ||
+      !consent.privacyPolicy ||
+      !consent.parentGuardianConsent
+    ) {
+      return "Please accept all three consent documents to create a parent account.";
     }
 
     return null;
@@ -136,13 +174,14 @@ export default function EmailSignupScreen() {
       return;
     }
 
-    const normalizedEmail = email
-      .trim()
-      .toLowerCase();
-
+    const normalizedEmail = email.trim().toLowerCase();
     setLoading(true);
 
     try {
+      /*
+       * Creates both the Firebase Authentication user and the parent
+       * Firestore profile with versioned consent timestamps.
+       */
       await signUp(
         normalizedEmail,
         password,
@@ -150,10 +189,7 @@ export default function EmailSignupScreen() {
         consent,
       );
     } catch (signUpError) {
-      console.error(
-        "Unable to create parent account:",
-        signUpError,
-      );
+      console.error("Unable to create parent account:", signUpError);
 
       setError(
         signUpError instanceof Error
@@ -166,6 +202,10 @@ export default function EmailSignupScreen() {
     }
 
     try {
+      /*
+       * The account already exists at this point. If sending fails, the
+       * parent can still continue and use Resend on the verification page.
+       */
       await sendVerificationEmail();
     } catch (verificationError) {
       console.error(
@@ -179,69 +219,18 @@ export default function EmailSignupScreen() {
     router.replace("/verify-email");
   }
 
-  function renderConsentRow(
-    key: keyof ConsentState,
-    document: ConsentDocumentKind,
-    label: string,
-  ) {
-    const checked = consent[key];
-
-    return (
-      <View style={styles.consentRow}>
-        <Pressable
-          onPress={() => toggleConsent(key)}
-          disabled={loading}
-          style={[
-            styles.checkbox,
-            loading && styles.disabledControl,
-          ]}
-          accessibilityRole="checkbox"
-          accessibilityLabel={label}
-          accessibilityState={{
-            checked,
-            disabled: loading,
-          }}
-        >
-          {checked ? (
-            <CheckIcon
-              width={x(14)}
-              height={x(14)}
-            />
-          ) : null}
-        </Pressable>
-
-        <Pressable
-          onPress={() =>
-            setConsentModalDocument(document)
-          }
-          disabled={loading}
-          accessibilityRole="button"
-          accessibilityLabel={`Read ${label}`}
-          style={styles.consentLabelPressable}
-        >
-          <Text style={styles.termsText}>
-            {label}
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
-
   return (
     <KeyboardAvoidingView
       style={styles.screen}
-      behavior={
-        Platform.OS === "ios"
-          ? "padding"
-          : "height"
-      }
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
-        contentContainerStyle={
-          styles.scrollContent
-        }
+        contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        bounces={false}
+        alwaysBounceVertical={false}
+        overScrollMode="never"
       >
         <View style={styles.figmaFrame}>
           <BackButton />
@@ -251,8 +240,7 @@ export default function EmailSignupScreen() {
           </Text>
 
           <Text style={styles.subtitle}>
-            Join us to start your child{"'"}s
-            {"\n"}
+            Join us to start your child{"'"}s{"\n"}
             confidence journey.
           </Text>
 
@@ -332,23 +320,41 @@ export default function EmailSignupScreen() {
             </View>
           </View>
 
-          <View style={styles.consentSection}>
-            {renderConsentRow(
-              "termsOfUse",
-              "termsOfUse",
-              "I agree to the Terms of Use",
-            )}
-            {renderConsentRow(
-              "privacyPolicy",
-              "privacyPolicy",
-              "I agree to the Privacy Policy",
-            )}
-            {renderConsentRow(
-              "parentGuardianConsent",
-              "parentGuardianConsent",
-              "I provide Parent/Guardian Consent",
-            )}
-          </View>
+          <ConsentRow
+            checked={consent.termsOfUse}
+            disabled={loading}
+            label="I agree to the Terms of Use."
+            accessibilityLabel="Agree to Terms of Use"
+            onToggle={() => updateConsent("termsOfUse")}
+            onOpenDocument={() =>
+              setConsentModalDocument("termsOfUse")
+            }
+            style={styles.termsRow}
+          />
+
+          <ConsentRow
+            checked={consent.privacyPolicy}
+            disabled={loading}
+            label="I agree to the Privacy Policy."
+            accessibilityLabel="Agree to Privacy Policy"
+            onToggle={() => updateConsent("privacyPolicy")}
+            onOpenDocument={() =>
+              setConsentModalDocument("privacyPolicy")
+            }
+            style={styles.privacyRow}
+          />
+
+          <ConsentRow
+            checked={consent.parentGuardianConsent}
+            disabled={loading}
+            label="I give Parent / Guardian Consent."
+            accessibilityLabel="Give Parent or Guardian Consent"
+            onToggle={() => updateConsent("parentGuardianConsent")}
+            onOpenDocument={() =>
+              setConsentModalDocument("parentGuardianConsent")
+            }
+            style={styles.parentConsentRow}
+          />
 
           {error ? (
             <Text
@@ -367,9 +373,7 @@ export default function EmailSignupScreen() {
               />
             ) : (
               <AppButton
-                title={
-                  "Send\nVerification Email"
-                }
+                title={"Send\nVerification Email"}
                 onPress={handleSignUp}
                 style={styles.sendButton}
               />
@@ -379,9 +383,7 @@ export default function EmailSignupScreen() {
           <TermsModal
             visible={consentModalDocument !== null}
             document={consentModalDocument}
-            onClose={() =>
-              setConsentModalDocument(null)
-            }
+            onClose={() => setConsentModalDocument(null)}
           />
         </View>
       </ScrollView>
@@ -396,13 +398,13 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-    minHeight: y(1100),
+    minHeight: y(CONTENT_HEIGHT),
     backgroundColor: colors.background,
   },
 
   figmaFrame: {
     width: "100%",
-    height: y(1100),
+    height: y(CONTENT_HEIGHT),
     position: "relative",
     backgroundColor: colors.background,
   },
@@ -414,7 +416,7 @@ const styles = StyleSheet.create({
     width: x(331),
     height: y(39),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(30),
     lineHeight: y(39),
     textAlign: "center",
@@ -425,43 +427,40 @@ const styles = StyleSheet.create({
     left: x(20),
     top: y(188),
     width: x(362),
-    minHeight: y(48),
+    height: y(48),
     color: colors.primary,
     fontFamily: "Literata",
     fontSize: x(20),
     lineHeight: y(24),
-    textAlign: "center",
   },
 
   emailInput: {
     position: "absolute",
     left: x(20),
-    top: y(280),
-    width: x(362),
+    top: y(262),
   },
 
   passwordInput: {
     position: "absolute",
     left: x(20),
     top: y(370),
-    width: x(362),
   },
 
   confirmInput: {
     position: "absolute",
     left: x(20),
-    top: y(460),
-    width: x(362),
+    top: y(478),
   },
 
   secureInput: {
+    fontFamily: Platform.OS === "ios" ? "System" : "Literata",
     letterSpacing: 0,
   },
 
   pinSection: {
     position: "absolute",
     left: x(20),
-    top: y(560),
+    top: y(583),
     width: x(361),
     height: y(122),
   },
@@ -479,21 +478,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  consentSection: {
+  consentRow: {
     position: "absolute",
     left: x(20),
-    top: y(720),
     width: x(362),
-    gap: y(14),
-  },
-
-  consentRow: {
+    minHeight: y(40),
     flexDirection: "row",
     alignItems: "flex-start",
   },
 
-  consentLabelPressable: {
-    flex: 1,
+  termsRow: {
+    top: y(735),
+  },
+
+  privacyRow: {
+    top: y(787),
+  },
+
+  parentConsentRow: {
+    top: y(839),
   },
 
   checkbox: {
@@ -505,14 +508,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: x(8),
-    marginTop: y(2),
   },
 
   disabledControl: {
     opacity: 0.6,
   },
 
-  termsText: {
+  consentText: {
+    width: x(328),
+    minHeight: y(30),
     color: colors.primary,
     fontFamily: "Literata",
     fontSize: x(18),
@@ -523,7 +527,7 @@ const styles = StyleSheet.create({
   error: {
     position: "absolute",
     left: x(20),
-    top: y(880),
+    top: y(892),
     width: x(362),
     color: "#B00020",
     fontFamily: "Literata",
@@ -535,7 +539,7 @@ const styles = StyleSheet.create({
   buttonWrapper: {
     position: "absolute",
     left: x(96),
-    top: y(930),
+    top: y(960),
     width: x(210),
     height: y(84),
     alignItems: "center",

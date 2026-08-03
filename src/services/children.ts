@@ -84,7 +84,9 @@ function mapChildDoc(
     stars: typeof data.stars === "number" ? data.stars : 0,
     gems: typeof data.gems === "number" ? data.gems : 0,
     badges: Array.isArray(data.badges)
-      ? (data.badges as string[])
+      ? data.badges.filter(
+          (badgeId): badgeId is string => typeof badgeId === "string",
+        )
       : [],
   };
 }
@@ -218,7 +220,9 @@ export async function awardRewards(
     const currentGems =
       typeof data.gems === "number" ? data.gems : 0;
     const currentBadges = Array.isArray(data.badges)
-      ? (data.badges as string[])
+      ? data.badges.filter(
+          (badgeId): badgeId is string => typeof badgeId === "string",
+        )
       : [];
 
     const nextBadges = [...currentBadges];

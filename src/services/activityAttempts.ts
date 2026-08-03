@@ -67,7 +67,10 @@ export async function listActivityAttempts(
   childId: string,
 ): Promise<ActivityAttempt[]> {
   const snapshot = await getDocs(
-    query(attemptsCollection(parentUid, childId), orderBy("createdAt", "desc")),
+    query(
+      attemptsCollection(parentUid, childId),
+      orderBy("createdAt", "desc"),
+    ),
   );
 
   return snapshot.docs.map((attemptDoc) => ({
@@ -80,7 +83,7 @@ export async function createActivityAttempt(
   parentUid: string,
   childId: string,
   data: CreateActivityAttemptInput,
-) {
+): Promise<string> {
   const status = data.status ?? "available";
 
   const ref = await addDoc(attemptsCollection(parentUid, childId), {
@@ -97,8 +100,8 @@ export async function createActivityAttempt(
 }
 
 /**
- * Seed Phase 1 activity attempts for a newly created child.
- * Skips any activityId that already has an attempt.
+ * Seed Phase activities for a newly created or older child profile.
+ * Existing activity IDs are preserved.
  */
 export async function seedPhaseActivities(
   parentUid: string,
@@ -123,7 +126,7 @@ export async function seedPhaseActivities(
 }
 
 /**
- * Complete a catalog activity by ID (no-op if the ID is unknown).
+ * Complete a catalog activity by ID. Unknown IDs are ignored safely.
  */
 export async function completeActivityById(
   parentUid: string,
@@ -133,9 +136,7 @@ export async function completeActivityById(
   const activity = ACTIVITIES_BY_ID[activityId];
 
   if (!activity) {
-    console.warn(
-      `Skipping unknown activity completion: ${activityId}`,
-    );
+    console.warn(`Skipping unknown activity completion: ${activityId}`);
     return;
   }
 
@@ -143,7 +144,7 @@ export async function completeActivityById(
 }
 
 /**
- * Mark an activity attempt completed and award the catalog rewards.
+ * Marks an activity attempt completed and awards the catalog rewards once.
  */
 export async function completeActivityAttempt(
   parentUid: string,
@@ -175,12 +176,15 @@ export async function completeActivityAttempt(
       return;
     }
 
-    await updateDoc(doc(attemptsCollection(parentUid, childId), attemptDoc.id), {
-      status: "completed",
-      starsEarned: activity.starsReward,
-      badgesEarned: badges,
-      completedAt: serverTimestamp(),
-    });
+    await updateDoc(
+      doc(attemptsCollection(parentUid, childId), attemptDoc.id),
+      {
+        status: "completed",
+        starsEarned: activity.starsReward,
+        badgesEarned: badges,
+        completedAt: serverTimestamp(),
+      },
+    );
   }
 
   await awardRewards(parentUid, childId, {
@@ -191,7 +195,7 @@ export async function completeActivityAttempt(
 }
 
 /**
- * Compute dashboard progress for a child's current phase from Firestore attempts.
+ * Computes dashboard progress for a child's phase from Firestore attempts.
  */
 export async function getChildActivityProgress(
   parentUid: string,
@@ -202,7 +206,11 @@ export async function getChildActivityProgress(
   const totalActivities = catalog.length;
 
   if (totalActivities === 0) {
-    return { phase, completedActivities: 0, totalActivities: 0 };
+    return {
+      phase,
+      completedActivities: 0,
+      totalActivities: 0,
+    };
   }
 
   const catalogIds = new Set(catalog.map((activity) => activity.id));
@@ -212,7 +220,8 @@ export async function getChildActivityProgress(
     attempts
       .filter(
         (attempt) =>
-          attempt.status === "completed" && catalogIds.has(attempt.activityId),
+          attempt.status === "completed" &&
+          catalogIds.has(attempt.activityId),
       )
       .map((attempt) => attempt.activityId),
   );

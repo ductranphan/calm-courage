@@ -650,7 +650,7 @@ const styles = StyleSheet.create({
     width: x(362),
     height: y(39),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(30),
     lineHeight: y(39),
     textAlign: "center",
@@ -689,7 +689,7 @@ const styles = StyleSheet.create({
   workbookLinkText: {
     marginLeft: x(15),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(20),
     lineHeight: y(22),
     textDecorationLine: "underline",
@@ -712,7 +712,7 @@ const styles = StyleSheet.create({
     width: x(169),
     height: y(26),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(20),
     lineHeight: y(26),
   },
@@ -834,7 +834,7 @@ const styles = StyleSheet.create({
 
   challengeButtonText: {
     color: colors.white,
-    fontFamily: "QuicheBlack",
+    fontFamily: "OutfitBlack",
     fontSize: x(15),
     lineHeight: y(19),
   },
@@ -923,7 +923,7 @@ const styles = StyleSheet.create({
     width: x(125),
     height: y(46),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(35),
     lineHeight: y(46),
     textAlign: "center",
@@ -953,7 +953,7 @@ const styles = StyleSheet.create({
 
   activityTileText: {
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(20),
     lineHeight: y(23),
     textAlign: "center",
@@ -968,7 +968,7 @@ const styles = StyleSheet.create({
     width: x(213),
     height: y(78),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "Outfit",
     fontSize: x(30),
     lineHeight: y(34),
     textAlign: "center",

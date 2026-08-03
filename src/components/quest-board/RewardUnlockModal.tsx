@@ -198,10 +198,9 @@ const styles = StyleSheet.create({
     width: x(244),
     height: y(39),
     color: colors.primary,
-    fontFamily: "Quiche",
+    fontFamily: "OutfitBlack",
     fontSize: x(30),
     lineHeight: y(39),
-    fontWeight: "900",
     textAlign: "center",
   },
 
@@ -282,10 +281,9 @@ const styles = StyleSheet.create({
 
   actionButtonText: {
     color: "#FFFFFF",
-    fontFamily: "Literata",
+    fontFamily: "LiterataBold",
     fontSize: x(12),
     lineHeight: y(16),
-    fontWeight: "700",
     textAlign: "center",
   },
 

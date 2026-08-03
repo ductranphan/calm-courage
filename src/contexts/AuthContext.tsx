@@ -3,6 +3,7 @@
  *
  * Tracks the current Firebase user and exposes auth actions to the app.
  */
+
 import {
   createContext,
   useContext,
@@ -66,14 +67,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       acceptTerms,
       deleteAccount: deleteParentAccount,
     }),
-    [user, loading]
+    [user, loading],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
+
   if (!context) {
     throw new Error("useAuth must be used within an AuthProvider.");
   }
