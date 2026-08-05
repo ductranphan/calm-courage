@@ -49,6 +49,7 @@ import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
+import { useChildRewards } from "@/hooks/useChildRewards";
 import { getChild } from "@/services/children";
 import { x, y } from "@/utils/scaling";
 
@@ -60,6 +61,7 @@ import HouseIcon from "../../assets/icons/house.svg";
 import RecordingMicrophoneOffIcon from "../../assets/icons/recording-microphone-off.svg";
 import RecordingMicrophoneOnIcon from "../../assets/icons/recording-microphone-on.svg";
 import StarIcon from "../../assets/icons/star.svg";
+import SaveStarIcon from "../../assets/icons/star-save.svg";
 import WorkbookBrushIcon from "../../assets/icons/workbook-brush.svg";
 import WorkbookDashboardIcon from "../../assets/icons/workbook-dashboard.svg";
 import WorkbookEraserIcon from "../../assets/icons/workbook-eraser.svg";
@@ -70,12 +72,6 @@ const CANVAS_BACKGROUND = "#FFFFFF";
 
 const FIGMA_FRAME_HEIGHT = 874;
 const WORKBOOK_AUDIO_DIRECTORY = "workbook-audio";
-
-const TEMP_REWARDS = {
-  stars: 15,
-  gems: 5,
-  badges: 3,
-};
 
 const WORKBOOK_PAGES = [
   {
@@ -246,6 +242,10 @@ export default function DigitalWorkbookScreen() {
   const { childModeActive } =
     useParentAccess();
 
+  const rewards = useChildRewards(
+    activeChild?.id,
+  );
+
   const audioRecorder = useAudioRecorder(
     RecordingPresets.HIGH_QUALITY,
   );
@@ -342,8 +342,28 @@ export default function DigitalWorkbookScreen() {
           return;
         }
 
+        const childAge = Number(child?.age);
+
+        const usesAges9To10Workbook =
+          Number.isInteger(childAge) &&
+          childAge >= 9 &&
+          childAge <= 10;
+
+        console.log(
+          "Resolved workbook variant:",
+          {
+            childId: activeChild.id,
+            storedAge: child?.age,
+            normalizedAge: childAge,
+            variant:
+              usesAges9To10Workbook
+                ? "ages-9-10"
+                : "drawing",
+          },
+        );
+
         setWorkbookVariant(
-          child?.age === 9 || child?.age === 10
+          usesAges9To10Workbook
             ? "ages-9-10"
             : "drawing",
         );
@@ -924,7 +944,13 @@ export default function DigitalWorkbookScreen() {
   }
 
   if (workbookVariant === "ages-9-10") {
-    return <DigitalWorkbookAges9To10 />;
+    return (
+      <DigitalWorkbookAges9To10
+        stars={rewards.stars}
+        gems={rewards.gems}
+        badgeCount={rewards.badges.length}
+      />
+    );
   }
 
   return (
@@ -978,7 +1004,7 @@ export default function DigitalWorkbookScreen() {
             />
 
             <Text style={styles.statText}>
-              {TEMP_REWARDS.stars}
+              {rewards.stars}
             </Text>
 
             <DiamondIcon
@@ -988,7 +1014,7 @@ export default function DigitalWorkbookScreen() {
 
             <Text style={styles.statText}>
               {formatScore(
-                TEMP_REWARDS.gems,
+                rewards.gems,
               )}
             </Text>
 
@@ -999,7 +1025,7 @@ export default function DigitalWorkbookScreen() {
 
             <Text style={styles.statText}>
               {formatScore(
-                TEMP_REWARDS.badges,
+                rewards.badges.length,
               )}
             </Text>
           </View>
@@ -1263,7 +1289,7 @@ export default function DigitalWorkbookScreen() {
                 : "Save &"}
             </Text>
 
-            <StarIcon
+            <SaveStarIcon
               width={x(23)}
               height={x(23)}
             />

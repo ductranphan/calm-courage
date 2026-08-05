@@ -67,7 +67,22 @@ export function ActiveChildProvider({
   const selectActiveChild =
     useCallback(
       (child: ActiveChild) => {
-        setActiveChild(child);
+        setActiveChild((currentChild) => {
+          /*
+           * Do not create a new context value when the same child is selected
+           * again. Besides avoiding unnecessary renders, this prevents effects
+           * that synchronize route data with context from entering an update
+           * loop.
+           */
+          const selectionAlreadyMatches =
+            currentChild?.id === child.id &&
+            currentChild?.name === child.name &&
+            currentChild?.avatarId === child.avatarId;
+
+          return selectionAlreadyMatches
+            ? currentChild
+            : child;
+        });
       },
       [],
     );

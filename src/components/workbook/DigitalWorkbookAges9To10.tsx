@@ -40,7 +40,8 @@ import AudioOnIcon from "../../../assets/icons/audio-on.svg";
 import BadgeIcon from "../../../assets/icons/certificate-badge.svg";
 import DiamondIcon from "../../../assets/icons/diamond.svg";
 import HouseIcon from "../../../assets/icons/house.svg";
-import StarIcon from "../../../assets/icons/star-save.svg";
+import StarIcon from "../../../assets/icons/star.svg";
+import SaveStarIcon from "../../../assets/icons/star-save.svg";
 import WorkbookDashboardIcon from "../../../assets/icons/workbook-dashboard.svg";
 
 const PAGE_BACKGROUND = "#F1F3F5";
@@ -58,12 +59,6 @@ const SCALE_TOP = 286;
 
 const INTENSITY_BUBBLE_LEFT = 132;
 const INTENSITY_BUBBLE_WIDTH = 168;
-
-const TEMP_REWARDS = {
-  stars: 15,
-  gems: 5,
-  badges: 3,
-};
 
 const SCALE_VALUES = Array.from(
   { length: 10 },
@@ -85,7 +80,17 @@ function clamp(
   );
 }
 
-export default function DigitalWorkbookAges9To10() {
+type Props = {
+  stars: number;
+  gems: number;
+  badgeCount: number;
+};
+
+export default function DigitalWorkbookAges9To10({
+  stars,
+  gems,
+  badgeCount,
+}: Props) {
   const { activeChild } = useActiveChild();
 
   const scrollViewRef =
@@ -367,7 +372,7 @@ export default function DigitalWorkbookAges9To10() {
             />
 
             <Text style={styles.statText}>
-              {TEMP_REWARDS.stars}
+              {stars}
             </Text>
 
             <DiamondIcon
@@ -377,7 +382,7 @@ export default function DigitalWorkbookAges9To10() {
 
             <Text style={styles.statText}>
               {formatScore(
-                TEMP_REWARDS.gems,
+                gems,
               )}
             </Text>
 
@@ -388,7 +393,7 @@ export default function DigitalWorkbookAges9To10() {
 
             <Text style={styles.statText}>
               {formatScore(
-                TEMP_REWARDS.badges,
+                badgeCount,
               )}
             </Text>
           </View>
@@ -637,7 +642,7 @@ export default function DigitalWorkbookAges9To10() {
                 : "Save &"}
             </Text>
 
-            <StarIcon
+            <SaveStarIcon
               width={x(23)}
               height={y(23)}
             />

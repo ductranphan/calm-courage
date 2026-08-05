@@ -2,22 +2,19 @@
  * Parent settings screen.
  *
  * Notification preferences and subscription actions are currently local UI.
- * Account deletion keeps the existing Firebase deletion flow.
+ * Account deletion opens the dedicated Delete Account screen.
  */
 
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -25,6 +22,7 @@ import {
 import ParentBottomNav from "@/components/dashboard/ParentBottomNav";
 import TermsModal from "@/components/modals/TermsModal";
 import AppButton from "@/components/ui/AppButton";
+import Logo from "@/components/ui/Logo";
 import {
   type ConsentDocumentKind,
 } from "@/constants/consent";
@@ -137,7 +135,6 @@ export default function SettingsScreen() {
 
   const {
     signOut: signOutUser,
-    deleteAccount,
   } = useAuth();
 
   const { clearActiveChild } = useActiveChild();
@@ -165,22 +162,9 @@ export default function SettingsScreen() {
     );
 
   const [
-    deleteModalVisible,
-    setDeleteModalVisible,
+    logoutModalVisible,
+    setLogoutModalVisible,
   ] = useState(false);
-
-  const [
-    deletePassword,
-    setDeletePassword,
-  ] = useState("");
-
-  const [
-    deleteError,
-    setDeleteError,
-  ] = useState<string | null>(null);
-
-  const [deleting, setDeleting] =
-    useState(false);
 
   const [signingOut, setSigningOut] =
     useState(false);
@@ -217,22 +201,15 @@ export default function SettingsScreen() {
       return;
     }
 
-    Alert.alert(
-      "Log Out",
-      "Are you sure you want to log out?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Log Out",
-          onPress: () => {
-            void confirmLogout();
-          },
-        },
-      ],
-    );
+    setLogoutModalVisible(true);
+  }
+
+  function closeLogoutModal() {
+    if (signingOut) {
+      return;
+    }
+
+    setLogoutModalVisible(false);
   }
 
   async function confirmLogout() {
@@ -242,6 +219,7 @@ export default function SettingsScreen() {
       lockAccess();
       clearActiveChild();
       await signOutUser();
+      setLogoutModalVisible(false);
       router.replace("/login");
     } catch (error) {
       console.error(
@@ -260,84 +238,8 @@ export default function SettingsScreen() {
     }
   }
 
-  function openDeleteModal() {
-    if (deleting) {
-      return;
-    }
-
-    setDeletePassword("");
-    setDeleteError(null);
-    setDeleteModalVisible(true);
-  }
-
-  function closeDeleteModal() {
-    if (deleting) {
-      return;
-    }
-
-    setDeletePassword("");
-    setDeleteError(null);
-    setDeleteModalVisible(false);
-  }
-
-  function handleDeleteAccountPress() {
-    if (deleting) {
-      return;
-    }
-
-    setDeleteError(null);
-
-    if (!deletePassword.trim()) {
-      setDeleteError(
-        "Enter your password to delete your account.",
-      );
-      return;
-    }
-
-    Alert.alert(
-      "Delete Account",
-      "This permanently deletes your parent account, all child profiles, check-ins, progress, and rewards. This cannot be undone.",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            void confirmDeleteAccount();
-          },
-        },
-      ],
-    );
-  }
-
-  async function confirmDeleteAccount() {
-    setDeleting(true);
-    setDeleteError(null);
-
-    try {
-      await deleteAccount(deletePassword);
-      clearActiveChild();
-      lockAccess();
-      setDeletePassword("");
-      setDeleteModalVisible(false);
-      router.replace("/onboarding");
-    } catch (error) {
-      console.error(
-        "Unable to delete account:",
-        error,
-      );
-
-      setDeleteError(
-        error instanceof Error
-          ? error.message
-          : "Unable to delete account. Please try again.",
-      );
-    } finally {
-      setDeleting(false);
-    }
+  function handleDeleteAccount() {
+    router.push("/delete-account" as Href);
   }
 
   return (
@@ -555,12 +457,11 @@ export default function SettingsScreen() {
 
           <SettingsRow
             label="Delete Account"
-            onPress={openDeleteModal}
-            accessibilityLabel="Delete account"
+            onPress={handleDeleteAccount}
+            accessibilityLabel="Open delete account page"
             style={
               styles.deleteAccountRow
             }
-            disabled={deleting}
           />
         </View>
       </ScrollView>
@@ -596,6 +497,93 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+
+      <Modal
+        visible={logoutModalVisible}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={closeLogoutModal}
+      >
+        <View style={styles.logoutModalBackdrop}>
+          <View style={styles.logoutModalCard}>
+            <View style={styles.logoutLogoWrapper}>
+              <Logo
+                width={x(177.3)}
+                height={y(61)}
+                shadow
+              />
+            </View>
+
+            <Text style={styles.logoutModalTitle}>
+              Log Out?
+            </Text>
+
+            <Text style={styles.logoutModalText}>
+              Are you sure you want to log{"\n"}
+              out? You will need to sign in{"\n"}
+              again to access parent settings{"\n"}
+              and progress tracking.
+            </Text>
+
+            <View style={styles.logoutModalActions}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.logoutConfirmButton,
+                  pressed &&
+                    styles.controlPressed,
+                  signingOut &&
+                    styles.disabledControl,
+                ]}
+                onPress={() => {
+                  void confirmLogout();
+                }}
+                disabled={signingOut}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm log out"
+              >
+                {signingOut ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={colors.primary}
+                  />
+                ) : (
+                  <Text
+                    style={
+                      styles.logoutConfirmButtonText
+                    }
+                  >
+                    Log out
+                  </Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.logoutCancelButton,
+                  pressed &&
+                    styles.controlPressed,
+                  signingOut &&
+                    styles.disabledControl,
+                ]}
+                onPress={closeLogoutModal}
+                disabled={signingOut}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel log out"
+              >
+                <Text
+                  style={
+                    styles.logoutCancelButtonText
+                  }
+                >
+                  Cancel
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={legalModalDocument !== null}
@@ -634,128 +622,6 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      <Modal
-        visible={deleteModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeDeleteModal}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalBackdrop}
-          behavior={
-            Platform.OS === "ios"
-              ? "padding"
-              : "height"
-          }
-        >
-          <View
-            style={styles.deleteModalCard}
-          >
-            <Text
-              style={
-                styles.deleteModalTitle
-              }
-            >
-              Delete Account
-            </Text>
-
-            <Text
-              style={
-                styles.deleteModalText
-              }
-            >
-              Enter your password to
-              permanently delete your account
-              and all child data.
-            </Text>
-
-            <TextInput
-              value={deletePassword}
-              onChangeText={(value) => {
-                setDeletePassword(value);
-                setDeleteError(null);
-              }}
-              placeholder="Password"
-              placeholderTextColor={
-                colors.muted
-              }
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!deleting}
-              style={
-                styles.deletePasswordInput
-              }
-              accessibilityLabel="Password for account deletion"
-            />
-
-            {deleteError ? (
-              <Text
-                style={styles.deleteError}
-                accessibilityRole="alert"
-              >
-                {deleteError}
-              </Text>
-            ) : null}
-
-            <View
-              style={
-                styles.deleteModalActions
-              }
-            >
-              <Pressable
-                style={({ pressed }) => [
-                  styles.cancelDeleteButton,
-                  pressed &&
-                    styles.controlPressed,
-                ]}
-                onPress={closeDeleteModal}
-                disabled={deleting}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel account deletion"
-              >
-                <Text
-                  style={
-                    styles.cancelDeleteText
-                  }
-                >
-                  Cancel
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={({ pressed }) => [
-                  styles.confirmDeleteButton,
-                  pressed &&
-                    styles.controlPressed,
-                  deleting &&
-                    styles.disabledControl,
-                ]}
-                onPress={
-                  handleDeleteAccountPress
-                }
-                disabled={deleting}
-                accessibilityRole="button"
-                accessibilityLabel="Confirm account deletion"
-              >
-                {deleting ? (
-                  <ActivityIndicator
-                    color={colors.white}
-                  />
-                ) : (
-                  <Text
-                    style={
-                      styles.confirmDeleteText
-                    }
-                  >
-                    Delete
-                  </Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </View>
   );
 }
@@ -1170,6 +1036,132 @@ const styles = StyleSheet.create({
     shadowRadius: x(5),
   },
 
+  logoutModalBackdrop: {
+    flex: 1,
+    backgroundColor:
+      "rgba(0, 0, 0, 0.50)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  logoutModalCard: {
+    position: "relative",
+    width: x(331),
+    height: y(500),
+    borderRadius: x(20),
+    backgroundColor: "#F1F3F5",
+    overflow: "visible",
+
+    shadowColor: colors.black,
+    shadowOffset: {
+      width: 0,
+      height: y(4),
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: x(4),
+    elevation: 10,
+  },
+
+  logoutLogoWrapper: {
+    position: "absolute",
+    left: x(76.85),
+    top: y(63),
+    width: x(177.3),
+    height: y(61),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  logoutModalTitle: {
+    position: "absolute",
+    left: x(89.59),
+    top: y(165),
+    width: x(151.82),
+    height: y(38),
+    color: colors.primary,
+    fontFamily: "OutfitBold",
+    fontSize: x(30),
+    lineHeight: y(38),
+    textAlign: "center",
+  },
+
+  logoutModalText: {
+    position: "absolute",
+    left: x(15),
+    top: y(224),
+    width: x(300),
+    height: y(120),
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(20),
+    lineHeight: y(20),
+    textAlign: "center",
+    textAlignVertical: "center",
+  },
+
+  logoutModalActions: {
+    position: "absolute",
+    left: x(41),
+    top: y(385),
+    width: x(249),
+    height: y(52),
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  logoutConfirmButton: {
+    width: x(117),
+    height: y(52),
+    borderRadius: x(20),
+    backgroundColor: "#D9D9D9",
+    alignItems: "center",
+    justifyContent: "center",
+
+    shadowColor: colors.black,
+    shadowOffset: {
+      width: 0,
+      height: y(4),
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: x(4),
+    elevation: 5,
+  },
+
+  logoutCancelButton: {
+    width: x(117),
+    height: y(52),
+    borderRadius: x(20),
+    backgroundColor: "#E8D8F1",
+    alignItems: "center",
+    justifyContent: "center",
+
+    shadowColor: colors.black,
+    shadowOffset: {
+      width: 0,
+      height: y(4),
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: x(4),
+    elevation: 5,
+  },
+
+  logoutConfirmButtonText: {
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(16),
+    lineHeight: y(20),
+    textAlign: "center",
+  },
+
+  logoutCancelButtonText: {
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(16),
+    lineHeight: y(20),
+    textAlign: "center",
+  },
+
   termsModalBackdrop: {
     flex: 1,
     position: "relative",
@@ -1179,108 +1171,6 @@ const styles = StyleSheet.create({
   termsModalPositioner: {
     flex: 1,
     position: "relative",
-  },
-
-  modalBackdrop: {
-    flex: 1,
-    paddingHorizontal: x(20),
-    backgroundColor:
-      "rgba(0, 0, 0, 0.35)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  deleteModalCard: {
-    width: x(362),
-    minHeight: y(330),
-    paddingHorizontal: x(24),
-    paddingVertical: y(28),
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: x(20),
-    backgroundColor:
-      colors.background,
-  },
-
-  deleteModalTitle: {
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(28),
-    lineHeight: y(35),
-    textAlign: "center",
-  },
-
-  deleteModalText: {
-    marginTop: y(18),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(16),
-    lineHeight: y(23),
-    textAlign: "center",
-  },
-
-  deletePasswordInput: {
-    width: "100%",
-    height: y(52),
-    marginTop: y(24),
-    borderRadius: x(16),
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.white,
-    paddingHorizontal: x(16),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(18),
-  },
-
-  deleteError: {
-    marginTop: y(10),
-    color: "#B00020",
-    fontFamily: "Literata",
-    fontSize: x(14),
-    lineHeight: y(18),
-    textAlign: "center",
-  },
-
-  deleteModalActions: {
-    width: "100%",
-    marginTop: y(25),
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  cancelDeleteButton: {
-    width: x(138),
-    height: y(50),
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: x(18),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  cancelDeleteText: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(18),
-    lineHeight: y(23),
-  },
-
-  confirmDeleteButton: {
-    width: x(138),
-    height: y(50),
-    borderRadius: x(18),
-    backgroundColor: "#B00020",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  confirmDeleteText: {
-    color: colors.white,
-    fontFamily: "LiterataBold",
-    fontSize: x(18),
-    lineHeight: y(23),
   },
 
   controlPressed: {
