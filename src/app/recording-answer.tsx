@@ -1,9 +1,8 @@
 /**
  * Voice-answer screen for the emotion encouragement flow.
  *
- * Records a single response and keeps it in temporary storage until the
- * child chooses to save it. Saved recordings are copied to the app's
- * documents directory; backend upload and point rewards are not yet wired.
+ * Records a response, saves it locally, uploads to Firebase Storage,
+ * stores metadata, and awards Brave Breath once on first successful save.
  */
 
 import {
@@ -42,6 +41,8 @@ import {
   isEmotionId,
   type EmotionId,
 } from "@/constants/emotions";
+import { useAuth } from "@/contexts/AuthContext";
+import { saveRecordingAnswer } from "@/services/childMedia";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -88,6 +89,8 @@ function getFileExtension(
 }
 
 export default function RecordingAnswerScreen() {
+  const { user } = useAuth();
+
   const { emotion, childId } =
     useLocalSearchParams<{
       emotion?: string;
@@ -536,6 +539,22 @@ export default function RecordingAnswerScreen() {
         "Recording answer saved locally:",
         savedUri,
       );
+
+      if (user?.uid && childId) {
+        await saveRecordingAnswer(
+          user.uid,
+          childId,
+          {
+            localUri: savedUri,
+            emotionId: emotionId ?? undefined,
+            durationMs:
+              recordedDurationMillis ||
+              liveDurationMillis ||
+              undefined,
+            awardBraveBreath: true,
+          },
+        );
+      }
 
       router.replace(
         "/child-dashboard" as Href,

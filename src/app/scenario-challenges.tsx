@@ -21,6 +21,8 @@ import {
 import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
+import { useChildRewards } from "@/hooks/useChildRewards";
+import { openGameLevel } from "@/utils/openGameLevel";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -33,12 +35,6 @@ import StarIcon from "../../assets/icons/star.svg";
 import WorkbookDashboardIcon from "../../assets/icons/workbook-dashboard.svg";
 
 const FIGMA_CONTENT_HEIGHT = 1815;
-
-const TEMP_REWARDS = {
-  stars: 15,
-  gems: 5,
-  badges: 3,
-};
 
 const CARD_WIDTH = 171;
 const CARD_HEIGHT = 138;
@@ -74,6 +70,7 @@ function formatScore(value: number): string {
 export default function ScenarioChallengesScreen() {
   const { activeChild } = useActiveChild();
   const { childModeActive } = useParentAccess();
+  const rewards = useChildRewards(activeChild?.id);
 
   const [audioEnabled, setAudioEnabled] =
     useState(false);
@@ -89,19 +86,7 @@ export default function ScenarioChallengesScreen() {
   function handleScenarioPress(
     scenarioNumber: number,
   ) {
-    /*
-     * Connect each scenario to its detail page later.
-     *
-     * Example:
-     *
-     * if (scenarioNumber === 1) {
-     *   router.push("/scenario-1" as Href);
-     * }
-     */
-
-    console.log(
-      `Scenario ${scenarioNumber} selected`,
-    );
+    openGameLevel("scenario", scenarioNumber);
   }
 
   function handleBack() {
@@ -188,7 +173,7 @@ export default function ScenarioChallengesScreen() {
             </View>
 
             <Text style={styles.starValue}>
-              {TEMP_REWARDS.stars}
+              {rewards.stars}
             </Text>
 
             <View style={styles.diamondIcon}>
@@ -199,9 +184,7 @@ export default function ScenarioChallengesScreen() {
             </View>
 
             <Text style={styles.gemValue}>
-              {formatScore(
-                TEMP_REWARDS.gems,
-              )}
+              {formatScore(rewards.gems)}
             </Text>
 
             <View style={styles.badgeIcon}>
@@ -212,9 +195,7 @@ export default function ScenarioChallengesScreen() {
             </View>
 
             <Text style={styles.badgeValue}>
-              {formatScore(
-                TEMP_REWARDS.badges,
-              )}
+              {formatScore(rewards.badges.length)}
             </Text>
           </View>
 

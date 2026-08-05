@@ -53,7 +53,7 @@ import { x, y } from "@/utils/scaling";
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
 import AudioOnIcon from "../../assets/icons/audio-on.svg";
 
-const PROMPT_CARD_TOP = 651;
+const PROMPT_CARD_TOP = 666;
 const DEFAULT_PROMPT_CARD_HEIGHT = 271;
 const CONTENT_BOTTOM_GAP = 20;
 
@@ -685,6 +685,17 @@ export default function ParentDashboardScreen() {
                   dashboardData.activitiesLabel
                 }
               </Text>
+
+              <Text
+                style={
+                  styles.recentCompletionsLabel
+                }
+              >
+                Recent:{" "}
+                {
+                  dashboardData.recentCompletionsLabel
+                }
+              </Text>
             </>
           ) : (
             <Text
@@ -1004,6 +1015,18 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
 
+  recentCompletionsLabel: {
+    position: "absolute",
+    left: x(20),
+    top: y(568),
+    width: x(362),
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(13),
+    lineHeight: y(18),
+    textAlign: "center",
+  },
+
   progressUnavailableText: {
     position: "absolute",
     left: x(20),
@@ -1019,7 +1042,7 @@ const styles = StyleSheet.create({
   dividerMiddle: {
     position: "absolute",
     left: x(20),
-    top: y(585),
+    top: y(600),
     width: x(362),
     height:
       StyleSheet.hairlineWidth,

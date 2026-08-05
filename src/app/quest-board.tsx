@@ -10,8 +10,10 @@
  */
 
 import { router, type Href } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -23,8 +25,20 @@ import {
 
 import RewardUnlockModal from "@/components/quest-board/RewardUnlockModal";
 import { colors } from "@/constants/colors";
+import {
+  type QuestCategory,
+} from "@/constants/quests";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
+import {
+  completeQuest,
+  listChildQuests,
+  seedWeeklyQuests,
+  startQuest,
+  type ChildQuest,
+  type QuestStatus as BackendQuestStatus,
+} from "@/services/quests";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -40,29 +54,52 @@ const PAGE_BACKGROUND = "#F1F3F5";
 const CONTENT_HEIGHT = 958;
 const FOOTER_SPACE = 125;
 
-type QuestCategory =
-  | "confidence"
-  | "emotion"
-  | "kindness"
-  | "gratitude"
-  | "resilience"
-  | "friendship";
-
-type QuestStatus =
+type UiQuestStatus =
   | "In Progress"
   | "Available"
-  | "Locked";
+  | "Locked"
+  | "Completed";
 
 type QuestItem = {
   id: string;
   title: string;
   description: string;
-  status: QuestStatus;
+  status: UiQuestStatus;
   buttonLabel: string;
   left: number;
   top: number;
   image: ImageSourcePropType;
 };
+
+function toUiStatus(
+  status: BackendQuestStatus,
+): UiQuestStatus {
+  switch (status) {
+    case "in_progress":
+      return "In Progress";
+    case "completed":
+      return "Completed";
+    case "locked":
+      return "Locked";
+    default:
+      return "Available";
+  }
+}
+
+function toButtonLabel(
+  status: BackendQuestStatus,
+): string {
+  switch (status) {
+    case "in_progress":
+      return "Continue →";
+    case "completed":
+      return "Claimed";
+    case "locked":
+      return "Locked";
+    default:
+      return "Start Quest →";
+  }
+}
 
 const CATEGORIES: Array<{
   id: QuestCategory;
@@ -124,14 +161,19 @@ const GRATITUDE_GARDEN_IMAGE = require(
   "../../assets/images/quest-gratitude-garden.png",
 );
 
-const QUESTS: QuestItem[] = [
+const QUEST_LAYOUT: Array<{
+  id: string;
+  title: string;
+  description: string;
+  left: number;
+  top: number;
+  image: ImageSourcePropType;
+}> = [
   {
     id: "confidence-climb",
     title: "The Confidence\nClimb",
     description:
       "Help Pip climb the mountain by proving your own strengths step by step!",
-    status: "In Progress",
-    buttonLabel: "Continue →",
     left: 20,
     top: 395,
     image: CONFIDENCE_CLIMB_IMAGE,
@@ -141,8 +183,6 @@ const QUESTS: QuestItem[] = [
     title: "The Kindness\nRanger",
     description:
       "Bring warmth back to the forest by completing acts of kindness!",
-    status: "Available",
-    buttonLabel: "Start Quest →",
     left: 211,
     top: 395,
     image: KINDNESS_RANGER_IMAGE,
@@ -152,8 +192,6 @@ const QUESTS: QuestItem[] = [
     title: "The Emotion\nExplorer",
     description:
       "Explore your feelings and become a mood detective!",
-    status: "Available",
-    buttonLabel: "Start Quest →",
     left: 20,
     top: 666,
     image: EMOTION_EXPLORER_IMAGE,
@@ -163,8 +201,6 @@ const QUESTS: QuestItem[] = [
     title: "The Gratitude\nGarden",
     description:
       "Grow your garden by noticing the good things around you!",
-    status: "Locked",
-    buttonLabel: "Locked",
     left: 211,
     top: 666,
     image: GRATITUDE_GARDEN_IMAGE,
@@ -172,6 +208,7 @@ const QUESTS: QuestItem[] = [
 ];
 
 export default function QuestBoardScreen() {
+  const { user } = useAuth();
   const { activeChild } = useActiveChild();
   const { childModeActive } =
     useParentAccess();
@@ -189,6 +226,35 @@ export default function QuestBoardScreen() {
     setRewardUnlockVisible,
   ] = useState(false);
 
+  const [backendQuests, setBackendQuests] =
+    useState<ChildQuest[]>([]);
+  const [questsLoading, setQuestsLoading] =
+    useState(true);
+  const [questBusy, setQuestBusy] =
+    useState(false);
+  const [pendingClaimQuestId, setPendingClaimQuestId] =
+    useState<string | null>(null);
+
+  const quests = useMemo((): QuestItem[] => {
+    return QUEST_LAYOUT.map((layout) => {
+      const backend = backendQuests.find(
+        (quest) => quest.questId === layout.id,
+      );
+      const status = backend
+        ? toUiStatus(backend.status)
+        : "Available";
+      const buttonLabel = backend
+        ? toButtonLabel(backend.status)
+        : "Start Quest →";
+
+      return {
+        ...layout,
+        status,
+        buttonLabel,
+      };
+    });
+  }, [backendQuests]);
+
   useEffect(() => {
     if (!childModeActive || !activeChild) {
       router.replace(
@@ -196,6 +262,59 @@ export default function QuestBoardScreen() {
       );
     }
   }, [activeChild, childModeActive]);
+
+  useEffect(() => {
+    let stillMounted = true;
+
+    async function loadQuests() {
+      if (!user?.uid || !activeChild?.id) {
+        if (stillMounted) {
+          setQuestsLoading(false);
+        }
+        return;
+      }
+
+      setQuestsLoading(true);
+
+      try {
+        const seeded = await seedWeeklyQuests(
+          user.uid,
+          activeChild.id,
+        );
+
+        if (stillMounted) {
+          setBackendQuests(seeded);
+        }
+      } catch (loadError) {
+        console.error(
+          "Unable to load weekly quests:",
+          loadError,
+        );
+
+        if (stillMounted) {
+          try {
+            const fallback = await listChildQuests(
+              user.uid,
+              activeChild.id,
+            );
+            setBackendQuests(fallback);
+          } catch {
+            setBackendQuests([]);
+          }
+        }
+      } finally {
+        if (stillMounted) {
+          setQuestsLoading(false);
+        }
+      }
+    }
+
+    void loadQuests();
+
+    return () => {
+      stillMounted = false;
+    };
+  }, [activeChild?.id, user?.uid]);
 
   function handleBack() {
     router.replace(
@@ -209,41 +328,77 @@ export default function QuestBoardScreen() {
     );
   }
 
-  function handleQuestPress(
+  async function handleQuestPress(
     quest: QuestItem,
   ) {
-    if (quest.status === "Locked") {
+    if (
+      quest.status === "Locked" ||
+      questBusy ||
+      !user?.uid ||
+      !activeChild?.id
+    ) {
       return;
     }
 
-    if (quest.id === "confidence-climb") {
-      setRewardUnlockVisible(true);
+    if (quest.status === "Completed") {
+      if (quest.id === "confidence-climb") {
+        setPendingClaimQuestId(quest.id);
+        setRewardUnlockVisible(true);
+      }
       return;
     }
 
-    console.log("Quest selected:", {
-      childId: activeChild?.id,
-      questId: quest.id,
-      questTitle: quest.title.replace(
-        "\n",
-        " ",
-      ),
-    });
+    setQuestBusy(true);
+
+    try {
+      await startQuest(
+        user.uid,
+        activeChild.id,
+        quest.id,
+      );
+
+      const completed = await completeQuest(
+        user.uid,
+        activeChild.id,
+        quest.id,
+      );
+
+      const refreshed = await seedWeeklyQuests(
+        user.uid,
+        activeChild.id,
+      );
+      setBackendQuests(refreshed);
+
+      if (quest.id === "confidence-climb") {
+        setPendingClaimQuestId(quest.id);
+        setRewardUnlockVisible(true);
+      } else {
+        Alert.alert(
+          "Quest Complete!",
+          completed
+            ? `You earned ${completed.starsEarned} stars and ${completed.gemsEarned} gems.`
+            : "Great work on your weekly quest.",
+        );
+      }
+    } catch (questError) {
+      console.error(
+        "Unable to complete quest:",
+        questError,
+      );
+      Alert.alert(
+        "Quest unavailable",
+        questError instanceof Error
+          ? questError.message
+          : "Please try again.",
+      );
+    } finally {
+      setQuestBusy(false);
+    }
   }
 
   function handleClaimReward() {
-    console.log("Reward claimed:", {
-      childId: activeChild?.id,
-      questId: "confidence-climb",
-      rewardId: "star-explorer-hat",
-      rewardType: "avatar-item",
-    });
-
-    /*
-     * Connect this action to Firebase later.
-     */
-
     setRewardUnlockVisible(false);
+    setPendingClaimQuestId(null);
   }
 
   function handlePrintCertificate() {
@@ -251,14 +406,12 @@ export default function QuestBoardScreen() {
       "Certificate requested:",
       {
         childId: activeChild?.id,
-        questId: "confidence-climb",
+        questId:
+          pendingClaimQuestId ??
+          "confidence-climb",
         rewardId: "star-explorer-hat",
       },
     );
-
-    /*
-     * Connect certificate creation and sharing later.
-     */
   }
 
   if (!childModeActive || !activeChild) {
@@ -397,7 +550,20 @@ export default function QuestBoardScreen() {
             );
           })}
 
-          {QUESTS.map((quest) => {
+          {questsLoading ? (
+            <ActivityIndicator
+              size="large"
+              color={colors.primary}
+              style={{
+                position: "absolute",
+                top: y(480),
+                left: 0,
+                right: 0,
+              }}
+            />
+          ) : null}
+
+          {quests.map((quest) => {
             const locked =
               quest.status === "Locked";
 
@@ -465,10 +631,10 @@ export default function QuestBoardScreen() {
                       !locked &&
                       styles.questButtonPressed,
                   ]}
-                  onPress={() =>
-                    handleQuestPress(quest)
-                  }
-                  disabled={locked}
+                  onPress={() => {
+                    void handleQuestPress(quest);
+                  }}
+                  disabled={locked || questBusy}
                   accessibilityRole="button"
                   accessibilityLabel={`${quest.buttonLabel} ${quest.title.replace(
                     "\n",

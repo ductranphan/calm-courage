@@ -748,6 +748,18 @@ export async function deleteParentAccount(
         "activityAttempts",
       );
 
+      await deleteQueryDocuments(
+        user.uid,
+        childDoc.id,
+        "quests",
+      );
+
+      await deleteQueryDocuments(
+        user.uid,
+        childDoc.id,
+        "media",
+      );
+
       await deleteDoc(
         childDoc.ref,
       );
