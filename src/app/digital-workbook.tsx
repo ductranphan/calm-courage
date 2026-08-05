@@ -10,8 +10,8 @@
  * - selected tool indicated using a shadow
  * - fixed child-mode footer
  *
- * Drawings currently remain in component state.
- * Audio recordings are saved locally on the device.
+ * Save uploads audio to Firebase Storage and stores drawing JSON in
+ * Firestore. Saving enough pages completes the Proud Moment activity.
  */
 
 import {
@@ -50,6 +50,7 @@ import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
 import { useChildRewards } from "@/hooks/useChildRewards";
+import { saveWorkbookPage } from "@/services/childMedia";
 import { getChild } from "@/services/children";
 import { x, y } from "@/utils/scaling";
 
@@ -864,23 +865,45 @@ export default function DigitalWorkbookScreen() {
   }
 
   /**
-   * Saves only the workbook drawing state.
+   * Saves drawing (+ optional local audio) to Firebase for this page.
    */
-  function handleSaveDrawing(): void {
-    console.log(
-      "Workbook drawing saved:",
-      {
-        childId: activeChild?.id,
-        pageId:
-          currentWorkbookPage.id,
-        drawing:
-          drawingPages[activePage],
-        savedAudio:
-          savedAudioUris[
-            activePage
-          ] ?? null,
-      },
-    );
+  async function handleSaveDrawing(): Promise<void> {
+    if (!user?.uid || !activeChild?.id) {
+      setSavedMessage(true);
+      return;
+    }
+
+    try {
+      await saveWorkbookPage(
+        user.uid,
+        activeChild.id,
+        {
+          pageIndex: activePage,
+          pageId: currentWorkbookPage.id,
+          audioLocalUri:
+            savedAudioUris[activePage] ?? null,
+          drawingPayload: JSON.stringify(
+            drawingPages[activePage] ?? [],
+          ),
+          tryCompleteProudMoment: true,
+          requiredPageCount: PAGE_COUNT,
+        },
+      );
+
+      console.log("Workbook page saved:", {
+        childId: activeChild.id,
+        pageId: currentWorkbookPage.id,
+      });
+    } catch (saveError) {
+      console.error(
+        "Unable to save workbook page:",
+        saveError,
+      );
+      Alert.alert(
+        "Save failed",
+        "Your drawing is still on this device, but cloud save failed. Please try again.",
+      );
+    }
 
     setSavedMessage(true);
 
@@ -1279,7 +1302,9 @@ export default function DigitalWorkbookScreen() {
               pressed &&
                 styles.saveButtonPressed,
             ]}
-            onPress={handleSaveDrawing}
+            onPress={() => {
+              void handleSaveDrawing();
+            }}
             accessibilityRole="button"
             accessibilityLabel="Save workbook drawing and earn a star"
           >

@@ -25,7 +25,9 @@ import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   getChildActivityProgress,
+  getRecentCompletions,
   seedPhaseActivities,
+  type RecentCompletion,
 } from "@/services/activityAttempts";
 import { getTodayCheckIn } from "@/services/checkIns";
 import { listChildren } from "@/services/children";
@@ -42,9 +44,8 @@ type DashboardData = {
   childAge: number;
   avatarId: AvatarId;
   todaysMood: EmotionId | null;
-
-  /* Activity progress will be populated when attempts are connected. */
   progress: ProgressData | null;
+  recentCompletions: RecentCompletion[];
 };
 
 type Options = {
@@ -206,6 +207,13 @@ export function useParentDashboardData(
             1,
           );
 
+        const recentCompletions =
+          await getRecentCompletions(
+            user.uid,
+            selectedChild.id,
+            5,
+          );
+
         if (stillMounted) {
           setData({
             childId: selectedChild.id,
@@ -218,6 +226,7 @@ export function useParentDashboardData(
               ),
             todaysMood,
             progress,
+            recentCompletions,
           });
         }
       } catch (loadError) {
@@ -299,5 +308,16 @@ export function useParentDashboardData(
     activitiesLabel: data?.progress
       ? `(${data.progress.completedActivities}/${data.progress.totalActivities} Activities Done)`
       : "",
+
+    recentCompletions:
+      data?.recentCompletions ?? [],
+
+    recentCompletionsLabel:
+      data?.recentCompletions &&
+      data.recentCompletions.length > 0
+        ? data.recentCompletions
+            .map((item) => item.title)
+            .join(" · ")
+        : "No games completed yet this phase",
   };
 }

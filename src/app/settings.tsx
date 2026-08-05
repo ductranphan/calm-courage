@@ -181,7 +181,7 @@ export default function SettingsScreen() {
   }
 
   function handleHelpSupport() {
-    router.push("/help-support");
+    router.push("/help-support" as Href);
   }
 
   function handleLegalDocuments() {

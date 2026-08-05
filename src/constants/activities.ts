@@ -76,3 +76,23 @@ export const ACTIVITIES_BY_ID: Record<string, CatalogActivity> =
 export function getActivitiesForPhase(phase: number): CatalogActivity[] {
   return PHASE_1_ACTIVITIES.filter((activity) => activity.phase === phase);
 }
+
+/**
+ * Maps child game hubs to the Phase 1 activity they complete at Level 1.
+ * Used by hubs and play-activity to keep rewards consistent.
+ */
+export type GameHubType =
+  | "scenario"
+  | "emotion_puzzle"
+  | "roleplay"
+  | "confidence";
+
+export const GAME_HUB_ACTIVITY_IDS: Record<
+  GameHubType,
+  string
+> = {
+  scenario: "phase1_try_something_new",
+  emotion_puzzle: "phase1_brave_breath",
+  roleplay: "phase1_kind_words",
+  confidence: "phase1_proud_moment",
+};

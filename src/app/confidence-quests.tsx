@@ -21,6 +21,8 @@ import {
 import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
+import { useChildRewards } from "@/hooks/useChildRewards";
+import { openGameLevel } from "@/utils/openGameLevel";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -51,12 +53,6 @@ const ROW_DISTANCE = 158;
 const CONTENT_HEIGHT = 2600;
 const FOOTER_SPACE = 125;
 
-const TEMP_REWARDS = {
-  stars: 15,
-  gems: 5,
-  badges: 3,
-};
-
 const miniSessions = Array.from(
   { length: 30 },
   (_, index) => {
@@ -83,6 +79,7 @@ function formatScore(value: number): string {
 export default function ConfidenceQuestsScreen() {
   const { activeChild } = useActiveChild();
   const { childModeActive } = useParentAccess();
+  const rewards = useChildRewards(activeChild?.id);
 
   const [audioEnabled, setAudioEnabled] =
     useState(false);
@@ -98,13 +95,7 @@ export default function ConfidenceQuestsScreen() {
   function handleMiniSessionPress(
     sessionNumber: number,
   ) {
-    /*
-     * Connect each mini session later.
-     */
-
-    console.log(
-      `Confidence mini session ${sessionNumber} selected`,
-    );
+    openGameLevel("confidence", sessionNumber);
   }
 
   function handleBack() {
@@ -193,7 +184,7 @@ export default function ConfidenceQuestsScreen() {
             </View>
 
             <Text style={styles.starValue}>
-              {TEMP_REWARDS.stars}
+              {rewards.stars}
             </Text>
 
             <View style={styles.diamondIcon}>
@@ -204,9 +195,7 @@ export default function ConfidenceQuestsScreen() {
             </View>
 
             <Text style={styles.gemValue}>
-              {formatScore(
-                TEMP_REWARDS.gems,
-              )}
+              {formatScore(rewards.gems)}
             </Text>
 
             <View style={styles.badgeIcon}>
@@ -217,9 +206,7 @@ export default function ConfidenceQuestsScreen() {
             </View>
 
             <Text style={styles.badgeValue}>
-              {formatScore(
-                TEMP_REWARDS.badges,
-              )}
+              {formatScore(rewards.badges.length)}
             </Text>
           </View>
 
