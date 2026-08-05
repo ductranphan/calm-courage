@@ -1,10 +1,15 @@
 /**
- * Loads live star / gem / badge totals for the active child from Firestore.
- * Refreshes whenever the screen gains focus so completions show up immediately.
+ * Loads a child's star, gem, and badge totals from Firestore.
+ *
+ * The data is refreshed whenever the current screen gains focus, so
+ * newly awarded rewards appear when the child returns to the workbook.
  */
 
 import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import {
+  useCallback,
+  useState,
+} from "react";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { getChild } from "@/services/children";
@@ -27,8 +32,11 @@ export function useChildRewards(
   childId: string | null | undefined,
 ): ChildRewardsState {
   const { user } = useAuth();
+
   const [rewards, setRewards] =
-    useState<ChildRewardsState>(EMPTY_REWARDS);
+    useState<ChildRewardsState>(
+      EMPTY_REWARDS,
+    );
 
   useFocusEffect(
     useCallback(() => {
@@ -42,6 +50,7 @@ export function useChildRewards(
               loading: false,
             });
           }
+
           return;
         }
 
@@ -53,7 +62,10 @@ export function useChildRewards(
         }
 
         try {
-          const child = await getChild(user.uid, childId);
+          const child = await getChild(
+            user.uid,
+            childId,
+          );
 
           if (!stillMounted) {
             return;
@@ -64,13 +76,28 @@ export function useChildRewards(
               ...EMPTY_REWARDS,
               loading: false,
             });
+
             return;
           }
 
           setRewards({
-            stars: child.stars,
-            gems: child.gems,
-            badges: child.badges,
+            stars:
+              typeof child.stars ===
+              "number"
+                ? child.stars
+                : 0,
+
+            gems:
+              typeof child.gems ===
+              "number"
+                ? child.gems
+                : 0,
+
+            badges:
+              Array.isArray(child.badges)
+                ? child.badges
+                : [],
+
             loading: false,
           });
         } catch (loadError) {
@@ -93,7 +120,7 @@ export function useChildRewards(
       return () => {
         stillMounted = false;
       };
-    }, [user?.uid, childId]),
+    }, [childId, user?.uid]),
   );
 
   return rewards;

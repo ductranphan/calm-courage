@@ -1,5 +1,7 @@
 /**
  * Reward unlock popup shown after completing a quest.
+ *
+ * This is a modal overlay, not a separate Expo Router page.
  */
 
 import {

@@ -21,6 +21,7 @@ import {
   type User,
 } from "firebase/auth";
 import {
+  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -36,11 +37,18 @@ import { CONSENT_VERSION } from "@/constants/consent";
 import { hashPin } from "@/utils/pin";
 
 const PARENT_COLLECTION = "parents";
+const ACCOUNT_DELETION_FEEDBACK_COLLECTION =
+  "accountDeletionFeedback";
 
 export type SignUpConsent = {
   termsOfUse: boolean;
   privacyPolicy: boolean;
   parentGuardianConsent: boolean;
+};
+
+export type AccountDeletionFeedbackInput = {
+  reasons: string[];
+  feedback: string;
 };
 
 export type UserProfile = {
@@ -64,7 +72,9 @@ export type UserProfile = {
  * Converts Firebase error codes into messages that can be shown
  * directly inside the application.
  */
-export function mapAuthError(code: string): string {
+export function mapAuthError(
+  code: string,
+): string {
   switch (code) {
     case "auth/invalid-email":
       return "Please enter a valid email address.";
@@ -105,7 +115,9 @@ export function mapAuthError(code: string): string {
   }
 }
 
-function getErrorCode(error: unknown): string | null {
+function getErrorCode(
+  error: unknown,
+): string | null {
   if (
     typeof error === "object" &&
     error !== null &&
@@ -118,14 +130,19 @@ function getErrorCode(error: unknown): string | null {
   return null;
 }
 
-function getErrorMessage(error: unknown): string {
+function getErrorMessage(
+  error: unknown,
+): string {
   const code = getErrorCode(error);
 
   if (code) {
     return mapAuthError(code);
   }
 
-  if (error instanceof Error && error.message) {
+  if (
+    error instanceof Error &&
+    error.message
+  ) {
     return error.message;
   }
 
@@ -138,8 +155,14 @@ function getErrorMessage(error: unknown): string {
  * Firestore path:
  * parents/{userId}
  */
-function parentDocument(userId: string) {
-  return doc(db, PARENT_COLLECTION, userId);
+function parentDocument(
+  userId: string,
+) {
+  return doc(
+    db,
+    PARENT_COLLECTION,
+    userId,
+  );
 }
 
 /**
@@ -156,41 +179,55 @@ async function createParentProfile(
 ): Promise<void> {
   const acceptedAt = serverTimestamp();
 
-  await setDoc(parentDocument(user.uid), {
-    email: user.email ?? "",
-    pinHash,
-    createdAt: serverTimestamp(),
+  await setDoc(
+    parentDocument(user.uid),
+    {
+      email: user.email ?? "",
+      pinHash,
+      createdAt: serverTimestamp(),
 
-    onboardingComplete: false,
+      onboardingComplete: false,
 
-    /*
-     * Three consent agreements are required at sign-up and recorded
-     * individually for Privacy Policy / store disclosures.
-     */
-    termsOfUseAccepted: consent.termsOfUse,
-    termsOfUseAcceptedAt: acceptedAt,
-    privacyPolicyAccepted: consent.privacyPolicy,
-    privacyPolicyAcceptedAt: acceptedAt,
-    parentGuardianConsentAccepted: consent.parentGuardianConsent,
-    parentGuardianConsentAcceptedAt: acceptedAt,
-    consentVersion: CONSENT_VERSION,
+      /*
+       * Three consent agreements are required at sign-up and recorded
+       * individually for Privacy Policy / store disclosures.
+       */
+      termsOfUseAccepted:
+        consent.termsOfUse,
+      termsOfUseAcceptedAt:
+        acceptedAt,
 
-    /*
-     * Legacy combined flag kept for older screens that still read it.
-     */
-    termsAccepted:
-      consent.termsOfUse &&
-      consent.privacyPolicy &&
-      consent.parentGuardianConsent,
-    termsAcceptedAt: acceptedAt,
-  });
+      privacyPolicyAccepted:
+        consent.privacyPolicy,
+      privacyPolicyAcceptedAt:
+        acceptedAt,
+
+      parentGuardianConsentAccepted:
+        consent.parentGuardianConsent,
+      parentGuardianConsentAcceptedAt:
+        acceptedAt,
+
+      consentVersion: CONSENT_VERSION,
+
+      /*
+       * Legacy combined flag kept for older screens that still read it.
+       */
+      termsAccepted:
+        consent.termsOfUse &&
+        consent.privacyPolicy &&
+        consent.parentGuardianConsent,
+      termsAcceptedAt: acceptedAt,
+    },
+  );
 }
 
 export async function getUserProfile(
   userId: string,
 ): Promise<UserProfile | null> {
   try {
-    const snapshot = await getDoc(parentDocument(userId));
+    const snapshot = await getDoc(
+      parentDocument(userId),
+    );
 
     if (!snapshot.exists()) {
       return null;
@@ -199,8 +236,16 @@ export async function getUserProfile(
     const data = snapshot.data();
 
     return {
-      email: typeof data.email === "string" ? data.email : "",
-      pinHash: typeof data.pinHash === "string" ? data.pinHash : "",
+      email:
+        typeof data.email === "string"
+          ? data.email
+          : "",
+
+      pinHash:
+        typeof data.pinHash === "string"
+          ? data.pinHash
+          : "",
+
       createdAt: data.createdAt,
 
       onboardingComplete:
@@ -228,18 +273,22 @@ export async function getUserProfile(
         data.privacyPolicyAcceptedAt,
 
       parentGuardianConsentAccepted:
-        data.parentGuardianConsentAccepted === true,
+        data.parentGuardianConsentAccepted ===
+        true,
 
       parentGuardianConsentAcceptedAt:
         data.parentGuardianConsentAcceptedAt,
 
       consentVersion:
-        typeof data.consentVersion === "string"
+        typeof data.consentVersion ===
+        "string"
           ? data.consentVersion
           : undefined,
     };
   } catch (error) {
-    throw new Error(getErrorMessage(error));
+    throw new Error(
+      getErrorMessage(error),
+    );
   }
 }
 
@@ -254,23 +303,29 @@ export async function verifyParentPin(
   userId: string,
   pin: string,
 ): Promise<boolean> {
-  const currentUser = auth.currentUser;
+  const currentUser =
+    auth.currentUser;
 
   if (!currentUser) {
-    throw new Error("You must be signed in to verify your PIN.");
+    throw new Error(
+      "You must be signed in to verify your PIN.",
+    );
   }
 
   /*
    * Prevent attempting to read another parent's profile.
    * This also matches the Firestore security rules.
    */
-  if (currentUser.uid !== userId) {
+  if (
+    currentUser.uid !== userId
+  ) {
     throw new Error(
       "You do not have permission to access this parent profile.",
     );
   }
 
-  const profile = await getUserProfile(userId);
+  const profile =
+    await getUserProfile(userId);
 
   if (!profile) {
     throw new Error(
@@ -284,30 +339,50 @@ export async function verifyParentPin(
     );
   }
 
-  const enteredPinHash = await hashPin(pin);
+  const enteredPinHash =
+    await hashPin(pin);
 
-  return enteredPinHash === profile.pinHash;
+  return (
+    enteredPinHash ===
+    profile.pinHash
+  );
 }
 
 export async function acceptTerms(
   userId: string,
 ): Promise<void> {
   try {
-    const acceptedAt = serverTimestamp();
+    const acceptedAt =
+      serverTimestamp();
 
-    await updateDoc(parentDocument(userId), {
-      termsAccepted: true,
-      termsAcceptedAt: acceptedAt,
-      termsOfUseAccepted: true,
-      termsOfUseAcceptedAt: acceptedAt,
-      privacyPolicyAccepted: true,
-      privacyPolicyAcceptedAt: acceptedAt,
-      parentGuardianConsentAccepted: true,
-      parentGuardianConsentAcceptedAt: acceptedAt,
-      consentVersion: CONSENT_VERSION,
-    });
+    await updateDoc(
+      parentDocument(userId),
+      {
+        termsAccepted: true,
+        termsAcceptedAt: acceptedAt,
+
+        termsOfUseAccepted: true,
+        termsOfUseAcceptedAt:
+          acceptedAt,
+
+        privacyPolicyAccepted: true,
+        privacyPolicyAcceptedAt:
+          acceptedAt,
+
+        parentGuardianConsentAccepted:
+          true,
+
+        parentGuardianConsentAcceptedAt:
+          acceptedAt,
+
+        consentVersion:
+          CONSENT_VERSION,
+      },
+    );
   } catch (error) {
-    throw new Error(getErrorMessage(error));
+    throw new Error(
+      getErrorMessage(error),
+    );
   }
 }
 
@@ -315,12 +390,18 @@ export async function completeOnboarding(
   userId: string,
 ): Promise<void> {
   try {
-    await updateDoc(parentDocument(userId), {
-      onboardingComplete: true,
-      onboardingCompletedAt: serverTimestamp(),
-    });
+    await updateDoc(
+      parentDocument(userId),
+      {
+        onboardingComplete: true,
+        onboardingCompletedAt:
+          serverTimestamp(),
+      },
+    );
   } catch (error) {
-    throw new Error(getErrorMessage(error));
+    throw new Error(
+      getErrorMessage(error),
+    );
   }
 }
 
@@ -334,7 +415,8 @@ export async function signUp(
   pin: string,
   consent: SignUpConsent,
 ): Promise<User> {
-  let createdUser: User | null = null;
+  let createdUser: User | null =
+    null;
 
   if (
     !consent.termsOfUse ||
@@ -347,11 +429,11 @@ export async function signUp(
   }
 
   try {
-    const normalizedEmail = email
-      .trim()
-      .toLowerCase();
+    const normalizedEmail =
+      email.trim().toLowerCase();
 
-    const pinHash = await hashPin(pin);
+    const pinHash =
+      await hashPin(pin);
 
     const credential =
       await createUserWithEmailAndPassword(
@@ -360,7 +442,8 @@ export async function signUp(
         password,
       );
 
-    createdUser = credential.user;
+    createdUser =
+      credential.user;
 
     /*
      * Firebase Authentication automatically signs in the new user.
@@ -383,7 +466,9 @@ export async function signUp(
      */
     if (createdUser) {
       try {
-        await deleteUser(createdUser);
+        await deleteUser(
+          createdUser,
+        );
       } catch (cleanupError) {
         console.error(
           "Unable to remove incomplete Firebase account:",
@@ -392,7 +477,9 @@ export async function signUp(
       }
     }
 
-    throw new Error(getErrorMessage(error));
+    throw new Error(
+      getErrorMessage(error),
+    );
   }
 }
 
@@ -401,9 +488,8 @@ export async function signIn(
   password: string,
 ): Promise<User> {
   try {
-    const normalizedEmail = email
-      .trim()
-      .toLowerCase();
+    const normalizedEmail =
+      email.trim().toLowerCase();
 
     const credential =
       await signInWithEmailAndPassword(
@@ -414,7 +500,9 @@ export async function signIn(
 
     return credential.user;
   } catch (error) {
-    throw new Error(getErrorMessage(error));
+    throw new Error(
+      getErrorMessage(error),
+    );
   }
 }
 
@@ -422,7 +510,9 @@ export async function signOutUser(): Promise<void> {
   try {
     await signOut(auth);
   } catch (error) {
-    throw new Error(getErrorMessage(error));
+    throw new Error(
+      getErrorMessage(error),
+    );
   }
 }
 
@@ -430,16 +520,17 @@ export async function resetPassword(
   email: string,
 ): Promise<void> {
   try {
-    const normalizedEmail = email
-      .trim()
-      .toLowerCase();
+    const normalizedEmail =
+      email.trim().toLowerCase();
 
     await sendPasswordResetEmail(
       auth,
       normalizedEmail,
     );
   } catch (error) {
-    throw new Error(getErrorMessage(error));
+    throw new Error(
+      getErrorMessage(error),
+    );
   }
 }
 
@@ -447,13 +538,19 @@ export async function sendVerificationEmail(): Promise<void> {
   const user = auth.currentUser;
 
   if (!user) {
-    throw new Error("No signed-in user found.");
+    throw new Error(
+      "No signed-in user found.",
+    );
   }
 
   try {
-    await sendEmailVerification(user);
+    await sendEmailVerification(
+      user,
+    );
   } catch (error) {
-    throw new Error(getErrorMessage(error));
+    throw new Error(
+      getErrorMessage(error),
+    );
   }
 }
 
@@ -461,7 +558,9 @@ export async function reloadCurrentUser(): Promise<User | null> {
   const user = auth.currentUser;
 
   if (!user) {
-    throw new Error("No signed-in user found.");
+    throw new Error(
+      "No signed-in user found.",
+    );
   }
 
   try {
@@ -469,7 +568,9 @@ export async function reloadCurrentUser(): Promise<User | null> {
 
     return auth.currentUser;
   } catch (error) {
-    throw new Error(getErrorMessage(error));
+    throw new Error(
+      getErrorMessage(error),
+    );
   }
 }
 
@@ -490,64 +591,187 @@ async function deleteQueryDocuments(
   );
 
   await Promise.all(
-    snapshot.docs.map((documentSnapshot) =>
-      deleteDoc(documentSnapshot.ref),
+    snapshot.docs.map(
+      (documentSnapshot) =>
+        deleteDoc(
+          documentSnapshot.ref,
+        ),
     ),
   );
 }
 
+function normalizeDeletionFeedback(
+  input:
+    | AccountDeletionFeedbackInput
+    | undefined,
+): AccountDeletionFeedbackInput {
+  const uniqueReasons = Array.from(
+    new Set(
+      (input?.reasons ?? [])
+        .filter(
+          (reason): reason is string =>
+            typeof reason ===
+              "string" &&
+            reason.trim().length > 0,
+        )
+        .map((reason) =>
+          reason.trim(),
+        ),
+    ),
+  ).slice(0, 5);
+
+  const feedback =
+    typeof input?.feedback ===
+    "string"
+      ? input.feedback
+          .trim()
+          .slice(0, 500)
+      : "";
+
+  return {
+    reasons: uniqueReasons,
+    feedback,
+  };
+}
+
+async function saveAccountDeletionFeedback(
+  parentId: string,
+  input:
+    | AccountDeletionFeedbackInput
+    | undefined,
+): Promise<void> {
+  const normalized =
+    normalizeDeletionFeedback(
+      input,
+    );
+
+  await addDoc(
+    collection(
+      db,
+      ACCOUNT_DELETION_FEEDBACK_COLLECTION,
+    ),
+    {
+      parentId,
+      reasons:
+        normalized.reasons,
+      feedback:
+        normalized.feedback,
+      createdAt:
+        serverTimestamp(),
+    },
+  );
+}
+
 /**
- * Permanently deletes the signed-in parent's Auth account and all
- * Firestore data under parents/{uid}, including children, check-ins,
- * and activity attempts.
+ * Permanently deletes the signed-in parent's Firebase Authentication
+ * account and the known Firestore data under parents/{uid}, including
+ * children, check-ins, and activity attempts.
  *
- * Requires the account password so Firebase can reauthenticate before
- * deleting the Auth user.
+ * The password is used to reauthenticate before any feedback is saved
+ * or destructive work begins.
+ *
+ * Account-deletion feedback is optional. A feedback-write failure is
+ * logged, but it never blocks the user's account-deletion request.
  */
 export async function deleteParentAccount(
   password: string,
+  deletionFeedback?: AccountDeletionFeedbackInput,
 ): Promise<void> {
   const user = auth.currentUser;
 
   if (!user?.email) {
-    throw new Error("You must be signed in to delete your account.");
+    throw new Error(
+      "You must be signed in to delete your account.",
+    );
   }
 
   if (!password.trim()) {
-    throw new Error("Please enter your password to delete your account.");
+    throw new Error(
+      "Please enter your password to delete your account.",
+    );
   }
 
   try {
-    const credential = EmailAuthProvider.credential(
-      user.email,
-      password,
+    const credential =
+      EmailAuthProvider.credential(
+        user.email,
+        password,
+      );
+
+    await reauthenticateWithCredential(
+      user,
+      credential,
     );
 
-    await reauthenticateWithCredential(user, credential);
+    /*
+     * Save feedback only after the password has been verified.
+     * The feedback collection is outside parents/{uid}, so it remains
+     * available after the parent profile is deleted.
+     *
+     * Do not block account deletion if this optional write fails.
+     */
+    try {
+      await saveAccountDeletionFeedback(
+        user.uid,
+        deletionFeedback,
+      );
+    } catch (feedbackError) {
+      console.error(
+        "Unable to save account deletion feedback:",
+        feedbackError,
+      );
+    }
 
-    const childrenSnapshot = await getDocs(
-      collection(db, PARENT_COLLECTION, user.uid, "children"),
-    );
+    const childrenSnapshot =
+      await getDocs(
+        collection(
+          db,
+          PARENT_COLLECTION,
+          user.uid,
+          "children",
+        ),
+      );
 
-    for (const childDoc of childrenSnapshot.docs) {
-      await deleteQueryDocuments(user.uid, childDoc.id, "checkIns");
+    for (
+      const childDoc of
+      childrenSnapshot.docs
+    ) {
+      await deleteQueryDocuments(
+        user.uid,
+        childDoc.id,
+        "checkIns",
+      );
+
       await deleteQueryDocuments(
         user.uid,
         childDoc.id,
         "activityAttempts",
       );
-      await deleteDoc(childDoc.ref);
+
+      await deleteDoc(
+        childDoc.ref,
+      );
     }
 
-    await deleteDoc(parentDocument(user.uid));
+    await deleteDoc(
+      parentDocument(user.uid),
+    );
+
     await deleteUser(user);
   } catch (error) {
-    throw new Error(getErrorMessage(error));
+    throw new Error(
+      getErrorMessage(error),
+    );
   }
 }
 
 export function subscribeToAuthChanges(
-  callback: (user: User | null) => void,
+  callback: (
+    user: User | null,
+  ) => void,
 ) {
-  return onAuthStateChanged(auth, callback);
+  return onAuthStateChanged(
+    auth,
+    callback,
+  );
 }

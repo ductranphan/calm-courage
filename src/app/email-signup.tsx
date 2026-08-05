@@ -2,7 +2,7 @@
  * Email sign-up screen.
  *
  * Matches Figma Screen 2.0: Parent Sign-Up & Security.
- * Collects the parent's email, password, PIN, and three consent agreements.
+ * Collects email, password, PIN, and the three required consent records.
  */
 
 import { router } from "expo-router";
