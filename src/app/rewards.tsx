@@ -1,15 +1,16 @@
 /**
  * Child Rewards and Achievements screen.
  *
- * Matches Figma Screen 9.0.
- *
- * Reward totals and badge unlock states are temporary visual values
- * until activityAttempts and reward persistence are connected.
+ * Displays:
+ * - the Figma empty state when the child has not earned any badges
+ * - the collected-badges screen after at least one badge is earned
+ * - a full child-mode error state when Firestore cannot load rewards
  */
 
 import { router, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,6 +18,7 @@ import {
   View,
 } from "react-native";
 
+import ErrorStateScreen from "@/components/ui/ErrorStateScreen";
 import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
@@ -35,6 +37,7 @@ import WorkbookDashboardIcon from "../../assets/icons/workbook-dashboard.svg";
 import BraveSpeakerBadge from "../../assets/images/brave-speaker.svg";
 import HelperFriendBadge from "../../assets/images/helper-friend.svg";
 import KindVoiceBadge from "../../assets/images/kind-voice.svg";
+import RewardsEmptyStateIllustration from "../../assets/images/rewards-empty-state.svg";
 
 const FIGMA_CONTENT_HEIGHT = 1100;
 const FOOTER_SPACE = 125;
@@ -72,8 +75,248 @@ export default function RewardsScreen() {
     );
   }
 
+  function handleExploreQuests() {
+    router.replace(
+      "/child-dashboard" as Href,
+    );
+  }
+
+  function renderAudioButton() {
+    return (
+      <Pressable
+        style={({ pressed }) => [
+          styles.audioButton,
+          pressed && styles.controlPressed,
+        ]}
+        onPress={() =>
+          setAudioEnabled(
+            (current) => !current,
+          )
+        }
+        accessibilityRole="button"
+        accessibilityLabel={
+          audioEnabled
+            ? "Turn audio off"
+            : "Turn audio on"
+        }
+        accessibilityState={{
+          selected: audioEnabled,
+        }}
+        hitSlop={8}
+      >
+        {audioEnabled ? (
+          <AudioOnIcon
+            width={x(35)}
+            height={y(35)}
+          />
+        ) : (
+          <AudioOffIcon
+            width={x(35)}
+            height={y(35)}
+          />
+        )}
+      </Pressable>
+    );
+  }
+
+  function renderFooter() {
+    return (
+      <View style={styles.fixedFooter}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.parentModeLink,
+            pressed && styles.controlPressed,
+          ]}
+          onPress={handleParentMode}
+          accessibilityRole="button"
+          accessibilityLabel="Switch to Parent Mode"
+        >
+          <Text style={styles.parentModeText}>
+            Switch to Parent Mode
+          </Text>
+        </Pressable>
+
+        <View style={styles.bottomNav}>
+          <Pressable
+            style={styles.navItem}
+            onPress={() =>
+              router.replace(
+                "/digital-workbook" as Href,
+              )
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Workbook"
+          >
+            <View style={styles.inactiveNavIcon}>
+              <WorkbookDashboardIcon
+                width={x(41.94)}
+                height={y(40.07)}
+              />
+            </View>
+
+            <Text style={styles.navLabel}>
+              Workbook
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.navItem}
+            onPress={() =>
+              router.replace(
+                "/child-dashboard" as Href,
+              )
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Home"
+          >
+            <View style={styles.inactiveNavIcon}>
+              <HouseIcon
+                width={x(40)}
+                height={y(40)}
+              />
+            </View>
+
+            <Text style={styles.navLabel}>
+              Home
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.navItem}
+            onPress={() => {
+              // Already on Rewards.
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Rewards"
+            accessibilityState={{
+              selected: true,
+            }}
+          >
+            <StarIcon
+              width={x(42)}
+              height={y(42)}
+            />
+
+            <Text style={styles.navLabel}>
+              Rewards
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   if (!childModeActive || !activeChild) {
     return null;
+  }
+
+  if (rewards.loading) {
+    return (
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator
+          size="large"
+          color={colors.primary}
+        />
+
+        <Text style={styles.loadingText}>
+          Loading rewards...
+        </Text>
+      </View>
+    );
+  }
+
+  if (rewards.error) {
+    return (
+      <ErrorStateScreen
+        activeTab="rewards"
+        message={rewards.error}
+        onRetry={rewards.retry}
+      />
+    );
+  }
+
+  const hasCollectedBadges =
+    rewards.badges.length > 0;
+
+  if (!hasCollectedBadges) {
+    return (
+      <View style={styles.screen}>
+        <View style={styles.emptyStateContent}>
+          {renderAudioButton()}
+
+          <Text style={styles.title}>
+            My Rewards
+          </Text>
+
+          <StarIcon
+            width={x(45)}
+            height={y(45)}
+            style={styles.emptyStarIcon}
+          />
+
+          <Text style={styles.emptyStarText}>
+            {rewards.stars} Stars
+          </Text>
+
+          <DiamondIcon
+            width={x(37.72)}
+            height={y(37.54)}
+            style={styles.emptyDiamondIcon}
+          />
+
+          <Text style={styles.emptyGemText}>
+            {rewards.gems} Gems
+          </Text>
+
+          <View style={styles.divider} />
+
+          <BadgeIcon
+            width={x(46)}
+            height={y(46)}
+            style={styles.badgeHeaderIcon}
+          />
+
+          <Text style={styles.badgeHeaderText}>
+            Collected Badges
+          </Text>
+
+          <Text style={styles.emptyBadgeCountText}>
+            0/{TOTAL_BADGE_SLOTS}
+          </Text>
+
+          <RewardsEmptyStateIllustration
+            width={x(200)}
+            height={y(143)}
+            style={styles.emptyIllustration}
+          />
+
+          <Text style={styles.emptyTitle}>
+            No badges earned yet!
+          </Text>
+
+          <Text style={styles.emptyMessage}>
+            Complete your first quest to unlock{"\n"}
+            special rewards and badges!
+          </Text>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.exploreButton,
+              pressed && styles.controlPressed,
+            ]}
+            onPress={handleExploreQuests}
+            accessibilityRole="button"
+            accessibilityLabel="Explore Quests"
+          >
+            <Text style={styles.exploreButtonText}>
+              Explore Quests
+            </Text>
+          </Pressable>
+        </View>
+
+        {renderFooter()}
+      </View>
+    );
   }
 
   return (
@@ -90,39 +333,7 @@ export default function RewardsScreen() {
         contentInsetAdjustmentBehavior="never"
       >
         <View style={styles.figmaContent}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.audioButton,
-              pressed && styles.controlPressed,
-            ]}
-            onPress={() =>
-              setAudioEnabled(
-                (current) => !current,
-              )
-            }
-            accessibilityRole="button"
-            accessibilityLabel={
-              audioEnabled
-                ? "Turn audio off"
-                : "Turn audio on"
-            }
-            accessibilityState={{
-              selected: audioEnabled,
-            }}
-            hitSlop={8}
-          >
-            {audioEnabled ? (
-              <AudioOnIcon
-                width={x(35)}
-                height={y(35)}
-              />
-            ) : (
-              <AudioOffIcon
-                width={x(35)}
-                height={y(35)}
-              />
-            )}
-          </Pressable>
+          {renderAudioButton()}
 
           <Text style={styles.title}>
             My Rewards
@@ -218,93 +429,27 @@ export default function RewardsScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.fixedFooter}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.parentModeLink,
-            pressed && styles.controlPressed,
-          ]}
-          onPress={handleParentMode}
-          accessibilityRole="button"
-          accessibilityLabel="Switch to Parent Mode"
-        >
-          <Text style={styles.parentModeText}>
-            Switch to Parent Mode
-          </Text>
-        </Pressable>
-
-        <View style={styles.bottomNav}>
-          <Pressable
-            style={styles.navItem}
-            onPress={() =>
-              router.replace(
-                "/digital-workbook" as Href,
-              )
-            }
-            accessibilityRole="button"
-            accessibilityLabel="Workbook"
-          >
-            <View style={styles.inactiveNavIcon}>
-              <WorkbookDashboardIcon
-                width={x(41.94)}
-                height={y(40.07)}
-              />
-            </View>
-
-            <Text style={styles.navLabel}>
-              Workbook
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.navItem}
-            onPress={() =>
-              router.replace(
-                "/child-dashboard" as Href,
-              )
-            }
-            accessibilityRole="button"
-            accessibilityLabel="Home"
-          >
-            <View style={styles.inactiveNavIcon}>
-              <HouseIcon
-                width={x(40)}
-                height={y(40)}
-              />
-            </View>
-
-            <Text style={styles.navLabel}>
-              Home
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.navItem}
-            onPress={() => {
-              // Already on Rewards.
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Rewards"
-            accessibilityState={{
-              selected: true,
-            }}
-          >
-            <StarIcon
-              width={x(42)}
-              height={y(42)}
-            />
-
-            <Text style={styles.navLabel}>
-              Rewards
-            </Text>
-          </Pressable>
-        </View>
-      </View>
+      {renderFooter()}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  loadingScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: PAGE_BACKGROUND,
+  },
+
+  loadingText: {
+    marginTop: y(14),
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(17),
+    lineHeight: y(24),
+  },
+
   screen: {
     flex: 1,
     position: "relative",
@@ -332,6 +477,13 @@ const styles = StyleSheet.create({
     backgroundColor: PAGE_BACKGROUND,
   },
 
+  emptyStateContent: {
+    position: "relative",
+    width: "100%",
+    height: "100%",
+    backgroundColor: PAGE_BACKGROUND,
+  },
+
   audioButton: {
     position: "absolute",
     left: x(347),
@@ -354,6 +506,47 @@ const styles = StyleSheet.create({
     fontSize: x(30),
     lineHeight: y(39),
     textAlign: "center",
+    includeFontPadding: false,
+  },
+
+  emptyStarIcon: {
+    position: "absolute",
+    left: x(28),
+    top: y(182),
+  },
+
+  emptyStarText: {
+    position: "absolute",
+    left: x(96),
+    top: y(193),
+    width: x(80),
+    height: y(30),
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(20),
+    lineHeight: y(24),
+    textAlign: "left",
+    includeFontPadding: false,
+  },
+
+  emptyDiamondIcon: {
+    position: "absolute",
+    left: x(229),
+    top: y(186),
+  },
+
+  emptyGemText: {
+    position: "absolute",
+    left: x(284),
+    top: y(193),
+    width: x(90),
+    height: y(30),
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(20),
+    lineHeight: y(24),
+    textAlign: "left",
+    includeFontPadding: false,
   },
 
   starSummary: {
@@ -379,7 +572,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: x(229),
     top: y(186),
-    width: x(125),
+    width: x(145),
     height: y(37.54),
     flexDirection: "row",
     alignItems: "center",
@@ -418,6 +611,7 @@ const styles = StyleSheet.create({
     fontFamily: "Literata",
     fontSize: x(20),
     lineHeight: y(24),
+    includeFontPadding: false,
   },
 
   badgeCountText: {
@@ -431,6 +625,85 @@ const styles = StyleSheet.create({
     fontSize: x(20),
     lineHeight: y(24),
     textAlign: "right",
+    includeFontPadding: false,
+  },
+
+  emptyBadgeCountText: {
+    position: "absolute",
+    left: x(338),
+    top: y(275),
+    width: x(44),
+    height: y(30),
+    color: colors.primary,
+    fontFamily: "Literata",
+    fontSize: x(20),
+    lineHeight: y(24),
+    textAlign: "right",
+    includeFontPadding: false,
+  },
+
+  emptyIllustration: {
+    position: "absolute",
+    left: x(101),
+    top: y(350),
+  },
+
+  emptyTitle: {
+    position: "absolute",
+    left: x(47),
+    top: y(533),
+    width: x(309),
+    height: y(38),
+    color: colors.primary,
+    fontFamily: "OutfitBold",
+    fontSize: x(30),
+    lineHeight: y(38),
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+
+  emptyMessage: {
+    position: "absolute",
+    left: x(47),
+    top: y(591),
+    width: x(308),
+    height: y(50),
+    color: colors.primary,
+    fontFamily: "Outfit",
+    fontSize: x(20),
+    lineHeight: y(25),
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+
+  exploreButton: {
+    position: "absolute",
+    left: x(96),
+    top: y(661),
+    width: x(210),
+    height: y(52),
+    borderRadius: x(20),
+    backgroundColor: "#E7D8EC",
+    alignItems: "center",
+    justifyContent: "center",
+
+    shadowColor: colors.black,
+    shadowOffset: {
+      width: 0,
+      height: y(4),
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: x(4),
+    elevation: 5,
+  },
+
+  exploreButtonText: {
+    color: colors.primary,
+    fontFamily: "Outfit",
+    fontSize: x(20),
+    lineHeight: y(25),
+    textAlign: "center",
+    includeFontPadding: false,
   },
 
   collectedBadgeRow: {
@@ -511,7 +784,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     top: 0,
-    width: x(217),
+    width: x(250),
     height: y(24),
     justifyContent: "center",
   },
@@ -522,6 +795,7 @@ const styles = StyleSheet.create({
     fontSize: x(20),
     lineHeight: y(24),
     textDecorationLine: "underline",
+    includeFontPadding: false,
   },
 
   bottomNav: {
@@ -559,6 +833,7 @@ const styles = StyleSheet.create({
     fontSize: x(10),
     lineHeight: y(12),
     textAlign: "center",
+    includeFontPadding: false,
   },
 
   controlPressed: {

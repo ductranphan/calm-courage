@@ -31,6 +31,7 @@ import BackIcon from "../../assets/icons/back.svg";
 import BadgeIcon from "../../assets/icons/certificate-badge.svg";
 import DiamondIcon from "../../assets/icons/diamond.svg";
 import HouseIcon from "../../assets/icons/house.svg";
+import LockStateIcon from "../../assets/icons/lock-state.svg";
 import StarIcon from "../../assets/icons/star.svg";
 import WorkbookDashboardIcon from "../../assets/icons/workbook-dashboard.svg";
 
@@ -204,33 +205,59 @@ export default function RoleplayChallengesScreen() {
             </Text>
           </View>
 
-          {activities.map((activity) => (
-            <Pressable
-              key={activity.id}
-              style={[
-                styles.activityCard,
-                {
-                  left: x(activity.left),
-                  top: y(activity.top),
-                },
-              ]}
-              onPress={() =>
-                handleActivityPress(
-                  activity.id,
-                )
-              }
-              accessibilityRole="button"
-              accessibilityLabel={
-                activity.label
-              }
-            >
-              <Text
-                style={styles.activityText}
+          {activities.map((activity) => {
+            const isLocked =
+              activity.id > 1;
+
+            return (
+              <Pressable
+                key={activity.id}
+                style={({ pressed }) => [
+                  styles.activityCard,
+                  {
+                    left: x(activity.left),
+                    top: y(activity.top),
+                  },
+                  isLocked &&
+                    styles.lockedActivityCard,
+                  pressed &&
+                    !isLocked &&
+                    styles.activityCardPressed,
+                ]}
+                onPress={() =>
+                  handleActivityPress(
+                    activity.id,
+                  )
+                }
+                disabled={isLocked}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  activity.label
+                }
+                accessibilityState={{
+                  disabled: isLocked,
+                }}
               >
-                {activity.label}
-              </Text>
-            </Pressable>
-          ))}
+                <Text
+                  style={[
+                    styles.activityText,
+                    isLocked &&
+                      styles.lockedActivityText,
+                  ]}
+                >
+                  {activity.label}
+                </Text>
+
+                {isLocked ? (
+                  <LockStateIcon
+                    width={x(23)}
+                    height={y(30)}
+                    style={styles.lockIcon}
+                  />
+                ) : null}
+              </Pressable>
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -468,6 +495,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: x(4),
     elevation: 5,
+  },
+
+
+  activityCardPressed: {
+    opacity: 0.8,
+  },
+
+  lockedActivityCard: {
+    backgroundColor: "#D9D9D9",
+  },
+
+  lockedActivityText: {
+    color: "#7D7C7C",
+  },
+
+  lockIcon: {
+    marginTop: y(8),
   },
 
   activityText: {

@@ -1,20 +1,18 @@
 /**
  * Application entry route.
  *
- * Waits for Firebase Authentication to restore the saved session, then
- * sends the user to the correct authentication screen.
+ * Displays the Figma loading screen while Firebase restores
+ * the saved session and verifies the current user's state.
  */
 
 import type { User } from "firebase/auth";
 import { Redirect } from "expo-router";
-import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  StyleSheet,
-  View,
-} from "react-native";
+  useEffect,
+  useState,
+} from "react";
 
-import { colors } from "@/constants/colors";
+import LoadingScreen from "@/components/ui/LoadingScreen";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function Index() {
@@ -24,8 +22,13 @@ export default function Index() {
     reloadUser,
   } = useAuth();
 
-  const [resolvedUser, setResolvedUser] = useState<User | null>(null);
-  const [checkingVerification, setCheckingVerification] = useState(true);
+  const [resolvedUser, setResolvedUser] =
+    useState<User | null>(null);
+
+  const [
+    checkingVerification,
+    setCheckingVerification,
+  ] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,10 +47,13 @@ export default function Index() {
       setCheckingVerification(true);
 
       try {
-        const refreshedUser = await reloadUser();
+        const refreshedUser =
+          await reloadUser();
 
         if (!cancelled) {
-          setResolvedUser(refreshedUser ?? user);
+          setResolvedUser(
+            refreshedUser ?? user,
+          );
         }
       } catch (error) {
         console.error(
@@ -70,35 +76,32 @@ export default function Index() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, user, reloadUser]);
+  }, [
+    authLoading,
+    user,
+    reloadUser,
+  ]);
 
-  if (authLoading || checkingVerification) {
-    return (
-      <View style={styles.loadingScreen}>
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-        />
-      </View>
-    );
+  if (
+    authLoading ||
+    checkingVerification
+  ) {
+    return <LoadingScreen />;
   }
 
   if (!resolvedUser) {
-    return <Redirect href="/onboarding" />;
+    return (
+      <Redirect href="/onboarding" />
+    );
   }
 
   if (!resolvedUser.emailVerified) {
-    return <Redirect href="/verify-email" />;
+    return (
+      <Redirect href="/verify-email" />
+    );
   }
 
-  return <Redirect href="/parent-verification" />;
+  return (
+    <Redirect href="/parent-verification" />
+  );
 }
-
-const styles = StyleSheet.create({
-  loadingScreen: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.background,
-  },
-});

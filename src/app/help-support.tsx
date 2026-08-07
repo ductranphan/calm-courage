@@ -4,11 +4,12 @@
  * Provides searchable and filterable help articles.
  */
 
-import { router } from "expo-router";
+import {
+  router,
+  type Href,
+} from "expo-router";
 import { useMemo, useState } from "react";
 import {
-  Alert,
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -72,7 +73,7 @@ const HELP_ARTICLES: HelpArticle[] = [
     question:
       "How do I manage my Founding Member subscription?",
     answer:
-      "You can manage your subscription in your app store. For our Founding Members, special price locking details are permanently active, as shown in previous billing history. Tap ‘Manage in App Store’ within the ‘Settings’ section.",
+      "You can manage your subscription in your app store. For our Founding Members, special price locking details are permanently active, as shown in previous billing history. Tap “Manage in App Store” within the Settings section.",
   },
   {
     id: "child-data-security",
@@ -110,13 +111,17 @@ export default function HelpSupportScreen() {
   const [searchQuery, setSearchQuery] =
     useState("");
 
-  const [selectedCategory, setSelectedCategory] =
-    useState<HelpCategory>("all");
+  const [
+    selectedCategory,
+    setSelectedCategory,
+  ] = useState<HelpCategory>("all");
 
-  const [expandedArticleId, setExpandedArticleId] =
-    useState<string | null>(
-      "founding-member-subscription",
-    );
+  const [
+    expandedArticleId,
+    setExpandedArticleId,
+  ] = useState<string | null>(
+    "founding-member-subscription",
+  );
 
   const filteredArticles = useMemo(() => {
     const normalizedSearch =
@@ -148,42 +153,20 @@ export default function HelpSupportScreen() {
 
   function toggleArticle(articleId: string) {
     setExpandedArticleId((current) =>
-      current === articleId ? null : articleId,
+      current === articleId
+        ? null
+        : articleId,
     );
   }
 
   function handleSwitchToChildMode() {
-    router.replace("/switch-to-child");
+    router.replace(
+      "/switch-to-child" as Href,
+    );
   }
 
-  async function handleContactUs() {
-    const emailUrl =
-      "mailto:?subject=Calm%20Courage%20Support";
-
-    try {
-      const supported =
-        await Linking.canOpenURL(emailUrl);
-
-      if (!supported) {
-        Alert.alert(
-          "Contact Us",
-          "No email application is available on this device.",
-        );
-        return;
-      }
-
-      await Linking.openURL(emailUrl);
-    } catch (error) {
-      console.error(
-        "Unable to open the email application:",
-        error,
-      );
-
-      Alert.alert(
-        "Contact Us",
-        "Unable to open the email application. Please try again.",
-      );
-    }
+  function handleContactUs() {
+    router.push("/contact-us" as Href);
   }
 
   return (
@@ -197,7 +180,9 @@ export default function HelpSupportScreen() {
             pressed && styles.controlPressed,
           ]}
           onPress={() =>
-            setAudioEnabled((current) => !current)
+            setAudioEnabled(
+              (current) => !current,
+            )
           }
           accessibilityRole="button"
           accessibilityLabel={
@@ -232,7 +217,9 @@ export default function HelpSupportScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={
+          styles.scrollContent
+        }
         showsVerticalScrollIndicator={false}
         bounces={false}
         alwaysBounceVertical={false}
@@ -259,7 +246,9 @@ export default function HelpSupportScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryRow}
+          contentContainerStyle={
+            styles.categoryRow
+          }
           bounces={false}
           alwaysBounceHorizontal={false}
           overScrollMode="never"
@@ -279,7 +268,9 @@ export default function HelpSupportScreen() {
                     styles.controlPressed,
                 ]}
                 onPress={() =>
-                  setSelectedCategory(category.id)
+                  setSelectedCategory(
+                    category.id,
+                  )
                 }
                 accessibilityRole="button"
                 accessibilityLabel={`Show ${category.label} help articles`}
@@ -315,7 +306,8 @@ export default function HelpSupportScreen() {
           ) : (
             filteredArticles.map((article) => {
               const expanded =
-                expandedArticleId === article.id;
+                expandedArticleId ===
+                article.id;
 
               return (
                 <Pressable
@@ -331,20 +323,26 @@ export default function HelpSupportScreen() {
                     toggleArticle(article.id)
                   }
                   accessibilityRole="button"
-                  accessibilityLabel={article.question}
+                  accessibilityLabel={
+                    article.question
+                  }
                   accessibilityState={{
                     expanded,
                   }}
                 >
                   <Text
-                    style={styles.articleQuestion}
+                    style={
+                      styles.articleQuestion
+                    }
                   >
                     {article.question}
                   </Text>
 
                   {expanded ? (
                     <Text
-                      style={styles.articleAnswer}
+                      style={
+                        styles.articleAnswer
+                      }
                     >
                       {article.answer}
                     </Text>
@@ -365,14 +363,13 @@ export default function HelpSupportScreen() {
 
         <View style={styles.contactCard}>
           <Text style={styles.contactTitle}>
-            Still need help? Send us a message
+            Still need help? Send us a
+            message
           </Text>
 
           <AppButton
             title="Contact Us"
-            onPress={() => {
-              void handleContactUs();
-            }}
+            onPress={handleContactUs}
             style={styles.contactButton}
           />
         </View>
@@ -388,13 +385,17 @@ export default function HelpSupportScreen() {
           accessibilityRole="button"
           accessibilityLabel="Switch to child mode"
         >
-          <Text style={styles.switchToChildText}>
+          <Text
+            style={styles.switchToChildText}
+          >
             Switch to Child Mode
           </Text>
         </Pressable>
 
         <View style={styles.bottomNavWrapper}>
-          <ParentBottomNav activeTab="settings" />
+          <ParentBottomNav
+            activeTab="settings"
+          />
         </View>
       </View>
     </View>
@@ -458,7 +459,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: y(215),
     paddingHorizontal: x(20),
-    paddingBottom: y(FOOTER_SCROLL_SPACE),
+    paddingBottom: y(
+      FOOTER_SCROLL_SPACE,
+    ),
     backgroundColor: colors.background,
   },
 
@@ -500,7 +503,11 @@ const styles = StyleSheet.create({
     height: y(2),
     borderRadius: x(2),
     backgroundColor: colors.primary,
-    transform: [{ rotate: "45deg" }],
+    transform: [
+      {
+        rotate: "45deg",
+      },
+    ],
   },
 
   searchInput: {
@@ -620,7 +627,11 @@ const styles = StyleSheet.create({
     borderTopWidth: x(2),
     borderRightWidth: x(2),
     borderColor: colors.primary,
-    transform: [{ rotate: "45deg" }],
+    transform: [
+      {
+        rotate: "45deg",
+      },
+    ],
   },
 
   emptyCard: {

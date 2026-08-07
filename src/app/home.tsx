@@ -5,7 +5,8 @@
  * emotion check-in, activity progress, and evening prompt.
  *
  * Parents with multiple children can press "Next" to cycle
- * through each child's dashboard.
+ * through each child's dashboard without changing the app's
+ * parent/child access mode.
  *
  * The "Switch to Child Mode" link and parent navbar remain
  * fixed at the bottom of the screen.
@@ -53,7 +54,7 @@ import { x, y } from "@/utils/scaling";
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
 import AudioOnIcon from "../../assets/icons/audio-on.svg";
 
-const PROMPT_CARD_TOP = 666;
+const PROMPT_CARD_TOP = 651;
 const DEFAULT_PROMPT_CARD_HEIGHT = 271;
 const CONTENT_BOTTOM_GAP = 20;
 
@@ -187,10 +188,6 @@ export default function ParentDashboardScreen() {
             return;
           }
 
-          /*
-           * This state updater now only returns the next
-           * selected ID. It does not update another context.
-           */
           setSelectedChildId(
             (currentChildId) => {
               const currentChildExists =
@@ -266,37 +263,6 @@ export default function ParentDashboardScreen() {
         selectedChildId,
       ],
     );
-
-  useEffect(() => {
-    if (!selectedChild) {
-      return;
-    }
-
-    const selectionAlreadyMatches =
-      activeChild?.id ===
-        selectedChild.id &&
-      activeChild?.name ===
-        selectedChild.name &&
-      activeChild?.avatarId ===
-        selectedChild.avatarId;
-
-    if (selectionAlreadyMatches) {
-      return;
-    }
-
-    selectActiveChild({
-      id: selectedChild.id,
-      name: selectedChild.name,
-      avatarId:
-        selectedChild.avatarId,
-    });
-  }, [
-    selectedChild,
-    activeChild?.id,
-    activeChild?.name,
-    activeChild?.avatarId,
-    selectActiveChild,
-  ]);
 
   const selectedChildIndex =
     useMemo(
@@ -380,6 +346,12 @@ export default function ParentDashboardScreen() {
     if (!currentChild) {
       return;
     }
+
+    selectActiveChild({
+      id: currentChild.id,
+      name: currentChild.name,
+      avatarId: currentChild.avatarId,
+    });
 
     router.push({
       pathname: "/switch-to-child",
@@ -683,17 +655,6 @@ export default function ParentDashboardScreen() {
               >
                 {
                   dashboardData.activitiesLabel
-                }
-              </Text>
-
-              <Text
-                style={
-                  styles.recentCompletionsLabel
-                }
-              >
-                Recent:{" "}
-                {
-                  dashboardData.recentCompletionsLabel
                 }
               </Text>
             </>
@@ -1015,18 +976,6 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
 
-  recentCompletionsLabel: {
-    position: "absolute",
-    left: x(20),
-    top: y(568),
-    width: x(362),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(13),
-    lineHeight: y(18),
-    textAlign: "center",
-  },
-
   progressUnavailableText: {
     position: "absolute",
     left: x(20),
@@ -1042,7 +991,7 @@ const styles = StyleSheet.create({
   dividerMiddle: {
     position: "absolute",
     left: x(20),
-    top: y(600),
+    top: y(585),
     width: x(362),
     height:
       StyleSheet.hairlineWidth,

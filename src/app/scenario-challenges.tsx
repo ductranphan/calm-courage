@@ -8,6 +8,7 @@
  * - parent-mode access
  */
 
+import { Asset } from "expo-asset";
 import { router, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -22,7 +23,6 @@ import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
 import { useChildRewards } from "@/hooks/useChildRewards";
-import { openGameLevel } from "@/utils/openGameLevel";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -31,10 +31,15 @@ import BackIcon from "../../assets/icons/back.svg";
 import BadgeIcon from "../../assets/icons/certificate-badge.svg";
 import DiamondIcon from "../../assets/icons/diamond.svg";
 import HouseIcon from "../../assets/icons/house.svg";
+import LockStateIcon from "../../assets/icons/lock-state.svg";
 import StarIcon from "../../assets/icons/star.svg";
 import WorkbookDashboardIcon from "../../assets/icons/workbook-dashboard.svg";
 
 const FIGMA_CONTENT_HEIGHT = 1815;
+
+const FRONT_TEMPLATE = require(
+  "../../assets/images/scenarios/scenario-front-template.png",
+);
 
 const CARD_WIDTH = 171;
 const CARD_HEIGHT = 138;
@@ -83,10 +88,26 @@ export default function ScenarioChallengesScreen() {
     }
   }, [activeChild, childModeActive]);
 
+  useEffect(() => {
+    void Asset.loadAsync(
+      FRONT_TEMPLATE,
+    ).catch((error: unknown) => {
+      console.warn(
+        "Unable to preload the scenario front template:",
+        error,
+      );
+    });
+  }, []);
+
   function handleScenarioPress(
     scenarioNumber: number,
   ) {
-    openGameLevel("scenario", scenarioNumber);
+    router.push({
+      pathname: "/scenario-card",
+      params: {
+        scenarioId: String(scenarioNumber),
+      },
+    } as unknown as Href);
   }
 
   function handleBack() {
@@ -199,35 +220,59 @@ export default function ScenarioChallengesScreen() {
             </Text>
           </View>
 
-          {scenarios.map((scenario) => (
-            <Pressable
-              key={scenario.id}
-              style={({ pressed }) => [
-                styles.scenarioCard,
-                {
-                  left: x(scenario.left),
-                  top: y(scenario.top),
-                },
-                pressed &&
-                  styles.scenarioCardPressed,
-              ]}
-              onPress={() =>
-                handleScenarioPress(
-                  scenario.id,
-                )
-              }
-              accessibilityRole="button"
-              accessibilityLabel={
-                scenario.label
-              }
-            >
-              <Text
-                style={styles.scenarioText}
+          {scenarios.map((scenario) => {
+            const isLocked =
+              scenario.id > 1;
+
+            return (
+              <Pressable
+                key={scenario.id}
+                style={({ pressed }) => [
+                  styles.scenarioCard,
+                  {
+                    left: x(scenario.left),
+                    top: y(scenario.top),
+                  },
+                  isLocked &&
+                    styles.lockedScenarioCard,
+                  pressed &&
+                    !isLocked &&
+                    styles.scenarioCardPressed,
+                ]}
+                onPress={() =>
+                  handleScenarioPress(
+                    scenario.id,
+                  )
+                }
+                disabled={isLocked}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  scenario.label
+                }
+                accessibilityState={{
+                  disabled: isLocked,
+                }}
               >
-                {scenario.label}
-              </Text>
-            </Pressable>
-          ))}
+                <Text
+                  style={[
+                    styles.scenarioText,
+                    isLocked &&
+                      styles.lockedScenarioText,
+                  ]}
+                >
+                  {scenario.label}
+                </Text>
+
+                {isLocked ? (
+                  <LockStateIcon
+                    width={x(23)}
+                    height={y(30)}
+                    style={styles.lockIcon}
+                  />
+                ) : null}
+              </Pressable>
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -481,6 +526,18 @@ const styles = StyleSheet.create({
 
   scenarioCardPressed: {
     opacity: 0.8,
+  },
+
+  lockedScenarioCard: {
+    backgroundColor: "#D9D9D9",
+  },
+
+  lockedScenarioText: {
+    color: "#7D7C7C",
+  },
+
+  lockIcon: {
+    marginTop: y(8),
   },
 
   scenarioText: {

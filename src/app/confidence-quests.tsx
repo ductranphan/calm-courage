@@ -31,6 +31,7 @@ import BackIcon from "../../assets/icons/back.svg";
 import BadgeIcon from "../../assets/icons/certificate-badge.svg";
 import DiamondIcon from "../../assets/icons/diamond.svg";
 import HouseIcon from "../../assets/icons/house.svg";
+import LockStateIcon from "../../assets/icons/lock-state.svg";
 import StarIcon from "../../assets/icons/star.svg";
 import WorkbookDashboardIcon from "../../assets/icons/workbook-dashboard.svg";
 
@@ -210,31 +211,59 @@ export default function ConfidenceQuestsScreen() {
             </Text>
           </View>
 
-          {miniSessions.map((session) => (
-            <Pressable
-              key={session.id}
-              style={[
-                styles.sessionCard,
-                {
-                  left: x(session.left),
-                  top: y(session.top),
-                },
-              ]}
-              onPress={() =>
-                handleMiniSessionPress(
-                  session.id,
-                )
-              }
-              accessibilityRole="button"
-              accessibilityLabel={
-                session.accessibilityLabel
-              }
-            >
-              <Text style={styles.sessionText}>
-                {session.label}
-              </Text>
-            </Pressable>
-          ))}
+          {miniSessions.map((session) => {
+            const isLocked =
+              session.id > 1;
+
+            return (
+              <Pressable
+                key={session.id}
+                style={({ pressed }) => [
+                  styles.sessionCard,
+                  {
+                    left: x(session.left),
+                    top: y(session.top),
+                  },
+                  isLocked &&
+                    styles.lockedSessionCard,
+                  pressed &&
+                    !isLocked &&
+                    styles.sessionCardPressed,
+                ]}
+                onPress={() =>
+                  handleMiniSessionPress(
+                    session.id,
+                  )
+                }
+                disabled={isLocked}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  session.accessibilityLabel
+                }
+                accessibilityState={{
+                  disabled: isLocked,
+                }}
+              >
+                <Text
+                  style={[
+                    styles.sessionText,
+                    isLocked &&
+                      styles.lockedSessionText,
+                  ]}
+                >
+                  {session.label}
+                </Text>
+
+                {isLocked ? (
+                  <LockStateIcon
+                    width={x(23)}
+                    height={y(30)}
+                    style={styles.lockIcon}
+                  />
+                ) : null}
+              </Pressable>
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -473,6 +502,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: x(4),
     elevation: 5,
+  },
+
+
+  sessionCardPressed: {
+    opacity: 0.8,
+  },
+
+  lockedSessionCard: {
+    backgroundColor: "#D9D9D9",
+  },
+
+  lockedSessionText: {
+    color: "#7D7C7C",
+  },
+
+  lockIcon: {
+    marginTop: y(8),
   },
 
   sessionText: {
