@@ -548,7 +548,11 @@ const styles = StyleSheet.create({
   },
 
   cardSide: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     width: x(CARD_WIDTH),
     height: y(CARD_HEIGHT),
     backgroundColor: SCREEN_BACKGROUND,
