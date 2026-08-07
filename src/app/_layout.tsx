@@ -1,8 +1,9 @@
 /**
  * Root layout.
  *
- * Loads fonts and image assets before showing the app, provides the
- * authentication/access contexts, and protects parent-only routes.
+ * Shows the custom Figma loading screen while fonts and
+ * image assets load, provides application contexts, and
+ * protects parent-only routes.
  */
 
 import * as Font from "expo-font";
@@ -12,14 +13,18 @@ import {
   usePathname,
 } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import {
   StyleSheet,
   View,
 } from "react-native";
 
-import { colors } from "@/constants/colors";
+import LoadingScreen from "@/components/ui/LoadingScreen";
 import { preloadQuestImages } from "@/constants/questAssets";
 import { ActiveChildProvider } from "@/contexts/ActiveChildContext";
 import {
@@ -64,14 +69,7 @@ function AppStack() {
     PARENT_ONLY_ROUTES.has(pathname);
 
   if (parentOnlyRoute && authLoading) {
-    return (
-      <View style={styles.loadingScreen}>
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-        />
-      </View>
-    );
+    return <LoadingScreen />;
   }
 
   if (parentOnlyRoute && !user) {
@@ -83,7 +81,9 @@ function AppStack() {
     user &&
     !user.emailVerified
   ) {
-    return <Redirect href="/verify-email" />;
+    return (
+      <Redirect href="/verify-email" />
+    );
   }
 
   if (
@@ -111,6 +111,9 @@ export default function RootLayout() {
   const [assetsLoaded, setAssetsLoaded] =
     useState(false);
 
+  const nativeSplashHidden =
+    useRef(false);
+
   useEffect(() => {
     let stillMounted = true;
 
@@ -118,50 +121,49 @@ export default function RootLayout() {
       try {
         await Promise.all([
           Font.loadAsync({
-            /*
+            /**
              * Body font.
              */
             Literata: require(
-              "../../assets/fonts/Literata-Regular.ttf",
+              "../../assets/fonts/Literata-Regular.ttf"
             ),
             LiterataMedium: require(
-              "../../assets/fonts/Literata-Medium.ttf",
+              "../../assets/fonts/Literata-Medium.ttf"
             ),
             LiterataSemiBold: require(
-              "../../assets/fonts/Literata-SemiBold.ttf",
+              "../../assets/fonts/Literata-SemiBold.ttf"
             ),
             LiterataBold: require(
-              "../../assets/fonts/Literata-Bold.ttf",
+              "../../assets/fonts/Literata-Bold.ttf"
             ),
             LiterataItalic: require(
-              "../../assets/fonts/Literata-Italic.ttf",
+              "../../assets/fonts/Literata-Italic.ttf"
             ),
 
-            /*
+            /**
              * Display font.
              */
             Outfit: require(
-              "../../assets/fonts/Outfit-Regular.ttf",
+              "../../assets/fonts/Outfit-Regular.ttf"
             ),
             OutfitMedium: require(
-              "../../assets/fonts/Outfit-Medium.ttf",
+              "../../assets/fonts/Outfit-Medium.ttf"
             ),
             OutfitSemiBold: require(
-              "../../assets/fonts/Outfit-SemiBold.ttf",
+              "../../assets/fonts/Outfit-SemiBold.ttf"
             ),
             OutfitBold: require(
-              "../../assets/fonts/Outfit-Bold.ttf",
+              "../../assets/fonts/Outfit-Bold.ttf"
             ),
             OutfitExtraBold: require(
-              "../../assets/fonts/Outfit-ExtraBold.ttf",
+              "../../assets/fonts/Outfit-ExtraBold.ttf"
             ),
             OutfitBlack: require(
-              "../../assets/fonts/Outfit-Black.ttf",
+              "../../assets/fonts/Outfit-Black.ttf"
             ),
           }),
 
           preloadImages(),
-
           preloadQuestImages(),
         ]);
       } catch (error) {
@@ -170,19 +172,8 @@ export default function RootLayout() {
           error,
         );
       } finally {
-        if (!stillMounted) {
-          return;
-        }
-
-        setAssetsLoaded(true);
-
-        try {
-          await SplashScreen.hideAsync();
-        } catch (error) {
-          console.warn(
-            "Unable to hide the splash screen:",
-            error,
-          );
+        if (stillMounted) {
+          setAssetsLoaded(true);
         }
       }
     }
@@ -194,26 +185,47 @@ export default function RootLayout() {
     };
   }, []);
 
-  if (!assetsLoaded) {
-    return null;
-  }
+  const handleRootLayout = useCallback(() => {
+    if (nativeSplashHidden.current) {
+      return;
+    }
+
+    nativeSplashHidden.current = true;
+
+    void SplashScreen.hideAsync().catch(
+      (error: unknown) => {
+        nativeSplashHidden.current = false;
+
+        console.warn(
+          "Unable to hide the native splash screen:",
+          error,
+        );
+      },
+    );
+  }, []);
 
   return (
-    <AuthProvider>
-      <ParentAccessProvider>
-        <ActiveChildProvider>
-          <AppStack />
-        </ActiveChildProvider>
-      </ParentAccessProvider>
-    </AuthProvider>
+    <View
+      style={styles.root}
+      onLayout={handleRootLayout}
+    >
+      {assetsLoaded ? (
+        <AuthProvider>
+          <ParentAccessProvider>
+            <ActiveChildProvider>
+              <AppStack />
+            </ActiveChildProvider>
+          </ParentAccessProvider>
+        </AuthProvider>
+      ) : (
+        <LoadingScreen fontReady={false} />
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingScreen: {
+  root: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.background,
   },
 });

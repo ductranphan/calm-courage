@@ -44,6 +44,7 @@ import Svg, {
   Polygon,
 } from "react-native-svg";
 
+import ErrorStateScreen from "@/components/ui/ErrorStateScreen";
 import DigitalWorkbookAges9To10 from "@/components/workbook/DigitalWorkbookAges9To10";
 import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
@@ -116,6 +117,7 @@ type WorkbookAudioPages =
 
 type WorkbookVariant =
   | "loading"
+  | "error"
   | "drawing"
   | "ages-9-10";
 
@@ -271,6 +273,11 @@ export default function DigitalWorkbookScreen() {
   const [workbookVariant, setWorkbookVariant] =
     useState<WorkbookVariant>("loading");
 
+  const [
+    workbookReloadKey,
+    setWorkbookReloadKey,
+  ] = useState(0);
+
   const [audioEnabled, setAudioEnabled] =
     useState(false);
 
@@ -306,6 +313,12 @@ export default function DigitalWorkbookScreen() {
 
   const [savedMessage, setSavedMessage] =
     useState(false);
+
+  function retryWorkbookLoad() {
+    setWorkbookReloadKey(
+      (currentKey) => currentKey + 1,
+    );
+  }
 
   useEffect(() => {
     if (!childModeActive || !activeChild) {
@@ -375,7 +388,7 @@ export default function DigitalWorkbookScreen() {
         );
 
         if (stillMounted) {
-          setWorkbookVariant("drawing");
+          setWorkbookVariant("error");
         }
       }
     }
@@ -389,6 +402,7 @@ export default function DigitalWorkbookScreen() {
     activeChild?.id,
     childModeActive,
     user?.uid,
+    workbookReloadKey,
   ]);
 
   useEffect(() => {
@@ -963,6 +977,15 @@ export default function DigitalWorkbookScreen() {
           Loading workbook...
         </Text>
       </View>
+    );
+  }
+
+  if (workbookVariant === "error") {
+    return (
+      <ErrorStateScreen
+        activeTab="workbook"
+        onRetry={retryWorkbookLoad}
+      />
     );
   }
 

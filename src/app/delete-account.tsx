@@ -1,24 +1,25 @@
 /**
  * Delete Account screen.
  *
- * Matches Figma Screen 16.0:
+ * Includes:
  * - permanent-deletion warning
  * - optional reasons for leaving
  * - optional written feedback
- * - fixed parent footer
- *
- * The existing Firebase deletion flow remains protected by password
- * reauthentication after the parent taps Continue.
+ * - Figma Screen 16.1 final-confirmation modal
+ * - Figma Screen 16.2 account-deleted success modal
+ * - one final-confirmation modal with both DELETE and login-password fields
+ * - success modal is mounted only after deletion succeeds
+ * - uses bye.svg and logo.svg from assets/images
+ * - transparent parent footer/navbar wrapper
  */
 
 import {
   router,
   type Href,
 } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -41,6 +42,8 @@ import AudioOffIcon from "../../assets/icons/audio-off.svg";
 import AudioOnIcon from "../../assets/icons/audio-on.svg";
 import BackIcon from "../../assets/icons/back.svg";
 import DeleteWarningIcon from "../../assets/icons/delete-warning.svg";
+import ByeImage from "../../assets/images/bye.svg";
+import LogoImage from "../../assets/images/logo.svg";
 
 const FIGMA_CONTENT_HEIGHT = 940;
 const FIXED_FOOTER_HEIGHT = 105;
@@ -81,14 +84,38 @@ export default function DeleteAccountScreen() {
     setConfirmationVisible,
   ] = useState(false);
 
-  const [password, setPassword] =
-    useState("");
+  const [
+    confirmationKeyword,
+    setConfirmationKeyword,
+  ] = useState("");
+
+  const [
+    deletionPassword,
+    setDeletionPassword,
+  ] = useState("");
 
   const [deleteError, setDeleteError] =
     useState<string | null>(null);
 
   const [deleting, setDeleting] =
     useState(false);
+
+  const [
+    accountDeletedVisible,
+    setAccountDeletedVisible,
+  ] = useState(false);
+
+  const keywordConfirmed = useMemo(
+    () =>
+      confirmationKeyword.trim() ===
+      "DELETE",
+    [confirmationKeyword],
+  );
+
+  const modalButtonDisabled =
+    deleting ||
+    !keywordConfirmed ||
+    deletionPassword.trim().length === 0;
 
   function toggleReason(
     reason: LeavingReason,
@@ -118,7 +145,8 @@ export default function DeleteAccountScreen() {
   }
 
   function openConfirmation() {
-    setPassword("");
+    setConfirmationKeyword("");
+    setDeletionPassword("");
     setDeleteError(null);
     setConfirmationVisible(true);
   }
@@ -128,68 +156,55 @@ export default function DeleteAccountScreen() {
       return;
     }
 
-    setPassword("");
+    setConfirmationKeyword("");
+    setDeletionPassword("");
     setDeleteError(null);
     setConfirmationVisible(false);
   }
 
-  function handleDeletePress() {
-    if (deleting) {
+  function handleReturnToLogin() {
+    setAccountDeletedVisible(false);
+
+    /*
+     * After account deletion, return to the public entry screen
+     * where the user can either create a new account or log in.
+     */
+    router.replace("/onboarding" as Href);
+  }
+
+  function handleFinalDeletePress() {
+    if (modalButtonDisabled) {
       return;
     }
 
     setDeleteError(null);
-
-    if (!password.trim()) {
-      setDeleteError(
-        "Enter your password to delete your account.",
-      );
-      return;
-    }
-
-    Alert.alert(
-      "Permanently Delete Account?",
-      "This will permanently delete your parent account, child profiles, check-ins, progress, rewards, and subscription data. This action cannot be undone.",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            void confirmDeleteAccount();
-          },
-        },
-      ],
-    );
+    void confirmDeleteAccount();
   }
 
   async function confirmDeleteAccount() {
+    if (deleting) {
+      return;
+    }
+
     setDeleting(true);
     setDeleteError(null);
 
     try {
       await deleteAccount(
-        password,
+        deletionPassword,
         {
-          reasons:
-            selectedReasons,
-          feedback:
-            additionalFeedback,
+          reasons: selectedReasons,
+          feedback: additionalFeedback,
         },
       );
 
       clearActiveChild();
       lockAccess();
 
-      setPassword("");
+      setConfirmationKeyword("");
+      setDeletionPassword("");
       setConfirmationVisible(false);
-
-      router.replace(
-        "/onboarding" as Href,
-      );
+      setAccountDeletedVisible(true);
     } catch (error) {
       console.error(
         "Unable to delete account:",
@@ -442,7 +457,7 @@ export default function DeleteAccountScreen() {
         onRequestClose={closeConfirmation}
       >
         <KeyboardAvoidingView
-          style={styles.modalBackdrop}
+          style={styles.modalBackdropPasswordRequired}
           behavior={
             Platform.OS === "ios"
               ? "padding"
@@ -450,8 +465,19 @@ export default function DeleteAccountScreen() {
           }
         >
           <View
-            style={styles.confirmationCard}
+            style={styles.confirmationCardPasswordRequired}
           >
+            <View
+              style={
+                styles.confirmationWarningIcon
+              }
+            >
+              <DeleteWarningIcon
+                width={x(49)}
+                height={x(49)}
+              />
+            </View>
+
             <Text
               style={styles.confirmationTitle}
             >
@@ -461,87 +487,191 @@ export default function DeleteAccountScreen() {
             <Text
               style={styles.confirmationText}
             >
-              Enter your password to permanently
-              delete your account and all child data.
+              To confirm deletion,{"\n"}
+              please type “DELETE”{"\n"}
+              in the box below.
             </Text>
 
             <TextInput
-              value={password}
+              value={confirmationKeyword}
               onChangeText={(value) => {
-                setPassword(value);
                 setDeleteError(null);
+                setConfirmationKeyword(
+                  value.toUpperCase(),
+                );
               }}
-              placeholder="Password"
+              placeholder="Type “DELETE” here"
+              placeholderTextColor="#A7A8CB"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!deleting}
+              returnKeyType="done"
+              onSubmitEditing={
+                modalButtonDisabled
+                  ? undefined
+                  : handleFinalDeletePress
+              }
+              style={styles.confirmationInput}
+              accessibilityLabel="Type DELETE to confirm account deletion"
+            />
+
+            <Text
+              style={styles.passwordPrompt}
+            >
+              Please confirm your password to continue.
+            </Text>
+
+            <TextInput
+              value={deletionPassword}
+              onChangeText={(value) => {
+                setDeleteError(null);
+                setDeletionPassword(value);
+              }}
+              placeholder="Enter your password"
               placeholderTextColor="#A7A8CB"
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
               editable={!deleting}
+              returnKeyType="done"
+              onSubmitEditing={
+                modalButtonDisabled
+                  ? undefined
+                  : handleFinalDeletePress
+              }
               style={styles.passwordInput}
-              accessibilityLabel="Password for account deletion"
+              accessibilityLabel="Password to confirm account deletion"
             />
 
             {deleteError ? (
               <Text
-                style={styles.deleteError}
+                style={[
+                  styles.deleteError,
+                  styles.deleteErrorPasswordRequired,
+                ]}
                 accessibilityRole="alert"
               >
                 {deleteError}
               </Text>
             ) : null}
 
-            <View
-              style={styles.confirmationActions}
+            <Pressable
+              style={({ pressed }) => [
+                styles.finalDeleteButton,
+                styles.finalDeleteButtonPasswordRequired,
+                modalButtonDisabled
+                  ? styles.finalDeleteButtonDisabled
+                  : styles.finalDeleteButtonEnabled,
+                pressed &&
+                  !modalButtonDisabled &&
+                  styles.controlPressed,
+              ]}
+              onPress={handleFinalDeletePress}
+              disabled={modalButtonDisabled}
+              accessibilityRole="button"
+              accessibilityLabel="Delete my account permanently"
+              accessibilityState={{
+                disabled:
+                  modalButtonDisabled,
+              }}
             >
-              <Pressable
-                style={({ pressed }) => [
-                  styles.cancelButton,
-                  pressed &&
-                    styles.controlPressed,
-                  deleting &&
-                    styles.disabledControl,
-                ]}
-                onPress={closeConfirmation}
-                disabled={deleting}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel account deletion"
-              >
+              {deleting ? (
+                <ActivityIndicator
+                  color={colors.white}
+                />
+              ) : (
                 <Text
-                  style={styles.cancelButtonText}
+                  style={[
+                    styles.finalDeleteButtonText,
+                    !modalButtonDisabled &&
+                      styles.finalDeleteButtonTextEnabled,
+                  ]}
                 >
-                  Cancel
+                  Delete My Account
                 </Text>
-              </Pressable>
+              )}
+            </Pressable>
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.deleteButton,
-                  pressed &&
-                    styles.controlPressed,
-                  deleting &&
-                    styles.disabledControl,
-                ]}
-                onPress={handleDeletePress}
-                disabled={deleting}
-                accessibilityRole="button"
-                accessibilityLabel="Permanently delete account"
+            <Pressable
+              style={({ pressed }) => [
+                styles.cancelButton,
+                styles.cancelButtonPasswordRequired,
+                pressed &&
+                  styles.controlPressed,
+                deleting &&
+                  styles.disabledControl,
+              ]}
+              onPress={closeConfirmation}
+              disabled={deleting}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel account deletion"
+            >
+              <Text
+                style={styles.cancelButtonText}
               >
-                {deleting ? (
-                  <ActivityIndicator
-                    color={colors.white}
-                  />
-                ) : (
-                  <Text
-                    style={styles.deleteButtonText}
-                  >
-                    Delete
-                  </Text>
-                )}
-              </Pressable>
-            </View>
+                Cancel
+              </Text>
+            </Pressable>
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {accountDeletedVisible ? (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          presentationStyle="overFullScreen"
+          statusBarTranslucent
+          onRequestClose={() => {
+          }}
+        >
+          <View style={styles.accountDeletedBackdrop}>
+            <View style={styles.accountDeletedCard}>
+              <View style={styles.byeImage}>
+                <ByeImage
+                  width="100%"
+                  height="100%"
+                  accessibilityLabel="Waving hand"
+                />
+              </View>
+
+              <View style={styles.deletedLogoShadow}>
+                <LogoImage
+                  width="100%"
+                  height="100%"
+                  accessibilityLabel="Calm Courage Company logo"
+                />
+              </View>
+
+              <Text style={styles.accountDeletedTitle}>
+                Account Deleted
+              </Text>
+
+              <Text style={styles.accountDeletedText}>
+                Your account and all{"\n"}
+                associated data have been{"\n"}
+                successfully deleted.{"\n"}
+                We’re sad to see you go!
+              </Text>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.returnToLoginButton,
+                  pressed && styles.controlPressed,
+                ]}
+                onPress={handleReturnToLogin}
+                accessibilityRole="button"
+                accessibilityLabel="Return to login screen"
+              >
+                <Text style={styles.returnToLoginButtonText}>
+                  Return to Login Screen
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </View>
   );
 }
@@ -799,6 +929,7 @@ const styles = StyleSheet.create({
     minWidth: x(226),
     height: y(28),
     justifyContent: "center",
+    backgroundColor: "transparent",
   },
 
   switchToChildText: {
@@ -816,118 +947,293 @@ const styles = StyleSheet.create({
     width: x(362),
     height: y(72),
     borderRadius: x(50),
-    backgroundColor: "#F1F3F5",
-    overflow: "hidden",
+    backgroundColor: "transparent",
+    overflow: "visible",
     zIndex: 50,
-    elevation: 12,
+  },
+
+  modalBackdropPasswordRequired: {
+    flex: 1,
+    paddingTop: y(105),
+    backgroundColor:
+      "rgba(0, 0, 0, 0.50)",
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+
+  confirmationCardPasswordRequired: {
+    position: "relative",
+    width: x(331),
+    height: y(600),
+    borderRadius: x(20),
+    backgroundColor: "#F1F3F5",
+  },
+
+  confirmationWarningIcon: {
+    position: "absolute",
+    left: x(141),
+    top: y(34),
+    width: x(49),
+    height: x(49),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  confirmationTitle: {
+    position: "absolute",
+    left: x(28),
+    top: y(86),
+    width: x(275),
+    height: y(38),
+    color: colors.primary,
+    fontFamily: "OutfitBold",
+    fontSize: x(30),
+    lineHeight: y(38),
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+
+  confirmationText: {
+    position: "absolute",
+    left: x(58),
+    top: y(139),
+    width: x(215),
+    minHeight: y(74),
+    color: colors.primary,
+    fontFamily: "Outfit",
+    fontSize: x(20),
+    lineHeight: y(24),
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+
+  confirmationInput: {
+    position: "absolute",
+    left: x(15.5),
+    top: y(232),
+    width: x(300),
+    height: y(72),
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: x(20),
+    backgroundColor: colors.white,
+    paddingHorizontal: x(20),
+    color: colors.primary,
+    fontFamily: "Outfit",
+    fontSize: x(20),
+    lineHeight: y(24),
+    includeFontPadding: false,
+  },
+
+  passwordPrompt: {
+    position: "absolute",
+    left: x(20),
+    top: y(316),
+    width: x(291),
+    color: colors.primary,
+    fontFamily: "Outfit",
+    fontSize: x(15),
+    lineHeight: y(19),
+    textAlign: "center",
+  },
+
+  passwordInput: {
+    position: "absolute",
+    left: x(15.5),
+    top: y(345),
+    width: x(300),
+    height: y(60),
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: x(20),
+    backgroundColor: colors.white,
+    paddingHorizontal: x(20),
+    color: colors.primary,
+    fontFamily: "Outfit",
+    fontSize: x(20),
+    lineHeight: y(24),
+    includeFontPadding: false,
+  },
+
+  deleteError: {
+    position: "absolute",
+    left: x(18),
+    top: y(307),
+    width: x(295),
+    color: "#B00020",
+    fontFamily: "Outfit",
+    fontSize: x(13),
+    lineHeight: y(16),
+    textAlign: "center",
+  },
+
+  deleteErrorPasswordRequired: {
+    top: y(411),
+  },
+
+  finalDeleteButton: {
+    position: "absolute",
+    left: x(15.5),
+    top: y(323),
+    width: x(300),
+    height: y(52),
+    borderRadius: x(20),
+    alignItems: "center",
+    justifyContent: "center",
     shadowColor: colors.black,
     shadowOffset: {
       width: 0,
       height: y(4),
     },
-    shadowOpacity: 0.12,
-    shadowRadius: x(5),
+    shadowOpacity: 0.25,
+    shadowRadius: x(4),
+    elevation: 5,
   },
 
-  modalBackdrop: {
-    flex: 1,
-    paddingHorizontal: x(20),
-    backgroundColor:
-      "rgba(0, 0, 0, 0.50)",
-    alignItems: "center",
-    justifyContent: "center",
+  finalDeleteButtonPasswordRequired: {
+    top: y(455),
   },
 
-  confirmationCard: {
-    width: x(362),
-    minHeight: y(340),
-    paddingHorizontal: x(24),
-    paddingVertical: y(28),
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: x(20),
-    backgroundColor: "#F1F3F5",
+  finalDeleteButtonDisabled: {
+    backgroundColor: "#D9D9D9",
   },
 
-  confirmationTitle: {
+  finalDeleteButtonEnabled: {
+    backgroundColor: "#EA5757",
+  },
+
+  finalDeleteButtonText: {
     color: colors.primary,
+    fontFamily: "Outfit",
+    fontSize: x(20),
+    lineHeight: y(24),
+    textAlign: "center",
+  },
+
+  finalDeleteButtonTextEnabled: {
+    color: colors.white,
     fontFamily: "OutfitBold",
-    fontSize: x(28),
-    lineHeight: y(35),
-    textAlign: "center",
-  },
-
-  confirmationText: {
-    marginTop: y(18),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(16),
-    lineHeight: y(23),
-    textAlign: "center",
-  },
-
-  passwordInput: {
-    width: "100%",
-    height: y(52),
-    marginTop: y(24),
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: x(16),
-    backgroundColor: colors.white,
-    paddingHorizontal: x(16),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(18),
-  },
-
-  deleteError: {
-    marginTop: y(10),
-    color: "#B00020",
-    fontFamily: "Literata",
-    fontSize: x(14),
-    lineHeight: y(18),
-    textAlign: "center",
-  },
-
-  confirmationActions: {
-    width: "100%",
-    marginTop: y(25),
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
   },
 
   cancelButton: {
-    width: x(138),
-    height: y(50),
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: x(18),
+    position: "absolute",
+    left: x(15.5),
+    top: y(392),
+    width: x(300),
+    height: y(52),
+    borderRadius: x(20),
+    backgroundColor: "#E8D8F1",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: colors.black,
+    shadowOffset: {
+      width: 0,
+      height: y(4),
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: x(4),
+    elevation: 5,
+  },
+
+  cancelButtonPasswordRequired: {
+    top: y(524),
   },
 
   cancelButtonText: {
     color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(18),
-    lineHeight: y(23),
+    fontFamily: "Outfit",
+    fontSize: x(20),
+    lineHeight: y(24),
+    textAlign: "center",
   },
 
-  deleteButton: {
-    width: x(138),
-    height: y(50),
-    borderRadius: x(18),
-    backgroundColor: "#B00020",
+  accountDeletedBackdrop: {
+    flex: 1,
+    paddingTop: y(154),
+    backgroundColor: "rgba(0, 0, 0, 0.50)",
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+
+  accountDeletedCard: {
+    position: "relative",
+    width: x(331),
+    height: y(500),
+    borderRadius: x(20),
+    backgroundColor: "#F1F3F5",
+  },
+
+  byeImage: {
+    position: "absolute",
+    left: x(47),
+    top: y(42),
+    width: x(131),
+    height: y(131),
+  },
+
+  deletedLogoShadow: {
+    position: "absolute",
+    left: x(151),
+    top: y(117),
+    width: x(130),
+    height: y(45),
+  },
+
+  accountDeletedTitle: {
+    position: "absolute",
+    left: x(30),
+    top: y(208),
+    width: x(274),
+    height: y(38),
+    color: colors.primary,
+    fontFamily: "OutfitBold",
+    fontSize: x(30),
+    lineHeight: y(38),
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+
+  accountDeletedText: {
+    position: "absolute",
+    left: x(30),
+    top: y(259),
+    width: x(271),
+    minHeight: y(96),
+    color: colors.primary,
+    fontFamily: "Outfit",
+    fontSize: x(20),
+    lineHeight: y(24),
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+
+  returnToLoginButton: {
+    position: "absolute",
+    left: x(16),
+    top: y(392),
+    width: x(300),
+    height: y(52),
+    borderRadius: x(20),
+    backgroundColor: "#E6D8EB",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: colors.black,
+    shadowOffset: {
+      width: 0,
+      height: y(4),
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: x(4),
+    elevation: 5,
   },
 
-  deleteButtonText: {
-    color: colors.white,
-    fontFamily: "LiterataBold",
-    fontSize: x(18),
-    lineHeight: y(23),
+  returnToLoginButtonText: {
+    color: colors.primary,
+    fontFamily: "Outfit",
+    fontSize: x(20),
+    lineHeight: y(24),
+    textAlign: "center",
+    includeFontPadding: false,
   },
 
   controlPressed: {

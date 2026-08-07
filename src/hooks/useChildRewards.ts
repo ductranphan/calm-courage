@@ -1,8 +1,8 @@
 /**
  * Loads a child's star, gem, and badge totals from Firestore.
  *
- * The data is refreshed whenever the current screen gains focus, so
- * newly awarded rewards appear when the child returns to the workbook.
+ * The data refreshes whenever the current screen gains focus and exposes
+ * an error state plus a retry function for child-mode error pages.
  */
 
 import { useFocusEffect } from "expo-router";
@@ -19,13 +19,21 @@ export type ChildRewardsState = {
   gems: number;
   badges: string[];
   loading: boolean;
+  error: string | null;
+  retry: () => void;
 };
 
-const EMPTY_REWARDS: ChildRewardsState = {
+type ChildRewardsData = Omit<
+  ChildRewardsState,
+  "retry"
+>;
+
+const EMPTY_REWARDS: ChildRewardsData = {
   stars: 0,
   gems: 0,
   badges: [],
   loading: true,
+  error: null,
 };
 
 export function useChildRewards(
@@ -34,9 +42,18 @@ export function useChildRewards(
   const { user } = useAuth();
 
   const [rewards, setRewards] =
-    useState<ChildRewardsState>(
+    useState<ChildRewardsData>(
       EMPTY_REWARDS,
     );
+
+  const [reloadKey, setReloadKey] =
+    useState(0);
+
+  const retry = useCallback(() => {
+    setReloadKey(
+      (currentKey) => currentKey + 1,
+    );
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -58,6 +75,7 @@ export function useChildRewards(
           setRewards((current) => ({
             ...current,
             loading: true,
+            error: null,
           }));
         }
 
@@ -73,8 +91,12 @@ export function useChildRewards(
 
           if (!child) {
             setRewards({
-              ...EMPTY_REWARDS,
+              stars: 0,
+              gems: 0,
+              badges: [],
               loading: false,
+              error:
+                "We couldn't load this child profile. Please try again.",
             });
 
             return;
@@ -93,12 +115,14 @@ export function useChildRewards(
                 ? child.gems
                 : 0,
 
-            badges:
-              Array.isArray(child.badges)
-                ? child.badges
-                : [],
+            badges: Array.isArray(
+              child.badges,
+            )
+              ? child.badges
+              : [],
 
             loading: false,
+            error: null,
           });
         } catch (loadError) {
           console.error(
@@ -110,6 +134,8 @@ export function useChildRewards(
             setRewards((current) => ({
               ...current,
               loading: false,
+              error:
+                "Please check your internet connection and try again.",
             }));
           }
         }
@@ -120,8 +146,15 @@ export function useChildRewards(
       return () => {
         stillMounted = false;
       };
-    }, [childId, user?.uid]),
+    }, [
+      childId,
+      reloadKey,
+      user?.uid,
+    ]),
   );
 
-  return rewards;
+  return {
+    ...rewards,
+    retry,
+  };
 }

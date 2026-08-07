@@ -4,8 +4,6 @@
  * Wraps Firebase Authentication and stores the parent profile under:
  *
  * parents/{firebaseAuthUid}
- *
- * This path matches the current Firestore security rules.
  */
 
 import {
@@ -108,7 +106,7 @@ export function mapAuthError(
       return "Firebase is temporarily unavailable. Please try again.";
 
     case "auth/requires-recent-login":
-      return "Please sign in again and retry this action.";
+      return "Please sign out, sign in again, and retry account deletion.";
 
     default:
       return "Something went wrong. Please try again.";
@@ -635,7 +633,7 @@ function normalizeDeletionFeedback(
 }
 
 async function saveAccountDeletionFeedback(
-  parentId: string,
+  parentUid: string,
   input:
     | AccountDeletionFeedbackInput
     | undefined,
@@ -651,7 +649,7 @@ async function saveAccountDeletionFeedback(
       ACCOUNT_DELETION_FEEDBACK_COLLECTION,
     ),
     {
-      parentId,
+      parentUid,
       reasons:
         normalized.reasons,
       feedback:
@@ -663,15 +661,8 @@ async function saveAccountDeletionFeedback(
 }
 
 /**
- * Permanently deletes the signed-in parent's Firebase Authentication
- * account and the known Firestore data under parents/{uid}, including
- * children, check-ins, and activity attempts.
- *
- * The password is used to reauthenticate before any feedback is saved
- * or destructive work begins.
- *
- * Account-deletion feedback is optional. A feedback-write failure is
- * logged, but it never blocks the user's account-deletion request.
+ * Reauthenticates the parent, deletes their Firestore data,
+ * then deletes the Firebase Authentication account.
  */
 export async function deleteParentAccount(
   password: string,
@@ -685,12 +676,14 @@ export async function deleteParentAccount(
     );
   }
 
-  if (!password.trim()) {
+  // Pass the password to Firebase exactly as entered.
+  if (password.length === 0) {
     throw new Error(
-      "Please enter your password to delete your account.",
+      "Please enter your login password to delete your account.",
     );
   }
 
+  // Reauthenticate before deleting any account data.
   try {
     const credential =
       EmailAuthProvider.credential(
@@ -702,14 +695,25 @@ export async function deleteParentAccount(
       user,
       credential,
     );
+  } catch (error) {
+    const code = getErrorCode(error);
 
-    /*
-     * Save feedback only after the password has been verified.
-     * The feedback collection is outside parents/{uid}, so it remains
-     * available after the parent profile is deleted.
-     *
-     * Do not block account deletion if this optional write fails.
-     */
+    if (
+      code === "auth/wrong-password" ||
+      code === "auth/invalid-credential"
+    ) {
+      throw new Error(
+        "Incorrect password. Please use the password you log in with, not your 4-digit parent PIN.",
+      );
+    }
+
+    throw new Error(
+      getErrorMessage(error),
+    );
+  }
+
+  try {
+    // Feedback is optional and must not block account deletion.
     try {
       await saveAccountDeletionFeedback(
         user.uid,

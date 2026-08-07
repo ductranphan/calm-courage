@@ -1,12 +1,42 @@
 /**
  * Parent settings screen.
  *
- * Notification preferences and subscription actions are currently local UI.
- * Account deletion opens the dedicated Delete Account screen.
+ * Displays one of two subscription sections:
+ *
+ * - trial / unsubscribed:
+ *   shows the existing Membership Plan + Subscribe Now design
+ *
+ * - monthly / yearly:
+ *   shows the Figma Manage Subscription design
+ *
+ * The subscription type is read from:
+ * parents/{parentUid}.subscription
+ *
+ * Supported values:
+ * - "trial"
+ * - "monthly"
+ * - "yearly"
+ *
+ * Optional Firestore fields supported by this screen:
+ * - foundingMember: boolean
+ * - subscriptionPriceLabel: string
+ * - subscriptionRenewsAt: Firestore Timestamp | Date | ISO string
+ * - nextBillingDate: Firestore Timestamp | Date | ISO string
+ * - subscriptionTrialEndsAt: Firestore Timestamp | Date | ISO string
+ * - trialEndsAt: Firestore Timestamp | Date | ISO string
+ *
  */
 
-import { router, type Href } from "expo-router";
-import { useState } from "react";
+import {
+  router,
+  type Href,
+  useFocusEffect,
+} from "expo-router";
+import {
+  useCallback,
+  useMemo,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,11 +48,16 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import {
+  doc,
+  getDoc,
+} from "firebase/firestore";
 
 import ParentBottomNav from "@/components/dashboard/ParentBottomNav";
 import TermsModal from "@/components/modals/TermsModal";
 import AppButton from "@/components/ui/AppButton";
 import Logo from "@/components/ui/Logo";
+import { db } from "@/config/firebase";
 import {
   type ConsentDocumentKind,
 } from "@/constants/consent";
@@ -34,11 +69,50 @@ import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
 import AudioOnIcon from "../../assets/icons/audio-on.svg";
+import ArrowIcon from "../../assets/icons/arrow.svg";
 
-const FIGMA_CONTENT_HEIGHT = 1320;
+const FIGMA_CONTENT_HEIGHT = 1435;
+
 const FIXED_FOOTER_HEIGHT = 105;
 const FIXED_FOOTER_BOTTOM = 20;
 const FOOTER_SCROLL_SPACE = 125;
+
+const TRIAL_LAYOUT = {
+  supportDividerTop: 737,
+  supportTitleTop: 763,
+  helpRowTop: 813,
+  legalRowTop: 890,
+  accountDividerTop: 1010,
+  accountTitleTop: 1036,
+  changePasswordTop: 1086,
+  logoutTop: 1162,
+  deleteAccountTop: 1238,
+} as const;
+
+const SUBSCRIBED_LAYOUT = {
+  supportDividerTop: 846,
+  supportTitleTop: 872,
+  helpRowTop: 922,
+  legalRowTop: 999,
+  accountDividerTop: 1119,
+  accountTitleTop: 1145,
+  changePasswordTop: 1195,
+  logoutTop: 1271,
+  deleteAccountTop: 1347,
+} as const;
+
+type ParentSubscription =
+  | "trial"
+  | "monthly"
+  | "yearly";
+
+type SubscriptionDetails = {
+  plan: ParentSubscription;
+  foundingMember: boolean;
+  priceLabel: string | null;
+  renewsAt: Date | null;
+  trialEndsAt: Date | null;
+};
 
 type SettingsToggleProps = {
   enabled: boolean;
@@ -50,10 +124,93 @@ type SettingsRowProps = {
   label: string;
   onPress: () => void;
   accessibilityLabel: string;
-  style?: object;
+  top: number;
+  height?: number;
   multiline?: boolean;
   disabled?: boolean;
 };
+
+function parseDateValue(
+  value: unknown,
+): Date | null {
+  if (value instanceof Date) {
+    return Number.isNaN(
+      value.getTime(),
+    )
+      ? null
+      : value;
+  }
+
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toDate" in value &&
+    typeof value.toDate === "function"
+  ) {
+    const date = value.toDate();
+
+    return date instanceof Date &&
+      !Number.isNaN(date.getTime())
+      ? date
+      : null;
+  }
+
+  if (
+    typeof value === "string" ||
+    typeof value === "number"
+  ) {
+    const date = new Date(value);
+
+    return Number.isNaN(
+      date.getTime(),
+    )
+      ? null
+      : date;
+  }
+
+  return null;
+}
+
+function formatBillingDate(
+  value: Date | null,
+): string {
+  if (!value) {
+    return "View in App Store";
+  }
+
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    },
+  ).format(value);
+}
+
+function getTrialDaysLeft(
+  trialEndsAt: Date | null,
+): number | null {
+  if (!trialEndsAt) {
+    return null;
+  }
+
+  const millisecondsPerDay =
+    24 * 60 * 60 * 1000;
+
+  const difference =
+    trialEndsAt.getTime() -
+    Date.now();
+
+  if (difference <= 0) {
+    return 0;
+  }
+
+  return Math.ceil(
+    difference /
+      millisecondsPerDay,
+  );
+}
 
 function SettingsToggle({
   enabled,
@@ -70,8 +227,12 @@ function SettingsToggle({
       ]}
       onPress={onChange}
       accessibilityRole="switch"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ checked: enabled }}
+      accessibilityLabel={
+        accessibilityLabel
+      }
+      accessibilityState={{
+        checked: enabled,
+      }}
       hitSlop={8}
     >
       <View
@@ -87,14 +248,34 @@ function SettingsToggle({
 }
 
 function ChevronRight() {
-  return <View style={styles.chevronRight} />;
+  return (
+    <View
+      style={styles.chevronRight}
+    />
+  );
+}
+
+function ExternalArrow() {
+  return (
+    <View
+      style={styles.externalArrowWrapper}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <ArrowIcon
+        width={x(18)}
+        height={x(18)}
+      />
+    </View>
+  );
 }
 
 function SettingsRow({
   label,
   onPress,
   accessibilityLabel,
-  style,
+  top,
+  height = 62,
   multiline = false,
   disabled = false,
 }: SettingsRowProps) {
@@ -102,15 +283,25 @@ function SettingsRow({
     <Pressable
       style={({ pressed }) => [
         styles.settingsRow,
-        style,
-        pressed && !disabled && styles.controlPressed,
-        disabled && styles.disabledControl,
+        {
+          top: y(top),
+          height: y(height),
+        },
+        pressed &&
+          !disabled &&
+          styles.controlPressed,
+        disabled &&
+          styles.disabledControl,
       ]}
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled }}
+      accessibilityLabel={
+        accessibilityLabel
+      }
+      accessibilityState={{
+        disabled,
+      }}
     >
       <Text
         style={[
@@ -122,7 +313,9 @@ function SettingsRow({
         {label}
       </Text>
 
-      <View style={styles.chevronWrapper}>
+      <View
+        style={styles.chevronWrapper}
+      >
         <ChevronRight />
       </View>
     </Pressable>
@@ -134,14 +327,22 @@ export default function SettingsScreen() {
     useWindowDimensions();
 
   const {
+    user,
     signOut: signOutUser,
   } = useAuth();
 
-  const { clearActiveChild } = useActiveChild();
-  const { lockAccess } = useParentAccess();
+  const {
+    clearActiveChild,
+  } = useActiveChild();
 
-  const [audioEnabled, setAudioEnabled] =
-    useState(false);
+  const {
+    lockAccess,
+  } = useParentAccess();
+
+  const [
+    audioEnabled,
+    setAudioEnabled,
+  ] = useState(false);
 
   const [
     pushNotifications,
@@ -152,6 +353,23 @@ export default function SettingsScreen() {
     weeklyEmailReports,
     setWeeklyEmailReports,
   ] = useState(false);
+
+  const [
+    subscriptionDetails,
+    setSubscriptionDetails,
+  ] =
+    useState<SubscriptionDetails>({
+      plan: "trial",
+      foundingMember: false,
+      priceLabel: null,
+      renewsAt: null,
+      trialEndsAt: null,
+    });
+
+  const [
+    subscriptionLoading,
+    setSubscriptionLoading,
+  ] = useState(true);
 
   const [
     legalModalDocument,
@@ -166,34 +384,250 @@ export default function SettingsScreen() {
     setLogoutModalVisible,
   ] = useState(false);
 
-  const [signingOut, setSigningOut] =
-    useState(false);
+  const [
+    signingOut,
+    setSigningOut,
+  ] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+
+      async function loadSubscription() {
+        if (!user?.uid) {
+          if (isMounted) {
+            setSubscriptionLoading(
+              false,
+            );
+          }
+
+          return;
+        }
+
+        setSubscriptionLoading(true);
+
+        try {
+          const snapshot =
+            await getDoc(
+              doc(
+                db,
+                "parents",
+                user.uid,
+              ),
+            );
+
+          if (
+            !isMounted ||
+            !snapshot.exists()
+          ) {
+            return;
+          }
+
+          const data =
+            snapshot.data();
+
+          const plan: ParentSubscription =
+            data.subscription ===
+              "monthly" ||
+            data.subscription ===
+              "yearly"
+              ? data.subscription
+              : "trial";
+
+          const renewsAt =
+            parseDateValue(
+              data.subscriptionRenewsAt ??
+                data.nextBillingDate,
+            );
+
+          const trialEndsAt =
+            parseDateValue(
+              data.subscriptionTrialEndsAt ??
+                data.trialEndsAt,
+            );
+
+          setSubscriptionDetails({
+            plan,
+            foundingMember:
+              data.foundingMember ===
+              true,
+            priceLabel:
+              typeof data.subscriptionPriceLabel ===
+              "string"
+                ? data.subscriptionPriceLabel.trim()
+                : null,
+            renewsAt,
+            trialEndsAt,
+          });
+        } catch (error) {
+          console.error(
+            "Unable to load subscription details:",
+            error,
+          );
+
+          if (isMounted) {
+            setSubscriptionDetails(
+              (current) => ({
+                ...current,
+                plan: "trial",
+              }),
+            );
+          }
+        } finally {
+          if (isMounted) {
+            setSubscriptionLoading(
+              false,
+            );
+          }
+        }
+      }
+
+      void loadSubscription();
+
+      return () => {
+        isMounted = false;
+      };
+    }, [user?.uid]),
+  );
 
   const termsModalTranslateY =
-    (viewportHeight - y(570)) / 2 -
+    (viewportHeight -
+      y(570)) /
+      2 -
     y(258);
+
+  const isSubscribed =
+    subscriptionDetails.plan ===
+      "monthly" ||
+    subscriptionDetails.plan ===
+      "yearly";
+
+  const activeLayout =
+    isSubscribed
+      ? SUBSCRIBED_LAYOUT
+      : TRIAL_LAYOUT;
+
+  const planTitle =
+    useMemo(() => {
+      const frequency =
+        subscriptionDetails.plan ===
+        "yearly"
+          ? "Yearly Plan"
+          : "Monthly Plan";
+
+      if (
+        subscriptionDetails.foundingMember
+      ) {
+        return `Founding Member\n${frequency}`;
+      }
+
+      return `Calm Courage\n${frequency}`;
+    }, [
+      subscriptionDetails.foundingMember,
+      subscriptionDetails.plan,
+    ]);
+
+  const subscriptionPrice =
+    useMemo(() => {
+      const customPrice =
+        subscriptionDetails.priceLabel;
+
+      if (customPrice) {
+        return subscriptionDetails.foundingMember
+          ? `${customPrice}\npermanently locked`
+          : customPrice;
+      }
+
+      if (
+        subscriptionDetails.plan ===
+        "monthly"
+      ) {
+        return subscriptionDetails.foundingMember
+          ? "$ 7.99 / month\npermanently locked"
+          : "$ 7.99 / month";
+      }
+
+      return "Yearly subscription\nmanaged in App Store";
+    }, [
+      subscriptionDetails.foundingMember,
+      subscriptionDetails.plan,
+      subscriptionDetails.priceLabel,
+    ]);
+
+  const nextBillingDate =
+    useMemo(
+      () =>
+        formatBillingDate(
+          subscriptionDetails.renewsAt,
+        ),
+      [
+        subscriptionDetails.renewsAt,
+      ],
+    );
+
+  const trialDaysLeft =
+    useMemo(
+      () =>
+        getTrialDaysLeft(
+          subscriptionDetails.trialEndsAt,
+        ),
+      [
+        subscriptionDetails.trialEndsAt,
+      ],
+    );
+
+  const subscriptionStatus =
+    useMemo(() => {
+      if (
+        trialDaysLeft !== null &&
+        trialDaysLeft > 0
+      ) {
+        return `Active - Free Trial\n(${trialDaysLeft} ${
+          trialDaysLeft === 1
+            ? "day"
+            : "days"
+        } left)`;
+      }
+
+      return "Active Subscription";
+    }, [trialDaysLeft]);
 
   function handleSubscribe() {
     Alert.alert(
       "Membership Plan",
-      "Subscription and payment functionality will be connected later.",
+      "Subscription purchase functionality will be connected with the app-store billing flow.",
+    );
+  }
+
+  function handleManageSubscription() {
+    Alert.alert(
+      "Manage Subscription",
+      "App-store subscription management will be connected when the in-app purchase integration is enabled.",
     );
   }
 
   function handleHelpSupport() {
-    router.push("/help-support" as Href);
+    router.push(
+      "/help-support" as Href,
+    );
   }
 
   function handleLegalDocuments() {
-    setLegalModalDocument("termsOfUse");
+    setLegalModalDocument(
+      "termsOfUse",
+    );
   }
 
   function handleChangePassword() {
-    router.push("/forgot-password");
+    router.push(
+      "/forgot-password" as Href,
+    );
   }
 
   function handleSwitchToChildMode() {
-    router.replace("/switch-to-child");
+    router.replace(
+      "/switch-to-child" as Href,
+    );
   }
 
   function handleLogoutPress() {
@@ -218,9 +652,14 @@ export default function SettingsScreen() {
     try {
       lockAccess();
       clearActiveChild();
+
       await signOutUser();
+
       setLogoutModalVisible(false);
-      router.replace("/login");
+
+      router.replace(
+        "/login" as Href,
+      );
     } catch (error) {
       console.error(
         "Unable to log out:",
@@ -239,7 +678,28 @@ export default function SettingsScreen() {
   }
 
   function handleDeleteAccount() {
-    router.push("/delete-account" as Href);
+    router.push(
+      "/delete-account" as Href,
+    );
+  }
+
+  if (subscriptionLoading) {
+    return (
+      <View
+        style={styles.loadingScreen}
+      >
+        <ActivityIndicator
+          size="large"
+          color={colors.primary}
+        />
+
+        <Text
+          style={styles.loadingText}
+        >
+          Loading settings...
+        </Text>
+      </View>
+    );
   }
 
   return (
@@ -249,13 +709,19 @@ export default function SettingsScreen() {
         contentContainerStyle={
           styles.scrollContent
         }
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={
+          false
+        }
         bounces={false}
-        alwaysBounceVertical={false}
+        alwaysBounceVertical={
+          false
+        }
         overScrollMode="never"
         contentInsetAdjustmentBehavior="never"
       >
-        <View style={styles.figmaFrame}>
+        <View
+          style={styles.figmaFrame}
+        >
           <Pressable
             style={({ pressed }) => [
               styles.audioButton,
@@ -264,7 +730,8 @@ export default function SettingsScreen() {
             ]}
             onPress={() =>
               setAudioEnabled(
-                (current) => !current,
+                (current) =>
+                  !current,
               )
             }
             accessibilityRole="button"
@@ -274,7 +741,8 @@ export default function SettingsScreen() {
                 : "Turn audio on"
             }
             accessibilityState={{
-              selected: audioEnabled,
+              selected:
+                audioEnabled,
             }}
             hitSlop={8}
           >
@@ -295,10 +763,14 @@ export default function SettingsScreen() {
             Settings
           </Text>
 
-          <View style={styles.topDivider} />
+          <View
+            style={styles.topDivider}
+          />
 
           <Text
-            style={styles.notificationsTitle}
+            style={
+              styles.notificationsTitle
+            }
           >
             Notifications
           </Text>
@@ -317,10 +789,13 @@ export default function SettingsScreen() {
             }
           >
             <SettingsToggle
-              enabled={pushNotifications}
+              enabled={
+                pushNotifications
+              }
               onChange={() =>
                 setPushNotifications(
-                  (current) => !current,
+                  (current) =>
+                    !current,
                 )
               }
               accessibilityLabel="Push notifications"
@@ -328,7 +803,9 @@ export default function SettingsScreen() {
           </View>
 
           <Text
-            style={styles.weeklyReportsText}
+            style={
+              styles.weeklyReportsText
+            }
           >
             Weekly Email Reports
           </Text>
@@ -339,10 +816,13 @@ export default function SettingsScreen() {
             }
           >
             <SettingsToggle
-              enabled={weeklyEmailReports}
+              enabled={
+                weeklyEmailReports
+              }
               onChange={() =>
                 setWeeklyEmailReports(
-                  (current) => !current,
+                  (current) =>
+                    !current,
                 )
               }
               accessibilityLabel="Weekly email reports"
@@ -355,91 +835,239 @@ export default function SettingsScreen() {
             }
           />
 
-          <Text
-            style={styles.membershipTitle}
-          >
-            Membership Plan
-          </Text>
-
-          <View
-            style={styles.membershipCard}
-          >
-            <Text
-              style={
-                styles.membershipDescription
-              }
-            >
-              Unlock all 20 scenario cards
-              &amp;{"\n"}
-              parent insights!
-            </Text>
-
-            <Text
-              style={styles.membershipPrice}
-            >
-              Monthly Subscription Pricing:
-              {"\n"}
-              $7.99/mo
-            </Text>
-
-            <View
-              style={
-                styles.subscribeButtonWrapper
-              }
-            >
-              <AppButton
-                title="Subscribe Now"
-                onPress={handleSubscribe}
+          {isSubscribed ? (
+            <>
+              <Text
                 style={
-                  styles.subscribeButton
+                  styles.manageSubscriptionTitle
                 }
-              />
-            </View>
-          </View>
+              >
+                Manage Subscription
+              </Text>
+
+              <View
+                style={
+                  styles.subscribedCard
+                }
+              >
+                <Text
+                  style={
+                    styles.subscribedPlanTitle
+                  }
+                >
+                  {planTitle}
+                </Text>
+
+                <Text
+                  style={
+                    styles.subscribedPrice
+                  }
+                >
+                  {subscriptionPrice}
+                </Text>
+
+                <View
+                  style={
+                    styles.subscribedCardDivider
+                  }
+                />
+
+                <Text
+                  style={
+                    styles.nextBillingLabel
+                  }
+                >
+                  Next billing date
+                </Text>
+
+                <Text
+                  style={
+                    styles.nextBillingDate
+                  }
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
+                >
+                  {nextBillingDate}
+                </Text>
+
+                <View
+                  style={
+                    styles.subscriptionStatusBadge
+                  }
+                >
+                  <Text
+                    style={
+                      styles.subscriptionStatusText
+                    }
+                    numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.72}
+                  >
+                    {subscriptionStatus}
+                  </Text>
+                </View>
+              </View>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.manageStoreButton,
+                  pressed &&
+                    styles.controlPressed,
+                ]}
+                onPress={
+                  handleManageSubscription
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Manage subscription in App Store"
+              >
+                <Text
+                  style={
+                    styles.manageStoreButtonText
+                  }
+                >
+                  Manage in App Store
+                </Text>
+
+                <ExternalArrow />
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text
+                style={
+                  styles.membershipTitle
+                }
+              >
+                Membership Plan
+              </Text>
+
+              <View
+                style={
+                  styles.membershipCard
+                }
+              >
+                <Text
+                  style={
+                    styles.membershipDescription
+                  }
+                >
+                  Unlock all 20 scenario cards
+                  &amp;{"\n"}
+                  parent insights!
+                </Text>
+
+                <Text
+                  style={
+                    styles.membershipPrice
+                  }
+                >
+                  Monthly Subscription Pricing:
+                  {"\n"}
+                  $7.99/mo
+                </Text>
+
+                <View
+                  style={
+                    styles.subscribeButtonWrapper
+                  }
+                >
+                  <AppButton
+                    title="Subscribe Now"
+                    onPress={
+                      handleSubscribe
+                    }
+                    style={
+                      styles.subscribeButton
+                    }
+                  />
+                </View>
+              </View>
+            </>
+          )}
 
           <View
-            style={styles.supportDivider}
+            style={[
+              styles.supportDivider,
+              {
+                top: y(
+                  activeLayout.supportDividerTop,
+                ),
+              },
+            ]}
           />
 
-          <Text style={styles.supportTitle}>
+          <Text
+            style={[
+              styles.supportTitle,
+              {
+                top: y(
+                  activeLayout.supportTitleTop,
+                ),
+              },
+            ]}
+          >
             Support &amp; Legal
           </Text>
 
           <SettingsRow
             label="Help & Support"
-            onPress={handleHelpSupport}
+            onPress={
+              handleHelpSupport
+            }
             accessibilityLabel="Open Help and Support"
-            style={styles.helpSupportRow}
+            top={
+              activeLayout.helpRowTop
+            }
           />
 
           <SettingsRow
             label={
               "Terms of Service\n& Privacy Policy"
             }
-            onPress={handleLegalDocuments}
+            onPress={
+              handleLegalDocuments
+            }
             accessibilityLabel="Open Terms of Service and Privacy Policy"
-            style={styles.legalRow}
+            top={
+              activeLayout.legalRowTop
+            }
+            height={83}
             multiline
           />
 
           <View
-            style={styles.accountDivider}
+            style={[
+              styles.accountDivider,
+              {
+                top: y(
+                  activeLayout.accountDividerTop,
+                ),
+              },
+            ]}
           />
 
           <Text
-            style={
-              styles.accountSettingsTitle
-            }
+            style={[
+              styles.accountSettingsTitle,
+              {
+                top: y(
+                  activeLayout.accountTitleTop,
+                ),
+              },
+            ]}
           >
             Account Settings
           </Text>
 
           <SettingsRow
             label="Change Password"
-            onPress={handleChangePassword}
+            onPress={
+              handleChangePassword
+            }
             accessibilityLabel="Change password"
-            style={
-              styles.changePasswordRow
+            top={
+              activeLayout.changePasswordTop
             }
           />
 
@@ -449,24 +1077,32 @@ export default function SettingsScreen() {
                 ? "Logging Out..."
                 : "Log Out"
             }
-            onPress={handleLogoutPress}
+            onPress={
+              handleLogoutPress
+            }
             accessibilityLabel="Log out"
-            style={styles.logoutRow}
+            top={
+              activeLayout.logoutTop
+            }
             disabled={signingOut}
           />
 
           <SettingsRow
             label="Delete Account"
-            onPress={handleDeleteAccount}
+            onPress={
+              handleDeleteAccount
+            }
             accessibilityLabel="Open delete account page"
-            style={
-              styles.deleteAccountRow
+            top={
+              activeLayout.deleteAccountTop
             }
           />
         </View>
       </ScrollView>
 
-      <View style={styles.fixedFooter}>
+      <View
+        style={styles.fixedFooter}
+      >
         <Pressable
           style={({ pressed }) => [
             styles.switchToChildWrapper,
@@ -489,7 +1125,9 @@ export default function SettingsScreen() {
         </Pressable>
 
         <View
-          style={styles.bottomNavWrapper}
+          style={
+            styles.bottomNavWrapper
+          }
         >
           <ParentBottomNav
             activeTab="settings"
@@ -497,18 +1135,33 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-
       <Modal
-        visible={logoutModalVisible}
+        visible={
+          logoutModalVisible
+        }
         transparent
         animationType="fade"
         presentationStyle="overFullScreen"
         statusBarTranslucent
-        onRequestClose={closeLogoutModal}
+        onRequestClose={
+          closeLogoutModal
+        }
       >
-        <View style={styles.logoutModalBackdrop}>
-          <View style={styles.logoutModalCard}>
-            <View style={styles.logoutLogoWrapper}>
+        <View
+          style={
+            styles.logoutModalBackdrop
+          }
+        >
+          <View
+            style={
+              styles.logoutModalCard
+            }
+          >
+            <View
+              style={
+                styles.logoutLogoWrapper
+              }
+            >
               <Logo
                 width={x(177.3)}
                 height={y(61)}
@@ -516,18 +1169,33 @@ export default function SettingsScreen() {
               />
             </View>
 
-            <Text style={styles.logoutModalTitle}>
+            <Text
+              style={
+                styles.logoutModalTitle
+              }
+            >
               Log Out?
             </Text>
 
-            <Text style={styles.logoutModalText}>
-              Are you sure you want to log{"\n"}
-              out? You will need to sign in{"\n"}
-              again to access parent settings{"\n"}
+            <Text
+              style={
+                styles.logoutModalText
+              }
+            >
+              Are you sure you want to log
+              {"\n"}
+              out? You will need to sign in
+              {"\n"}
+              again to access parent settings
+              {"\n"}
               and progress tracking.
             </Text>
 
-            <View style={styles.logoutModalActions}>
+            <View
+              style={
+                styles.logoutModalActions
+              }
+            >
               <Pressable
                 style={({ pressed }) => [
                   styles.logoutConfirmButton,
@@ -546,7 +1214,9 @@ export default function SettingsScreen() {
                 {signingOut ? (
                   <ActivityIndicator
                     size="small"
-                    color={colors.primary}
+                    color={
+                      colors.primary
+                    }
                   />
                 ) : (
                   <Text
@@ -567,7 +1237,9 @@ export default function SettingsScreen() {
                   signingOut &&
                     styles.disabledControl,
                 ]}
-                onPress={closeLogoutModal}
+                onPress={
+                  closeLogoutModal
+                }
                 disabled={signingOut}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel log out"
@@ -586,16 +1258,25 @@ export default function SettingsScreen() {
       </Modal>
 
       <Modal
-        visible={legalModalDocument !== null}
+        visible={
+          legalModalDocument !==
+          null
+        }
         transparent
         animationType="fade"
         presentationStyle="overFullScreen"
         statusBarTranslucent
         onRequestClose={() =>
-          setLegalModalDocument(null)
+          setLegalModalDocument(
+            null,
+          )
         }
       >
-        <View style={styles.termsModalBackdrop}>
+        <View
+          style={
+            styles.termsModalBackdrop
+          }
+        >
           <View
             style={[
               styles.termsModalPositioner,
@@ -611,573 +1292,762 @@ export default function SettingsScreen() {
           >
             <TermsModal
               visible={
-                legalModalDocument !== null
+                legalModalDocument !==
+                null
               }
-              document={legalModalDocument}
+              document={
+                legalModalDocument
+              }
               onClose={() =>
-                setLegalModalDocument(null)
+                setLegalModalDocument(
+                  null,
+                )
               }
             />
           </View>
         </View>
       </Modal>
-
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    position: "relative",
-    backgroundColor:
-      colors.background,
-  },
+const styles =
+  StyleSheet.create({
+    loadingScreen: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor:
+        colors.background,
+    },
 
-  scrollView: {
-    flex: 1,
-    backgroundColor:
-      colors.background,
-  },
+    loadingText: {
+      marginTop: y(16),
+      color: colors.primary,
+      fontFamily: "Outfit",
+      fontSize: x(18),
+      lineHeight: y(23),
+    },
 
-  scrollContent: {
-    flexGrow: 1,
-    minHeight: y(
-      FIGMA_CONTENT_HEIGHT +
+    screen: {
+      flex: 1,
+      position: "relative",
+      backgroundColor:
+        colors.background,
+    },
+
+    scrollView: {
+      flex: 1,
+      backgroundColor:
+        colors.background,
+    },
+
+    scrollContent: {
+      flexGrow: 1,
+      minHeight: y(
+        FIGMA_CONTENT_HEIGHT +
+          FOOTER_SCROLL_SPACE,
+      ),
+      paddingBottom: y(
         FOOTER_SCROLL_SPACE,
-    ),
-    paddingBottom: y(
-      FOOTER_SCROLL_SPACE,
-    ),
-    backgroundColor:
-      colors.background,
-  },
-
-  figmaFrame: {
-    width: "100%",
-    height: y(FIGMA_CONTENT_HEIGHT),
-    position: "relative",
-    backgroundColor:
-      colors.background,
-  },
-
-  audioButton: {
-    position: "absolute",
-    left: x(347),
-    top: y(48),
-    width: x(35),
-    height: x(35),
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 10,
-  },
-
-  title: {
-    position: "absolute",
-    left: x(20),
-    top: y(123),
-    width: x(362),
-    height: y(39),
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(30),
-    lineHeight: y(39),
-    textAlign: "center",
-  },
-
-  topDivider: {
-    position: "absolute",
-    left: x(20),
-    top: y(188),
-    width: x(362),
-    height:
-      StyleSheet.hairlineWidth,
-    backgroundColor: colors.primary,
-  },
-
-  notificationsTitle: {
-    position: "absolute",
-    left: x(20),
-    top: y(217),
-    width: x(285),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "LiterataBold",
-    fontSize: x(20),
-    lineHeight: y(24),
-  },
-
-  pushNotificationsText: {
-    position: "absolute",
-    left: x(20),
-    top: y(262),
-    width: x(285),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-  },
-
-  pushNotificationsToggle: {
-    position: "absolute",
-    left: x(326),
-    top: y(262),
-    width: x(56),
-    height: y(30),
-  },
-
-  weeklyReportsText: {
-    position: "absolute",
-    left: x(20),
-    top: y(307),
-    width: x(285),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-  },
-
-  weeklyReportsToggle: {
-    position: "absolute",
-    left: x(326),
-    top: y(307),
-    width: x(56),
-    height: y(30),
-  },
-
-  toggle: {
-    width: x(56),
-    height: y(30),
-    borderRadius: x(20),
-    justifyContent: "center",
-  },
-
-  toggleDisabled: {
-    backgroundColor: "#D9D9D9",
-  },
-
-  toggleEnabled: {
-    backgroundColor: colors.primary,
-  },
-
-  toggleThumb: {
-    position: "absolute",
-    top: y(5),
-    width: x(20),
-    height: x(20),
-    borderRadius: x(20),
-  },
-
-  toggleThumbDisabled: {
-    left: x(6),
-    backgroundColor: colors.primary,
-  },
-
-  toggleThumbEnabled: {
-    right: x(6),
-    backgroundColor: "#D9D9D9",
-  },
-
-  notificationsDivider: {
-    position: "absolute",
-    left: x(20),
-    top: y(366),
-    width: x(362),
-    height:
-      StyleSheet.hairlineWidth,
-    backgroundColor: colors.primary,
-  },
-
-  membershipTitle: {
-    position: "absolute",
-    left: x(20),
-    top: y(392),
-    width: x(285),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "LiterataBold",
-    fontSize: x(20),
-    lineHeight: y(24),
-  },
-
-  membershipCard: {
-    position: "absolute",
-    left: x(20),
-    top: y(437),
-    width: x(362),
-    height: y(271),
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: x(20),
-    backgroundColor:
-      colors.background,
-  },
-
-  membershipDescription: {
-    position: "absolute",
-    left: x(31),
-    top: y(21),
-    width: x(300),
-    minHeight: y(50),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(25),
-  },
-
-  membershipPrice: {
-    position: "absolute",
-    left: x(31),
-    top: y(106),
-    width: x(300),
-    minHeight: y(50),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(25),
-  },
-
-  subscribeButtonWrapper: {
-    position: "absolute",
-    left: x(76.5),
-    top: y(188),
-    width: x(209),
-    height: y(52),
-  },
-
-  subscribeButton: {
-    width: x(209),
-    height: y(52),
-    borderRadius: x(20),
-    shadowColor: colors.black,
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+      ),
+      backgroundColor:
+        colors.background,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
 
-  supportDivider: {
-    position: "absolute",
-    left: x(20),
-    top: y(737),
-    width: x(362),
-    height:
-      StyleSheet.hairlineWidth,
-    backgroundColor: colors.primary,
-  },
-
-  supportTitle: {
-    position: "absolute",
-    left: x(20),
-    top: y(763),
-    width: x(285),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "LiterataBold",
-    fontSize: x(20),
-    lineHeight: y(24),
-  },
-
-  settingsRow: {
-    position: "absolute",
-    left: x(20),
-    width: x(362),
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: x(20),
-    backgroundColor:
-      colors.background,
-    justifyContent: "center",
-    shadowColor: colors.black,
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+    figmaFrame: {
+      position: "relative",
+      width: "100%",
+      height: y(
+        FIGMA_CONTENT_HEIGHT,
+      ),
+      backgroundColor:
+        colors.background,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 4,
-  },
 
-  helpSupportRow: {
-    top: y(813),
-    height: y(62),
-  },
-
-  legalRow: {
-    top: y(890),
-    height: y(83),
-  },
-
-  settingsRowText: {
-    width: x(319),
-    marginLeft: x(21),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-  },
-
-  settingsRowTextMultiline: {
-    lineHeight: y(24),
-  },
-
-  chevronWrapper: {
-    position: "absolute",
-    right: x(18),
-    top: "50%",
-    width: x(18),
-    height: y(18),
-    marginTop: y(-9),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  chevronRight: {
-    width: x(10),
-    height: x(10),
-    borderTopWidth: x(2),
-    borderRightWidth: x(2),
-    borderColor: colors.primary,
-    transform: [{ rotate: "45deg" }],
-  },
-
-  accountDivider: {
-    position: "absolute",
-    left: x(20),
-    top: y(1010),
-    width: x(362),
-    height:
-      StyleSheet.hairlineWidth,
-    backgroundColor: colors.primary,
-  },
-
-  accountSettingsTitle: {
-    position: "absolute",
-    left: x(20),
-    top: y(1036),
-    width: x(285),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "LiterataBold",
-    fontSize: x(20),
-    lineHeight: y(24),
-  },
-
-  changePasswordRow: {
-    top: y(1086),
-    height: y(62),
-  },
-
-  logoutRow: {
-    top: y(1162),
-    height: y(62),
-  },
-
-  deleteAccountRow: {
-    top: y(1238),
-    height: y(62),
-  },
-
-  fixedFooter: {
-    position: "absolute",
-    left: x(20),
-    bottom: y(
-      FIXED_FOOTER_BOTTOM,
-    ),
-    width: x(362),
-    height: y(
-      FIXED_FOOTER_HEIGHT,
-    ),
-    backgroundColor: "transparent",
-    zIndex: 50,
-  },
-
-  switchToChildWrapper: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    minWidth: x(226),
-    height: y(28),
-    justifyContent: "center",
-  },
-
-  switchToChildText: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textDecorationLine: "underline",
-  },
-
-  bottomNavWrapper: {
-    position: "absolute",
-    left: 0,
-    top: y(33),
-    width: x(362),
-    height: y(72),
-    borderRadius: x(50),
-    backgroundColor:
-      colors.background,
-    overflow: "hidden",
-    zIndex: 50,
-    elevation: 12,
-
-    shadowColor: colors.black,
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+    audioButton: {
+      position: "absolute",
+      left: x(347),
+      top: y(48),
+      width: x(35),
+      height: x(35),
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 10,
     },
-    shadowOpacity: 0.12,
-    shadowRadius: x(5),
-  },
 
-  logoutModalBackdrop: {
-    flex: 1,
-    backgroundColor:
-      "rgba(0, 0, 0, 0.50)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  logoutModalCard: {
-    position: "relative",
-    width: x(331),
-    height: y(500),
-    borderRadius: x(20),
-    backgroundColor: "#F1F3F5",
-    overflow: "visible",
-
-    shadowColor: colors.black,
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+    title: {
+      position: "absolute",
+      left: x(20),
+      top: y(123),
+      width: x(362),
+      height: y(39),
+      color: colors.primary,
+      fontFamily: "Outfit",
+      fontSize: x(30),
+      lineHeight: y(39),
+      textAlign: "center",
+      includeFontPadding: false,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 10,
-  },
 
-  logoutLogoWrapper: {
-    position: "absolute",
-    left: x(76.85),
-    top: y(63),
-    width: x(177.3),
-    height: y(61),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  logoutModalTitle: {
-    position: "absolute",
-    left: x(89.59),
-    top: y(165),
-    width: x(151.82),
-    height: y(38),
-    color: colors.primary,
-    fontFamily: "OutfitBold",
-    fontSize: x(30),
-    lineHeight: y(38),
-    textAlign: "center",
-  },
-
-  logoutModalText: {
-    position: "absolute",
-    left: x(15),
-    top: y(224),
-    width: x(300),
-    height: y(120),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(20),
-    textAlign: "center",
-    textAlignVertical: "center",
-  },
-
-  logoutModalActions: {
-    position: "absolute",
-    left: x(41),
-    top: y(385),
-    width: x(249),
-    height: y(52),
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  logoutConfirmButton: {
-    width: x(117),
-    height: y(52),
-    borderRadius: x(20),
-    backgroundColor: "#D9D9D9",
-    alignItems: "center",
-    justifyContent: "center",
-
-    shadowColor: colors.black,
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+    topDivider: {
+      position: "absolute",
+      left: x(20),
+      top: y(188),
+      width: x(362),
+      height:
+        StyleSheet.hairlineWidth,
+      backgroundColor:
+        colors.primary,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
 
-  logoutCancelButton: {
-    width: x(117),
-    height: y(52),
-    borderRadius: x(20),
-    backgroundColor: "#E8D8F1",
-    alignItems: "center",
-    justifyContent: "center",
-
-    shadowColor: colors.black,
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+    notificationsTitle: {
+      position: "absolute",
+      left: x(20),
+      top: y(217),
+      width: x(285),
+      height: y(24),
+      color: colors.primary,
+      fontFamily:
+        "LiterataBold",
+      fontSize: x(20),
+      lineHeight: y(24),
+      includeFontPadding: false,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
 
-  logoutConfirmButtonText: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(16),
-    lineHeight: y(20),
-    textAlign: "center",
-  },
+    pushNotificationsText: {
+      position: "absolute",
+      left: x(20),
+      top: y(262),
+      width: x(285),
+      height: y(24),
+      color: colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(20),
+      lineHeight: y(24),
+      includeFontPadding: false,
+    },
 
-  logoutCancelButtonText: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(16),
-    lineHeight: y(20),
-    textAlign: "center",
-  },
+    pushNotificationsToggle: {
+      position: "absolute",
+      left: x(326),
+      top: y(262),
+      width: x(56),
+      height: y(30),
+    },
 
-  termsModalBackdrop: {
-    flex: 1,
-    position: "relative",
-    backgroundColor: "transparent",
-  },
+    weeklyReportsText: {
+      position: "absolute",
+      left: x(20),
+      top: y(307),
+      width: x(285),
+      height: y(24),
+      color: colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(20),
+      lineHeight: y(24),
+      includeFontPadding: false,
+    },
 
-  termsModalPositioner: {
-    flex: 1,
-    position: "relative",
-  },
+    weeklyReportsToggle: {
+      position: "absolute",
+      left: x(326),
+      top: y(307),
+      width: x(56),
+      height: y(30),
+    },
 
-  controlPressed: {
-    opacity: 0.65,
-  },
+    toggle: {
+      width: x(56),
+      height: y(30),
+      borderRadius: x(20),
+      justifyContent: "center",
+    },
 
-  disabledControl: {
-    opacity: 0.55,
-  },
-});
+    toggleDisabled: {
+      backgroundColor: "#D9D9D9",
+    },
+
+    toggleEnabled: {
+      backgroundColor:
+        colors.primary,
+    },
+
+    toggleThumb: {
+      position: "absolute",
+      top: y(5),
+      width: x(20),
+      height: x(20),
+      borderRadius: x(20),
+    },
+
+    toggleThumbDisabled: {
+      left: x(6),
+      backgroundColor:
+        colors.primary,
+    },
+
+    toggleThumbEnabled: {
+      right: x(6),
+      backgroundColor:
+        "#D9D9D9",
+    },
+
+    notificationsDivider: {
+      position: "absolute",
+      left: x(20),
+      top: y(366),
+      width: x(362),
+      height:
+        StyleSheet.hairlineWidth,
+      backgroundColor:
+        colors.primary,
+    },
+
+    membershipTitle: {
+      position: "absolute",
+      left: x(20),
+      top: y(392),
+      width: x(285),
+      height: y(24),
+      color: colors.primary,
+      fontFamily:
+        "LiterataBold",
+      fontSize: x(20),
+      lineHeight: y(24),
+      includeFontPadding: false,
+    },
+
+    membershipCard: {
+      position: "absolute",
+      left: x(20),
+      top: y(437),
+      width: x(362),
+      height: y(271),
+      borderWidth: 1,
+      borderColor:
+        colors.primary,
+      borderRadius: x(20),
+      backgroundColor:
+        colors.background,
+    },
+
+    membershipDescription: {
+      position: "absolute",
+      left: x(31),
+      top: y(21),
+      width: x(300),
+      minHeight: y(50),
+      color: colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(20),
+      lineHeight: y(25),
+    },
+
+    membershipPrice: {
+      position: "absolute",
+      left: x(31),
+      top: y(106),
+      width: x(300),
+      minHeight: y(50),
+      color: colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(20),
+      lineHeight: y(25),
+    },
+
+    subscribeButtonWrapper: {
+      position: "absolute",
+      left: x(76.5),
+      top: y(188),
+      width: x(209),
+      height: y(52),
+    },
+
+    subscribeButton: {
+      width: x(209),
+      height: y(52),
+      borderRadius: x(20),
+
+      shadowColor:
+        colors.black,
+      shadowOffset: {
+        width: 0,
+        height: y(4),
+      },
+      shadowOpacity: 0.25,
+      shadowRadius: x(4),
+      elevation: 5,
+    },
+
+    manageSubscriptionTitle: {
+      position: "absolute",
+      left: x(20),
+      top: y(392),
+      width: x(285),
+      height: y(24),
+      color: colors.primary,
+      fontFamily:
+        "LiterataBold",
+      fontSize: x(20),
+      lineHeight: y(24),
+      includeFontPadding: false,
+    },
+
+    subscribedCard: {
+      position: "absolute",
+      left: x(20),
+      top: y(442),
+      width: x(362),
+      height: y(271),
+      borderWidth: 1,
+      borderColor:
+        colors.primary,
+      borderRadius: x(20),
+      backgroundColor:
+        colors.background,
+    },
+
+    subscribedPlanTitle: {
+      position: "absolute",
+      left: x(81.5),
+      top: y(26),
+      width: x(199),
+      minHeight: y(50),
+      color: colors.primary,
+      fontFamily:
+        "LiterataBold",
+      fontSize: x(20),
+      lineHeight: y(25),
+      textAlign: "center",
+      includeFontPadding: false,
+    },
+
+    subscribedPrice: {
+      position: "absolute",
+      left: x(81.5),
+      top: y(101),
+      width: x(199),
+      minHeight: y(50),
+      color: colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(20),
+      lineHeight: y(25),
+      textAlign: "center",
+      includeFontPadding: false,
+    },
+
+    subscribedCardDivider: {
+      position: "absolute",
+      left: x(21),
+      top: y(171),
+      width: x(318),
+      height:
+        StyleSheet.hairlineWidth,
+      backgroundColor:
+        colors.primary,
+    },
+
+    nextBillingLabel: {
+      position: "absolute",
+      left: x(21),
+      top: y(196),
+      width: x(199),
+      height: y(25),
+      color: colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(20),
+      lineHeight: y(25),
+      includeFontPadding: false,
+    },
+
+    nextBillingDate: {
+      position: "absolute",
+      left: x(21),
+      top: y(221),
+      width: x(199),
+      height: y(25),
+      color: colors.primary,
+      fontFamily:
+        "LiterataBold",
+      fontSize: x(20),
+      lineHeight: y(25),
+      includeFontPadding: false,
+    },
+
+    subscriptionStatusBadge: {
+      position: "absolute",
+      left: x(221),
+      top: y(199),
+      width: x(118),
+      height: y(45),
+      borderRadius: x(10),
+      backgroundColor:
+        "#DDEAEC",
+      paddingHorizontal: x(5),
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    subscriptionStatusText: {
+      width: "100%",
+      color: colors.primary,
+      fontFamily: "Outfit",
+      fontSize: x(12),
+      lineHeight: y(15),
+      textAlign: "center",
+      includeFontPadding: false,
+    },
+
+    manageStoreButton: {
+      position: "absolute",
+      left: x(20),
+      top: y(756),
+      width: x(362),
+      height: y(52),
+      borderRadius: x(20),
+      backgroundColor:
+        "#E6D8EB",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+
+      shadowColor:
+        colors.black,
+      shadowOffset: {
+        width: 0,
+        height: y(4),
+      },
+      shadowOpacity: 0.25,
+      shadowRadius: x(4),
+      elevation: 5,
+    },
+
+    manageStoreButtonText: {
+      color: colors.primary,
+      fontFamily: "Outfit",
+      fontSize: x(20),
+      lineHeight: y(25),
+      textAlign: "center",
+      includeFontPadding: false,
+    },
+
+    externalArrowWrapper: {
+      width: x(18),
+      height: x(18),
+      marginLeft: x(12),
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    supportDivider: {
+      position: "absolute",
+      left: x(20),
+      width: x(362),
+      height:
+        StyleSheet.hairlineWidth,
+      backgroundColor:
+        colors.primary,
+    },
+
+    supportTitle: {
+      position: "absolute",
+      left: x(20),
+      width: x(285),
+      height: y(24),
+      color: colors.primary,
+      fontFamily:
+        "LiterataBold",
+      fontSize: x(20),
+      lineHeight: y(24),
+      includeFontPadding: false,
+    },
+
+    settingsRow: {
+      position: "absolute",
+      left: x(20),
+      width: x(362),
+      borderWidth: 1,
+      borderColor:
+        colors.primary,
+      borderRadius: x(20),
+      backgroundColor:
+        colors.background,
+      justifyContent: "center",
+
+      shadowColor:
+        colors.black,
+      shadowOffset: {
+        width: 0,
+        height: y(4),
+      },
+      shadowOpacity: 0.25,
+      shadowRadius: x(4),
+      elevation: 4,
+    },
+
+    settingsRowText: {
+      width: x(319),
+      marginLeft: x(21),
+      color: colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(20),
+      lineHeight: y(24),
+    },
+
+    settingsRowTextMultiline: {
+      lineHeight: y(24),
+    },
+
+    chevronWrapper: {
+      position: "absolute",
+      right: x(18),
+      top: "50%",
+      width: x(18),
+      height: y(18),
+      marginTop: y(-9),
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    chevronRight: {
+      width: x(10),
+      height: x(10),
+      borderTopWidth: x(2),
+      borderRightWidth: x(2),
+      borderColor:
+        colors.primary,
+      transform: [
+        {
+          rotate: "45deg",
+        },
+      ],
+    },
+
+    accountDivider: {
+      position: "absolute",
+      left: x(20),
+      width: x(362),
+      height:
+        StyleSheet.hairlineWidth,
+      backgroundColor:
+        colors.primary,
+    },
+
+    accountSettingsTitle: {
+      position: "absolute",
+      left: x(20),
+      width: x(285),
+      height: y(24),
+      color: colors.primary,
+      fontFamily:
+        "LiterataBold",
+      fontSize: x(20),
+      lineHeight: y(24),
+      includeFontPadding: false,
+    },
+
+    fixedFooter: {
+      position: "absolute",
+      left: x(20),
+      bottom: y(
+        FIXED_FOOTER_BOTTOM,
+      ),
+      width: x(362),
+      height: y(
+        FIXED_FOOTER_HEIGHT,
+      ),
+      backgroundColor:
+        "transparent",
+      zIndex: 50,
+    },
+
+    switchToChildWrapper: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      minWidth: x(226),
+      height: y(28),
+      justifyContent: "center",
+      backgroundColor:
+        "transparent",
+    },
+
+    switchToChildText: {
+      color: colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(20),
+      lineHeight: y(24),
+      textDecorationLine:
+        "underline",
+      includeFontPadding: false,
+    },
+
+    bottomNavWrapper: {
+      position: "absolute",
+      left: 0,
+      top: y(33),
+      width: x(362),
+      height: y(72),
+      borderRadius: x(50),
+      backgroundColor:
+        "transparent",
+      overflow: "visible",
+      zIndex: 50,
+    },
+
+    logoutModalBackdrop: {
+      flex: 1,
+      backgroundColor:
+        "rgba(0, 0, 0, 0.50)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    logoutModalCard: {
+      position: "relative",
+      width: x(331),
+      height: y(500),
+      borderRadius: x(20),
+      backgroundColor:
+        "#F1F3F5",
+      overflow: "visible",
+
+      shadowColor:
+        colors.black,
+      shadowOffset: {
+        width: 0,
+        height: y(4),
+      },
+      shadowOpacity: 0.25,
+      shadowRadius: x(4),
+      elevation: 10,
+    },
+
+    logoutLogoWrapper: {
+      position: "absolute",
+      left: x(76.85),
+      top: y(63),
+      width: x(177.3),
+      height: y(61),
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    logoutModalTitle: {
+      position: "absolute",
+      left: x(89.59),
+      top: y(165),
+      width: x(151.82),
+      height: y(38),
+      color: colors.primary,
+      fontFamily:
+        "OutfitBold",
+      fontSize: x(30),
+      lineHeight: y(38),
+      textAlign: "center",
+    },
+
+    logoutModalText: {
+      position: "absolute",
+      left: x(15),
+      top: y(224),
+      width: x(300),
+      height: y(120),
+      color: colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(20),
+      lineHeight: y(20),
+      textAlign: "center",
+      textAlignVertical:
+        "center",
+    },
+
+    logoutModalActions: {
+      position: "absolute",
+      left: x(41),
+      top: y(385),
+      width: x(249),
+      height: y(52),
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent:
+        "space-between",
+    },
+
+    logoutConfirmButton: {
+      width: x(117),
+      height: y(52),
+      borderRadius: x(20),
+      backgroundColor:
+        "#D9D9D9",
+      alignItems: "center",
+      justifyContent: "center",
+
+      shadowColor:
+        colors.black,
+      shadowOffset: {
+        width: 0,
+        height: y(4),
+      },
+      shadowOpacity: 0.25,
+      shadowRadius: x(4),
+      elevation: 5,
+    },
+
+    logoutCancelButton: {
+      width: x(117),
+      height: y(52),
+      borderRadius: x(20),
+      backgroundColor:
+        "#E8D8F1",
+      alignItems: "center",
+      justifyContent: "center",
+
+      shadowColor:
+        colors.black,
+      shadowOffset: {
+        width: 0,
+        height: y(4),
+      },
+      shadowOpacity: 0.25,
+      shadowRadius: x(4),
+      elevation: 5,
+    },
+
+    logoutConfirmButtonText: {
+      color: colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(16),
+      lineHeight: y(20),
+      textAlign: "center",
+    },
+
+    logoutCancelButtonText: {
+      color: colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(16),
+      lineHeight: y(20),
+      textAlign: "center",
+    },
+
+    termsModalBackdrop: {
+      flex: 1,
+      position: "relative",
+      backgroundColor:
+        "transparent",
+    },
+
+    termsModalPositioner: {
+      flex: 1,
+      position: "relative",
+    },
+
+    controlPressed: {
+      opacity: 0.65,
+    },
+
+    disabledControl: {
+      opacity: 0.55,
+    },
+  });
