@@ -5,13 +5,12 @@
  * - stage 1 is always unlocked
  * - every next stage stays locked until ALL previous stages are completed
  *
- * Useful for:
+ * Use this for:
  * - Choose Your Courage
  * - Emotion Puzzle Match
  * - any other adventure game level selector
  */
 
-import { Ionicons } from "@expo/vector-icons";
 import { router, type Href } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -29,6 +28,7 @@ import { useChildRewards } from "@/hooks/useChildRewards";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../../assets/icons/audio-off.svg";
+import BackIcon from "../../../assets/icons/back.svg";
 import AudioOnIcon from "../../../assets/icons/audio-on.svg";
 import BadgeIcon from "../../../assets/icons/certificate-badge.svg";
 import DiamondIcon from "../../../assets/icons/diamond.svg";
@@ -178,10 +178,9 @@ export default function SequentialAdventureSelector({
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Ionicons
-              name="arrow-back"
-              size={x(26)}
-              color={colors.primary}
+            <BackIcon
+              width={x(37.24)}
+              height={y(22.18)}
             />
           </Pressable>
 

@@ -1,5 +1,15 @@
 /**
  * Choose Your Courage scenario card screen.
+ *
+ * Matches the Figma layout:
+ * - scenario number at top 79, left 185
+ * - card at top 171, left 11
+ * - front and back both use exactly 380 × 532
+ * - card/screen background is #DDEAEC
+ *
+ * The front and back stay mounted at the same time and cross-fade.
+ * This avoids the visible flash that happened when one side was
+ * unmounted before the other side finished rendering.
  */
 
 import type { ComponentType } from "react";
@@ -140,6 +150,9 @@ export default function ScenarioCardScreen() {
   /**
    * 0 = front visible
    * 1 = back visible
+   *
+   * Both sides remain mounted, so tapping never waits for the
+   * SVG or PNG to be created again.
    */
   const sideProgress = useRef(
     new Animated.Value(0),
@@ -548,7 +561,11 @@ const styles = StyleSheet.create({
   },
 
   cardSide: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     width: x(CARD_WIDTH),
     height: y(CARD_HEIGHT),
     backgroundColor: SCREEN_BACKGROUND,
