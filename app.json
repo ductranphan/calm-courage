@@ -30,7 +30,8 @@
         }
       ],
       "expo-font",
-      "expo-audio"
+      "expo-audio",
+      "expo-mail-composer"
     ],
     "experiments": {
       "typedRoutes": true
