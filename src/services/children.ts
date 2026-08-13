@@ -17,6 +17,7 @@ import {
 
 import { db } from "@/config/firebase";
 import type { AvatarId } from "@/constants/avatars";
+import { deleteChildStorageFiles } from "@/services/storage";
 
 export type ChildProfile = {
   id: string;
@@ -289,5 +290,32 @@ export async function deleteChild(
     childId,
   );
 
+  const subcollections = [
+    "checkIns",
+    "activityAttempts",
+    "quests",
+    "media",
+  ] as const;
+
+  for (const subcollection of subcollections) {
+    const snapshot = await getDocs(
+      collection(
+        db,
+        "parents",
+        parentUid,
+        "children",
+        childId,
+        subcollection,
+      ),
+    );
+
+    await Promise.all(
+      snapshot.docs.map((documentSnapshot) =>
+        deleteDoc(documentSnapshot.ref),
+      ),
+    );
+  }
+
+  await deleteChildStorageFiles(parentUid, childId);
   await deleteDoc(childRef);
 }

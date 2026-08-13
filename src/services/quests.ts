@@ -513,3 +513,63 @@ export async function completeQuest(
     catalog,
   );
 }
+
+/**
+ * Marks a completed quest reward as claimed (and optional certificate request).
+ */
+export async function claimQuestReward(
+  parentUid: string,
+  childId: string,
+  questId: string,
+  options?: {
+    certificateRequested?: boolean;
+    weekKey?: string;
+  },
+): Promise<ChildQuest | null> {
+  const catalog = QUEST_CATALOG_BY_ID[questId];
+  const weekKey = options?.weekKey ?? getWeekKey();
+
+  if (!catalog) {
+    return null;
+  }
+
+  const ref = questRef(
+    parentUid,
+    childId,
+    weekKey,
+    questId,
+  );
+  const snapshot = await getDoc(ref);
+
+  if (!snapshot.exists()) {
+    return null;
+  }
+
+  const current = snapshot.data() as Record<
+    string,
+    unknown
+  >;
+
+  if (current.status !== "completed") {
+    throw new Error(
+      "Finish the quest before claiming the reward.",
+    );
+  }
+
+  await updateDoc(ref, {
+    rewardClaimedAt: serverTimestamp(),
+    ...(options?.certificateRequested
+      ? {
+          certificateRequestedAt: serverTimestamp(),
+        }
+      : {}),
+    updatedAt: serverTimestamp(),
+  });
+
+  const claimedSnapshot = await getDoc(ref);
+
+  return mapQuest(
+    claimedSnapshot.data() as Record<string, unknown>,
+    catalog,
+  );
+}

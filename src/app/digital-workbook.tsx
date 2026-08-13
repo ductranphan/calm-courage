@@ -51,7 +51,7 @@ import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
 import { useChildRewards } from "@/hooks/useChildRewards";
-import { saveWorkbookPage } from "@/services/childMedia";
+import { saveWorkbookPage, listChildMedia } from "@/services/childMedia";
 import { getChild } from "@/services/children";
 import { x, y } from "@/utils/scaling";
 
@@ -327,6 +327,90 @@ export default function DigitalWorkbookScreen() {
       );
     }
   }, [activeChild, childModeActive]);
+
+  useEffect(() => {
+    let stillMounted = true;
+
+    async function hydrateWorkbookMedia() {
+      if (
+        !user?.uid ||
+        !activeChild?.id ||
+        workbookVariant !== "drawing"
+      ) {
+        return;
+      }
+
+      try {
+        const media = await listChildMedia(
+          user.uid,
+          activeChild.id,
+        );
+
+        if (!stillMounted) {
+          return;
+        }
+
+        const nextDrawings = createEmptyDrawingPages();
+        const nextAudio = createEmptyAudioPages();
+
+        for (const item of media) {
+          if (
+            typeof item.pageIndex !== "number" ||
+            item.pageIndex < 0 ||
+            item.pageIndex >= PAGE_COUNT
+          ) {
+            continue;
+          }
+
+          if (
+            item.kind === "workbook_drawing" &&
+            item.drawingPayload &&
+            !nextDrawings[item.pageIndex]?.length
+          ) {
+            try {
+              const parsed = JSON.parse(
+                item.drawingPayload,
+              ) as unknown;
+
+              if (Array.isArray(parsed)) {
+                nextDrawings[item.pageIndex] =
+                  parsed as (typeof nextDrawings)[number];
+              }
+            } catch {
+              // Skip invalid drawing payloads.
+            }
+          }
+
+          if (
+            item.kind === "workbook_audio" &&
+            item.downloadUrl &&
+            !nextAudio[item.pageIndex]
+          ) {
+            nextAudio[item.pageIndex] =
+              item.downloadUrl;
+          }
+        }
+
+        setDrawingPages(nextDrawings);
+        setSavedAudioUris(nextAudio);
+      } catch (error) {
+        console.warn(
+          "Unable to hydrate workbook media:",
+          error,
+        );
+      }
+    }
+
+    void hydrateWorkbookMedia();
+
+    return () => {
+      stillMounted = false;
+    };
+  }, [
+    activeChild?.id,
+    user?.uid,
+    workbookVariant,
+  ]);
 
   useEffect(() => {
     let stillMounted = true;

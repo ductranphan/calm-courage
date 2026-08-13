@@ -20,8 +20,13 @@ import {
 } from "react-native";
 
 import { colors } from "@/constants/colors";
+import { GAME_HUB_ACTIVITY_IDS } from "@/constants/activities";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
+import {
+  isHubLevelLocked,
+  useActivityCompleted,
+} from "@/hooks/useActivityCompleted";
 import { useChildRewards } from "@/hooks/useChildRewards";
 import { x, y } from "@/utils/scaling";
 
@@ -76,6 +81,11 @@ export default function ScenarioChallengesScreen() {
   const { activeChild } = useActiveChild();
   const { childModeActive } = useParentAccess();
   const rewards = useChildRewards(activeChild?.id);
+  const { completed: phaseCompleted } =
+    useActivityCompleted(
+      activeChild?.id,
+      GAME_HUB_ACTIVITY_IDS.scenario,
+    );
 
   const [audioEnabled, setAudioEnabled] =
     useState(false);
@@ -221,8 +231,10 @@ export default function ScenarioChallengesScreen() {
           </View>
 
           {scenarios.map((scenario) => {
-            const isLocked =
-              scenario.id > 1;
+            const isLocked = isHubLevelLocked(
+              scenario.id,
+              phaseCompleted,
+            );
 
             return (
               <Pressable

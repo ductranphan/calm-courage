@@ -19,8 +19,13 @@ import {
 } from "react-native";
 
 import { colors } from "@/constants/colors";
+import { GAME_HUB_ACTIVITY_IDS } from "@/constants/activities";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
+import {
+  isHubLevelLocked,
+  useActivityCompleted,
+} from "@/hooks/useActivityCompleted";
 import { useChildRewards } from "@/hooks/useChildRewards";
 import { openGameLevel } from "@/utils/openGameLevel";
 import { x, y } from "@/utils/scaling";
@@ -81,6 +86,11 @@ export default function ConfidenceQuestsScreen() {
   const { activeChild } = useActiveChild();
   const { childModeActive } = useParentAccess();
   const rewards = useChildRewards(activeChild?.id);
+  const { completed: phaseCompleted } =
+    useActivityCompleted(
+      activeChild?.id,
+      GAME_HUB_ACTIVITY_IDS.confidence,
+    );
 
   const [audioEnabled, setAudioEnabled] =
     useState(false);
@@ -212,8 +222,10 @@ export default function ConfidenceQuestsScreen() {
           </View>
 
           {miniSessions.map((session) => {
-            const isLocked =
-              session.id > 1;
+            const isLocked = isHubLevelLocked(
+              session.id,
+              phaseCompleted,
+            );
 
             return (
               <Pressable

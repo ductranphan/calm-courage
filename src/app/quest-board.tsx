@@ -32,6 +32,7 @@ import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
 import {
+  claimQuestReward,
   completeQuest,
   listChildQuests,
   seedWeeklyQuests,
@@ -396,22 +397,52 @@ export default function QuestBoardScreen() {
     }
   }
 
-  function handleClaimReward() {
+  async function handleClaimReward() {
+    if (
+      user?.uid &&
+      activeChild?.id &&
+      pendingClaimQuestId
+    ) {
+      try {
+        await claimQuestReward(
+          user.uid,
+          activeChild.id,
+          pendingClaimQuestId,
+        );
+      } catch (error) {
+        console.warn(
+          "Unable to claim quest reward:",
+          error,
+        );
+      }
+    }
+
     setRewardUnlockVisible(false);
     setPendingClaimQuestId(null);
   }
 
-  function handlePrintCertificate() {
-    console.log(
-      "Certificate requested:",
-      {
-        childId: activeChild?.id,
-        questId:
-          pendingClaimQuestId ??
-          "confidence-climb",
-        rewardId: "star-explorer-hat",
-      },
-    );
+  async function handlePrintCertificate() {
+    const questId =
+      pendingClaimQuestId ??
+      "confidence-climb";
+
+    if (!user?.uid || !activeChild?.id) {
+      return;
+    }
+
+    try {
+      await claimQuestReward(
+        user.uid,
+        activeChild.id,
+        questId,
+        { certificateRequested: true },
+      );
+    } catch (error) {
+      console.warn(
+        "Unable to request quest certificate:",
+        error,
+      );
+    }
   }
 
   if (!childModeActive || !activeChild) {
@@ -768,10 +799,12 @@ export default function QuestBoardScreen() {
         onClose={() =>
           setRewardUnlockVisible(false)
         }
-        onClaimReward={handleClaimReward}
-        onPrintCertificate={
-          handlePrintCertificate
-        }
+        onClaimReward={() => {
+          void handleClaimReward();
+        }}
+        onPrintCertificate={() => {
+          void handlePrintCertificate();
+        }}
       />
     </View>
   );

@@ -30,7 +30,12 @@ import {
 } from "@/constants/scenarioChallenges";
 import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
+import {
+  completeActivityById,
+  startActivityById,
+} from "@/services/activityAttempts";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -118,6 +123,7 @@ function getFrontFontSize(
 }
 
 export default function ScenarioCardScreen() {
+  const { user } = useAuth();
   const { activeChild } = useActiveChild();
   const { childModeActive } = useParentAccess();
 
@@ -136,6 +142,9 @@ export default function ScenarioCardScreen() {
     frontImageLoaded,
     setFrontImageLoaded,
   ] = useState(false);
+
+  const hasStartedRef = useRef(false);
+  const hasCompletedRef = useRef(false);
 
   /**
    * 0 = front visible
@@ -201,6 +210,75 @@ export default function ScenarioCardScreen() {
     SCENARIO_BACK_CARDS[
       parsedScenarioId
     ];
+
+  /*
+   * Scenario 1 is the Phase 1 "Try Something New" path.
+   * Start the attempt when the card opens; complete once on first flip to back.
+   */
+  useEffect(() => {
+    if (
+      !user?.uid ||
+      !activeChild?.id ||
+      scenario?.id !== 1 ||
+      hasStartedRef.current
+    ) {
+      return;
+    }
+
+    hasStartedRef.current = true;
+
+    void startActivityById(
+      user.uid,
+      activeChild.id,
+      "phase1_try_something_new",
+      {
+        source: "scenario_card",
+        scenarioId: 1,
+      },
+    ).catch((error: unknown) => {
+      console.warn(
+        "Unable to start scenario activity:",
+        error,
+      );
+      hasStartedRef.current = false;
+    });
+  }, [activeChild?.id, scenario?.id, user?.uid]);
+
+  useEffect(() => {
+    if (
+      !showBack ||
+      !user?.uid ||
+      !activeChild?.id ||
+      scenario?.id !== 1 ||
+      hasCompletedRef.current
+    ) {
+      return;
+    }
+
+    hasCompletedRef.current = true;
+
+    void completeActivityById(
+      user.uid,
+      activeChild.id,
+      "phase1_try_something_new",
+      {
+        source: "scenario_card",
+        scenarioId: 1,
+        flippedToBack: true,
+      },
+    ).catch((error: unknown) => {
+      console.warn(
+        "Unable to complete scenario activity:",
+        error,
+      );
+      hasCompletedRef.current = false;
+    });
+  }, [
+    activeChild?.id,
+    scenario?.id,
+    showBack,
+    user?.uid,
+  ]);
 
   function handleBack() {
     if (showBack) {
