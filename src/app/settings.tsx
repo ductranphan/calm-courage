@@ -65,6 +65,10 @@ import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
+import {
+  getParentPreferences,
+  updateParentPreferences,
+} from "@/services/preferences";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -416,6 +420,23 @@ export default function SettingsScreen() {
               ),
             );
 
+          const preferences =
+            await getParentPreferences(
+              user.uid,
+            );
+
+          if (isMounted) {
+            setAudioEnabled(
+              preferences.audioEnabled,
+            );
+            setPushNotifications(
+              preferences.pushNotifications,
+            );
+            setWeeklyEmailReports(
+              preferences.weeklyEmailReports,
+            );
+          }
+
           if (
             !isMounted ||
             !snapshot.exists()
@@ -489,6 +510,34 @@ export default function SettingsScreen() {
       };
     }, [user?.uid]),
   );
+
+  async function persistPreference(
+    patch: {
+      audioEnabled?: boolean;
+      pushNotifications?: boolean;
+      weeklyEmailReports?: boolean;
+    },
+  ) {
+    if (!user?.uid) {
+      return;
+    }
+
+    try {
+      await updateParentPreferences(
+        user.uid,
+        patch,
+      );
+    } catch (error) {
+      console.error(
+        "Unable to save parent preferences:",
+        error,
+      );
+      Alert.alert(
+        "Could not save",
+        "Your preference could not be saved. Please try again.",
+      );
+    }
+  }
 
   const termsModalTranslateY =
     (viewportHeight -
@@ -728,12 +777,15 @@ export default function SettingsScreen() {
               pressed &&
                 styles.controlPressed,
             ]}
-            onPress={() =>
-              setAudioEnabled(
-                (current) =>
-                  !current,
-              )
-            }
+            onPress={() => {
+              setAudioEnabled((current) => {
+                const next = !current;
+                void persistPreference({
+                  audioEnabled: next,
+                });
+                return next;
+              });
+            }}
             accessibilityRole="button"
             accessibilityLabel={
               audioEnabled
@@ -792,12 +844,17 @@ export default function SettingsScreen() {
               enabled={
                 pushNotifications
               }
-              onChange={() =>
+              onChange={() => {
                 setPushNotifications(
-                  (current) =>
-                    !current,
-                )
-              }
+                  (current) => {
+                    const next = !current;
+                    void persistPreference({
+                      pushNotifications: next,
+                    });
+                    return next;
+                  },
+                );
+              }}
               accessibilityLabel="Push notifications"
             />
           </View>
@@ -819,12 +876,17 @@ export default function SettingsScreen() {
               enabled={
                 weeklyEmailReports
               }
-              onChange={() =>
+              onChange={() => {
                 setWeeklyEmailReports(
-                  (current) =>
-                    !current,
-                )
-              }
+                  (current) => {
+                    const next = !current;
+                    void persistPreference({
+                      weeklyEmailReports: next,
+                    });
+                    return next;
+                  },
+                );
+              }}
               accessibilityLabel="Weekly email reports"
             />
           </View>

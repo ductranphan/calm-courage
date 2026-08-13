@@ -32,6 +32,7 @@ import {
 
 import { auth, db } from "@/config/firebase";
 import { CONSENT_VERSION } from "@/constants/consent";
+import { deleteParentStorageFiles } from "@/services/storage";
 import { hashPin } from "@/utils/pin";
 
 const PARENT_COLLECTION = "parents";
@@ -768,6 +769,8 @@ export async function deleteParentAccount(
         childDoc.ref,
       );
     }
+
+    await deleteParentStorageFiles(user.uid);
 
     await deleteDoc(
       parentDocument(user.uid),

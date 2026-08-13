@@ -1,8 +1,8 @@
 /**
  * Digital Workbook for children aged 9–10.
  *
- * The reward totals and Save action are temporary frontend values.
- * Firestore persistence and reward updates will be connected later.
+ * Save writes intensity + written response to Firestore media and can
+ * complete the Proud Moment Phase 1 activity once.
  */
 
 import { router, type Href } from "expo-router";
@@ -13,6 +13,7 @@ import {
   useState,
 } from "react";
 import {
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   PanResponder,
@@ -33,6 +34,11 @@ import Svg, {
 
 import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  listChildMedia,
+  saveWorkbookPage,
+} from "@/services/childMedia";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../../assets/icons/audio-off.svg";
@@ -91,6 +97,7 @@ export default function DigitalWorkbookAges9To10({
   gems,
   badgeCount,
 }: Props) {
+  const { user } = useAuth();
   const { activeChild } = useActiveChild();
 
   const scrollViewRef =
@@ -119,6 +126,70 @@ export default function DigitalWorkbookAges9To10({
 
   const [savedMessage, setSavedMessage] =
     useState(false);
+
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let stillMounted = true;
+
+    async function hydrate() {
+      if (!user?.uid || !activeChild?.id) {
+        return;
+      }
+
+      try {
+        const media = await listChildMedia(
+          user.uid,
+          activeChild.id,
+        );
+
+        const latest = media.find(
+          (item) =>
+            item.kind === "workbook_drawing" &&
+            item.pageId === "ages-9-10",
+        );
+
+        if (!latest?.drawingPayload || !stillMounted) {
+          return;
+        }
+
+        const parsed = JSON.parse(
+          latest.drawingPayload,
+        ) as {
+          intensity?: number;
+          response?: string;
+        };
+
+        if (typeof parsed.intensity === "number") {
+          const nextIntensity = clamp(
+            Math.round(parsed.intensity),
+            1,
+            10,
+          );
+          setIntensity(nextIntensity);
+          const nextPosition =
+            ((nextIntensity - 1) / 9) * x(SLIDER_WIDTH);
+          sliderPositionRef.current = nextPosition;
+          setSliderPosition(nextPosition);
+        }
+
+        if (typeof parsed.response === "string") {
+          setResponse(parsed.response);
+        }
+      } catch (error) {
+        console.warn(
+          "Unable to hydrate ages 9-10 workbook:",
+          error,
+        );
+      }
+    }
+
+    void hydrate();
+
+    return () => {
+      stillMounted = false;
+    };
+  }, [activeChild?.id, user?.uid]);
 
   const [keyboardVisible, setKeyboardVisible] =
     useState(false);
@@ -265,17 +336,47 @@ export default function DigitalWorkbookAges9To10({
     }, 180);
   }
 
-  function handleSave() {
+  async function handleSave() {
     Keyboard.dismiss();
 
-    console.log(
-      "Static 9–10 workbook response:",
-      {
-        childId: activeChild?.id,
-        intensity,
-        response: response.trim(),
-      },
-    );
+    if (saving) {
+      return;
+    }
+
+    if (!user?.uid || !activeChild?.id) {
+      setSavedMessage(true);
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      await saveWorkbookPage(
+        user.uid,
+        activeChild.id,
+        {
+          pageIndex: 0,
+          pageId: "ages-9-10",
+          drawingPayload: JSON.stringify({
+            intensity,
+            response: response.trim(),
+          }),
+          tryCompleteProudMoment: true,
+          requiredPageCount: 1,
+        },
+      );
+    } catch (error) {
+      console.error(
+        "Unable to save ages 9-10 workbook:",
+        error,
+      );
+      Alert.alert(
+        "Save failed",
+        "Your answers are still on this device, but cloud save failed. Please try again.",
+      );
+    } finally {
+      setSaving(false);
+    }
 
     setSavedMessage(true);
 
@@ -630,7 +731,9 @@ export default function DigitalWorkbookAges9To10({
               pressed &&
                 styles.saveButtonPressed,
             ]}
-            onPress={handleSave}
+            onPress={() => {
+              void handleSave();
+            }}
             accessibilityRole="button"
             accessibilityLabel="Save workbook answer"
           >
