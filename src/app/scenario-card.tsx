@@ -1,20 +1,22 @@
-/**
- * Choose Your Courage scenario card screen.
- */
+import type {
+  ComponentType,
+} from "react";
 
-import type { ComponentType } from "react";
 import { Asset } from "expo-asset";
+
 import {
   router,
   type Href,
   useLocalSearchParams,
 } from "expo-router";
+
 import {
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+
 import {
   Animated,
   Image,
@@ -23,19 +25,23 @@ import {
   Text,
   View,
 } from "react-native";
-import type { SvgProps } from "react-native-svg";
 
-import {
-  getScenarioChallenge,
-} from "@/constants/scenarioChallenges";
+import type {
+  SvgProps,
+} from "react-native-svg";
+
+import { GAME_HUB_ACTIVITY_IDS } from "@/constants/activities";
 import { colors } from "@/constants/colors";
+import { getScenarioChallenge } from "@/constants/scenarioChallenges";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
+
 import {
-  completeActivityById,
-  startActivityById,
-} from "@/services/activityAttempts";
+  completeHubLevel,
+  startHubLevel,
+} from "@/services/hubLevelProgress";
+
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -66,17 +72,23 @@ import Scenario18Back from "../../assets/images/scenarios/scenario-18-back.svg";
 import Scenario19Back from "../../assets/images/scenarios/scenario-19-back.svg";
 import Scenario20Back from "../../assets/images/scenarios/scenario-20-back.svg";
 
-const SCREEN_BACKGROUND = "#DDEAEC";
+const SCREEN_BACKGROUND =
+  "#DDEAEC";
+
+const TOTAL_SCENARIOS = 20;
 
 const CARD_WIDTH = 380;
 const CARD_HEIGHT = 532;
+
 const CARD_LEFT = 11;
 const CARD_TOP = 171;
+
 const CARD_RADIUS = 60;
 
-const FRONT_TEMPLATE = require(
-  "../../assets/images/scenarios/scenario-front-template.png",
-);
+const FRONT_TEMPLATE =
+  require(
+    "../../assets/images/scenarios/scenario-front-template.png",
+  );
 
 const SCENARIO_BACK_CARDS: Record<
   number,
@@ -123,88 +135,77 @@ function getFrontFontSize(
 }
 
 export default function ScenarioCardScreen() {
-  const { user } = useAuth();
-  const { activeChild } = useActiveChild();
-  const { childModeActive } = useParentAccess();
+  const { user } =
+    useAuth();
+
+  const { activeChild } =
+    useActiveChild();
+
+  const { childModeActive } =
+    useParentAccess();
 
   const { scenarioId } =
     useLocalSearchParams<{
-      scenarioId?: string | string[];
+      scenarioId?:
+        | string
+        | string[];
     }>();
 
-  const [audioEnabled, setAudioEnabled] =
-    useState(false);
+  const [
+    audioEnabled,
+    setAudioEnabled,
+  ] = useState(false);
 
-  const [showBack, setShowBack] =
-    useState(false);
+  const [
+    showBack,
+    setShowBack,
+  ] = useState(false);
 
   const [
     frontImageLoaded,
     setFrontImageLoaded,
   ] = useState(false);
 
-  const hasStartedRef = useRef(false);
-  const hasCompletedRef = useRef(false);
+  const hasStartedRef =
+    useRef(false);
 
-  /**
-   * 0 = front visible
-   * 1 = back visible
-   */
-  const sideProgress = useRef(
-    new Animated.Value(0),
-  ).current;
+  const hasCompletedRef =
+    useRef(false);
 
-  useEffect(() => {
-    if (!childModeActive || !activeChild) {
-      router.replace(
-        "/parent-verification" as Href,
-      );
-    }
-  }, [activeChild, childModeActive]);
-
-  useEffect(() => {
-    void Asset.loadAsync(
-      FRONT_TEMPLATE,
-    ).catch((error: unknown) => {
-      console.warn(
-        "Unable to preload the scenario front template:",
-        error,
-      );
-    });
-  }, []);
-
-  useEffect(() => {
-    Animated.timing(sideProgress, {
-      toValue: showBack ? 1 : 0,
-      duration: 140,
-      useNativeDriver: true,
-    }).start();
-  }, [showBack, sideProgress]);
-
-  const parsedScenarioId = useMemo(() => {
-    const rawScenarioId = Array.isArray(
-      scenarioId,
-    )
-      ? scenarioId[0]
-      : scenarioId;
-
-    if (!rawScenarioId) {
-      return Number.NaN;
-    }
-
-    return Number.parseInt(
-      rawScenarioId,
-      10,
-    );
-  }, [scenarioId]);
-
-  const scenario = useMemo(
-    () =>
-      getScenarioChallenge(
-        parsedScenarioId,
+  const sideProgress =
+    useRef(
+      new Animated.Value(
+        0,
       ),
-    [parsedScenarioId],
-  );
+    ).current;
+
+  const parsedScenarioId =
+    useMemo(() => {
+      const rawScenarioId =
+        Array.isArray(
+          scenarioId,
+        )
+          ? scenarioId[0]
+          : scenarioId;
+
+      if (!rawScenarioId) {
+        return Number.NaN;
+      }
+
+      return Number.parseInt(
+        rawScenarioId,
+        10,
+      );
+    }, [scenarioId]);
+
+  const scenario =
+    useMemo(
+      () =>
+        getScenarioChallenge(
+          parsedScenarioId,
+        ),
+      [parsedScenarioId],
+    );
 
   const BackCard =
     SCENARIO_BACK_CARDS[
@@ -212,80 +213,135 @@ export default function ScenarioCardScreen() {
     ];
 
   /*
-   * Scenario 1 is the Phase 1 "Try Something New" path.
-   * Start the attempt when the card opens; complete once on first flip to back.
+   * Protect child-only screen.
    */
+  useEffect(() => {
+    if (
+      !childModeActive ||
+      !activeChild
+    ) {
+      router.replace(
+        "/parent-verification" as Href,
+      );
+    }
+  }, [
+    activeChild,
+    childModeActive,
+  ]);
+
+  /*
+   * Preload reusable front template.
+   */
+  useEffect(() => {
+    void Asset.loadAsync(
+      FRONT_TEMPLATE,
+    ).catch(
+      (
+        error: unknown,
+      ) => {
+        console.warn(
+          "Unable to preload the scenario front template:",
+          error,
+        );
+      },
+    );
+  }, []);
+
+  /*
+   * Front/back cross-fade.
+   */
+  useEffect(() => {
+    Animated.timing(
+      sideProgress,
+      {
+        toValue:
+          showBack
+            ? 1
+            : 0,
+
+        duration: 140,
+
+        useNativeDriver:
+          true,
+      },
+    ).start();
+  }, [
+    showBack,
+    sideProgress,
+  ]);
+
+  useEffect(() => {
+    hasStartedRef.current =
+      false;
+
+    hasCompletedRef.current =
+      false;
+
+    setShowBack(false);
+
+    setFrontImageLoaded(
+      false,
+    );
+
+    sideProgress.setValue(
+      0,
+    );
+  }, [
+    parsedScenarioId,
+    sideProgress,
+  ]);
+
   useEffect(() => {
     if (
       !user?.uid ||
       !activeChild?.id ||
-      scenario?.id !== 1 ||
+      !scenario?.id ||
       hasStartedRef.current
     ) {
       return;
     }
 
-    hasStartedRef.current = true;
+    hasStartedRef.current =
+      true;
 
-    void startActivityById(
+    void startHubLevel(
       user.uid,
       activeChild.id,
-      "phase1_try_something_new",
+
+      GAME_HUB_ACTIVITY_IDS
+        .scenario,
+
+      scenario.id,
+
+      TOTAL_SCENARIOS,
+
       {
-        source: "scenario_card",
-        scenarioId: 1,
+        source:
+          "scenario_card",
+
+        scenarioId:
+          scenario.id,
       },
-    ).catch((error: unknown) => {
-      console.warn(
-        "Unable to start scenario activity:",
-        error,
-      );
-      hasStartedRef.current = false;
-    });
-  }, [activeChild?.id, scenario?.id, user?.uid]);
+    ).catch(
+      (
+        error: unknown,
+      ) => {
+        console.warn(
+          "Unable to start scenario level:",
+          error,
+        );
 
-  useEffect(() => {
-    if (
-      !showBack ||
-      !user?.uid ||
-      !activeChild?.id ||
-      scenario?.id !== 1 ||
-      hasCompletedRef.current
-    ) {
-      return;
-    }
-
-    hasCompletedRef.current = true;
-
-    void completeActivityById(
-      user.uid,
-      activeChild.id,
-      "phase1_try_something_new",
-      {
-        source: "scenario_card",
-        scenarioId: 1,
-        flippedToBack: true,
+        hasStartedRef.current =
+          false;
       },
-    ).catch((error: unknown) => {
-      console.warn(
-        "Unable to complete scenario activity:",
-        error,
-      );
-      hasCompletedRef.current = false;
-    });
+    );
   }, [
     activeChild?.id,
     scenario?.id,
-    showBack,
     user?.uid,
   ]);
 
   function handleBack() {
-    if (showBack) {
-      setShowBack(false);
-      return;
-    }
-
     router.replace(
       "/scenario-challenges" as Href,
     );
@@ -297,19 +353,122 @@ export default function ScenarioCardScreen() {
     );
   }
 
-  if (!childModeActive || !activeChild) {
+  function toggleAudio() {
+    setAudioEnabled(
+      (current) =>
+        !current,
+    );
+  }
+
+  function finishScenario() {
+    if (
+      hasCompletedRef.current
+    ) {
+      return;
+    }
+
+    hasCompletedRef.current =
+      true;
+
+    if (
+      user?.uid &&
+      activeChild?.id &&
+      scenario?.id
+    ) {
+      void completeHubLevel(
+        user.uid,
+        activeChild.id,
+
+        GAME_HUB_ACTIVITY_IDS
+          .scenario,
+
+        scenario.id,
+
+        TOTAL_SCENARIOS,
+
+        {
+          source:
+            "scenario_card",
+
+          scenarioId:
+            scenario.id,
+
+          flippedToBack:
+            true,
+        },
+      ).catch(
+        (
+          error: unknown,
+        ) => {
+          console.warn(
+            "Unable to complete scenario level:",
+            error,
+          );
+        },
+      );
+    }
+
+    router.replace(
+      {
+        pathname:
+          "/scenario-challenges",
+
+        params: {
+          rewardSuccess:
+            "1",
+        },
+      } as unknown as Href,
+    );
+  }
+
+  function handleCardPress() {
+    /*
+     * Tap 1:
+     * front -> guidance/back.
+     */
+    if (!showBack) {
+      setShowBack(true);
+
+      return;
+    }
+
+    /*
+     * Tap 2:
+     * finish the scenario.
+     */
+    finishScenario();
+  }
+
+  if (
+    !childModeActive ||
+    !activeChild
+  ) {
     return null;
   }
 
-  if (!scenario || !BackCard) {
+  if (
+    !scenario ||
+    !BackCard
+  ) {
     return (
-      <View style={styles.missingScreen}>
-        <Text style={styles.missingTitle}>
-          This scenario was not found.
+      <View
+        style={
+          styles.missingScreen
+        }
+      >
+        <Text
+          style={
+            styles.missingTitle
+          }
+        >
+          This scenario was
+          not found.
         </Text>
 
         <Pressable
-          style={styles.missingButton}
+          style={
+            styles.missingButton
+          }
           onPress={() =>
             router.replace(
               "/scenario-challenges" as Href,
@@ -317,7 +476,11 @@ export default function ScenarioCardScreen() {
           }
           accessibilityRole="button"
         >
-          <Text style={styles.missingButtonText}>
+          <Text
+            style={
+              styles.missingButtonText
+            }
+          >
             Back to Scenarios
           </Text>
         </Pressable>
@@ -327,28 +490,41 @@ export default function ScenarioCardScreen() {
 
   const frontFontSize =
     getFrontFontSize(
-      scenario.frontText.length,
+      scenario.frontText
+        .length,
     );
 
   const frontOpacity =
-    sideProgress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [1, 0],
-    });
+    sideProgress.interpolate(
+      {
+        inputRange: [
+          0,
+          1,
+        ],
 
-  const backOpacity = sideProgress;
+        outputRange: [
+          1,
+          0,
+        ],
+      },
+    );
+
+  const backOpacity =
+    sideProgress;
 
   return (
     <View style={styles.screen}>
+      {/* BACK */}
       <Pressable
-        style={styles.backButton}
+        style={({ pressed }) => [
+          styles.backButton,
+
+          pressed &&
+            styles.controlPressed,
+        ]}
         onPress={handleBack}
         accessibilityRole="button"
-        accessibilityLabel={
-          showBack
-            ? "Show the front of this scenario"
-            : "Back to Choose Your Courage"
-        }
+        accessibilityLabel="Back to Choose Your Courage"
         hitSlop={8}
       >
         <BackIcon
@@ -357,16 +533,16 @@ export default function ScenarioCardScreen() {
         />
       </Pressable>
 
+      {/* AUDIO */}
       <Pressable
         style={({ pressed }) => [
           styles.audioButton,
+
           pressed &&
             styles.controlPressed,
         ]}
-        onPress={() =>
-          setAudioEnabled(
-            (current) => !current,
-          )
+        onPress={
+          toggleAudio
         }
         accessibilityRole="button"
         accessibilityLabel={
@@ -375,7 +551,8 @@ export default function ScenarioCardScreen() {
             : "Turn audio on"
         }
         accessibilityState={{
-          selected: audioEnabled,
+          selected:
+            audioEnabled,
         }}
         hitSlop={8}
       >
@@ -392,68 +569,99 @@ export default function ScenarioCardScreen() {
         )}
       </Pressable>
 
-      <Text style={styles.scenarioNumber}>
+      {/* NUMBER */}
+      <Text
+        style={
+          styles.scenarioNumber
+        }
+      >
         {scenario.id}.
       </Text>
 
+      {/* CARD */}
       <Pressable
-        style={styles.cardPressable}
-        onPress={() =>
-          setShowBack(
-            (current) => !current,
-          )
+        style={
+          styles.cardPressable
+        }
+        onPress={
+          handleCardPress
         }
         accessibilityRole="button"
         accessibilityLabel={
           showBack
-            ? `Scenario ${scenario.id} guidance. Tap to show the situation.`
+            ? `Scenario ${scenario.id} guidance. Tap when you are finished to complete the scenario.`
             : `Scenario ${scenario.id}. ${scenario.frontText} Tap to show the guidance.`
         }
       >
-        <View style={styles.cardSurface}>
+        <View
+          style={
+            styles.cardSurface
+          }
+        >
+          {/* BACK */}
           <Animated.View
             pointerEvents="none"
             style={[
               styles.cardSide,
+
               {
-                opacity: backOpacity,
+                opacity:
+                  backOpacity,
               },
             ]}
           >
             <BackCard
-              width={x(CARD_WIDTH)}
-              height={y(CARD_HEIGHT)}
+              width={
+                x(CARD_WIDTH)
+              }
+              height={
+                y(CARD_HEIGHT)
+              }
               preserveAspectRatio="none"
             />
           </Animated.View>
 
+          {/* FRONT */}
           <Animated.View
             pointerEvents="none"
             style={[
               styles.cardSide,
+
               {
-                opacity: frontOpacity,
+                opacity:
+                  frontOpacity,
               },
             ]}
           >
             <Image
-              source={FRONT_TEMPLATE}
-              defaultSource={FRONT_TEMPLATE}
+              source={
+                FRONT_TEMPLATE
+              }
+              defaultSource={
+                FRONT_TEMPLATE
+              }
               resizeMode="stretch"
               fadeDuration={0}
               onLoad={() =>
-                setFrontImageLoaded(true)
+                setFrontImageLoaded(
+                  true,
+                )
               }
               onError={() =>
-                setFrontImageLoaded(true)
+                setFrontImageLoaded(
+                  true,
+                )
               }
-              style={styles.frontBackground}
+              style={
+                styles.frontBackground
+              }
               accessibilityIgnoresInvertColors
             />
 
             <View
               style={[
                 styles.frontTextContainer,
+
                 !frontImageLoaded &&
                   styles.hiddenFrontText,
               ]}
@@ -461,44 +669,75 @@ export default function ScenarioCardScreen() {
               <Text
                 style={[
                   styles.frontText,
+
                   {
                     fontSize:
-                      x(frontFontSize),
-                    lineHeight: x(
-                      frontFontSize * 1.28,
-                    ),
+                      x(
+                        frontFontSize,
+                      ),
+
+                    lineHeight:
+                      x(
+                        frontFontSize *
+                          1.28,
+                      ),
                   },
                 ]}
-                numberOfLines={12}
+                numberOfLines={
+                  12
+                }
                 adjustsFontSizeToFit
-                minimumFontScale={0.76}
+                minimumFontScale={
+                  0.76
+                }
               >
-                {scenario.frontText}
+                {
+                  scenario.frontText
+                }
               </Text>
             </View>
           </Animated.View>
         </View>
       </Pressable>
 
-      <View style={styles.fixedFooter}>
+      <View
+        style={
+          styles.fixedFooter
+        }
+      >
         <Pressable
-          style={({ pressed }) => [
+          style={({
+            pressed,
+          }) => [
             styles.parentModeLink,
+
             pressed &&
               styles.controlPressed,
           ]}
-          onPress={handleParentMode}
+          onPress={
+            handleParentMode
+          }
           accessibilityRole="button"
           accessibilityLabel="Switch to Parent Mode"
         >
-          <Text style={styles.parentModeText}>
+          <Text
+            style={
+              styles.parentModeText
+            }
+          >
             Switch to Parent Mode
           </Text>
         </Pressable>
 
-        <View style={styles.bottomNav}>
+        <View
+          style={
+            styles.bottomNav
+          }
+        >
           <Pressable
-            style={styles.navItem}
+            style={
+              styles.navItem
+            }
             onPress={() =>
               router.replace(
                 "/digital-workbook" as Href,
@@ -512,13 +751,19 @@ export default function ScenarioCardScreen() {
               height={y(40.07)}
             />
 
-            <Text style={styles.navLabel}>
+            <Text
+              style={
+                styles.navLabel
+              }
+            >
               Workbook
             </Text>
           </Pressable>
 
           <Pressable
-            style={styles.navItem}
+            style={
+              styles.navItem
+            }
             onPress={() =>
               router.replace(
                 "/child-dashboard" as Href,
@@ -532,13 +777,19 @@ export default function ScenarioCardScreen() {
               height={x(40)}
             />
 
-            <Text style={styles.navLabel}>
+            <Text
+              style={
+                styles.navLabel
+              }
+            >
               Home
             </Text>
           </Pressable>
 
           <Pressable
-            style={styles.navItem}
+            style={
+              styles.navItem
+            }
             onPress={() =>
               router.replace(
                 "/rewards" as Href,
@@ -552,7 +803,11 @@ export default function ScenarioCardScreen() {
               height={x(42)}
             />
 
-            <Text style={styles.navLabel}>
+            <Text
+              style={
+                styles.navLabel
+              }
+            >
               Rewards
             </Text>
           </Pressable>
@@ -562,203 +817,376 @@ export default function ScenarioCardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    position: "relative",
-    backgroundColor: SCREEN_BACKGROUND,
-  },
+const styles =
+  StyleSheet.create({
+    screen: {
+      flex: 1,
 
-  backButton: {
-    position: "absolute",
-    left: x(20),
-    top: y(48),
-    width: x(37.24),
-    height: y(35),
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 20,
-  },
+      position:
+        "relative",
 
-  audioButton: {
-    position: "absolute",
-    left: x(347),
-    top: y(48),
-    width: x(35),
-    height: x(35),
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 20,
-  },
+      backgroundColor:
+        SCREEN_BACKGROUND,
+    },
 
-  scenarioNumber: {
-    position: "absolute",
-    left: x(185),
-    top: y(79),
-    width: x(32),
-    height: y(63),
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(50),
-    lineHeight: y(63),
-    textAlign: "center",
-    includeFontPadding: false,
-  },
+    backButton: {
+      position:
+        "absolute",
 
-  cardPressable: {
-    position: "absolute",
-    left: x(CARD_LEFT),
-    top: y(CARD_TOP),
-    width: x(CARD_WIDTH),
-    height: y(CARD_HEIGHT),
-    borderRadius: x(CARD_RADIUS),
-    overflow: "hidden",
-    backgroundColor: SCREEN_BACKGROUND,
-  },
+      left: x(20),
+      top: y(48),
 
-  cardSurface: {
-    position: "relative",
-    width: x(CARD_WIDTH),
-    height: y(CARD_HEIGHT),
-    borderRadius: x(CARD_RADIUS),
-    overflow: "hidden",
-    backgroundColor: SCREEN_BACKGROUND,
-  },
+      width: x(37.24),
+      height: y(35),
 
-  cardSide: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    width: x(CARD_WIDTH),
-    height: y(CARD_HEIGHT),
-    backgroundColor: SCREEN_BACKGROUND,
-  },
+      alignItems:
+        "center",
 
-  frontBackground: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    width: x(CARD_WIDTH),
-    height: y(CARD_HEIGHT),
-  },
+      justifyContent:
+        "center",
 
-  frontTextContainer: {
-    position: "absolute",
-    left: x(31),
-    right: x(31),
-    top: y(92),
-    bottom: y(88),
-    alignItems: "center",
-    justifyContent: "center",
-  },
+      zIndex: 20,
+    },
 
-  hiddenFrontText: {
-    opacity: 0,
-  },
+    audioButton: {
+      position:
+        "absolute",
 
-  frontText: {
-    width: "100%",
-    color: colors.primary,
-    fontFamily: "LiterataBold",
-    textAlign: "center",
-    includeFontPadding: false,
-  },
+      left: x(347),
+      top: y(48),
 
-  fixedFooter: {
-    position: "absolute",
-    left: x(20),
-    bottom: y(20),
-    width: x(362),
-    height: y(105),
-    backgroundColor: "transparent",
-    zIndex: 50,
-  },
+      width: x(35),
+      height: x(35),
 
-  parentModeLink: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    width: x(217),
-    height: y(24),
-    justifyContent: "center",
-  },
+      alignItems:
+        "center",
 
-  parentModeText: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textDecorationLine: "underline",
-  },
+      justifyContent:
+        "center",
 
-  bottomNav: {
-    position: "absolute",
-    left: 0,
-    top: y(33),
-    width: x(362),
-    height: y(72),
-    borderWidth: x(1),
-    borderColor: colors.primary,
-    borderRadius: x(50),
-    backgroundColor: SCREEN_BACKGROUND,
-    overflow: "hidden",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    paddingHorizontal: x(18),
-  },
+      zIndex: 20,
+    },
 
-  navItem: {
-    width: x(58),
-    height: y(56.75),
-    alignItems: "center",
-    justifyContent: "center",
-  },
+    scenarioNumber: {
+      position:
+        "absolute",
 
-  navLabel: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(10),
-    lineHeight: y(12),
-    marginTop: y(1),
-    textAlign: "center",
-  },
+      left: x(90),
+      top: y(72),
 
-  missingScreen: {
-    flex: 1,
-    paddingHorizontal: x(30),
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: SCREEN_BACKGROUND,
-  },
+      width: x(222),
+      height: y(76),
 
-  missingTitle: {
-    color: colors.primary,
-    fontFamily: "OutfitBold",
-    fontSize: x(24),
-    lineHeight: y(31),
-    textAlign: "center",
-  },
+      color:
+        colors.primary,
 
-  missingButton: {
-    width: x(210),
-    height: y(52),
-    marginTop: y(24),
-    borderRadius: x(20),
-    backgroundColor: "#E7D8EC",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+      fontFamily:
+        "Outfit",
 
-  missingButtonText: {
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(18),
-  },
+      fontSize: x(50),
+      lineHeight: y(70),
 
-  controlPressed: {
-    opacity: 0.65,
-  },
-});
+      textAlign:
+        "center",
+
+      includeFontPadding:
+        false,
+
+      paddingHorizontal:
+        x(8),
+
+      overflow:
+        "visible",
+    },
+
+    cardPressable: {
+      position:
+        "absolute",
+
+      left:
+        x(CARD_LEFT),
+
+      top:
+        y(CARD_TOP),
+
+      width:
+        x(CARD_WIDTH),
+
+      height:
+        y(CARD_HEIGHT),
+
+      borderRadius:
+        x(CARD_RADIUS),
+
+      overflow:
+        "hidden",
+
+      backgroundColor:
+        SCREEN_BACKGROUND,
+    },
+
+    cardSurface: {
+      position:
+        "relative",
+
+      width:
+        x(CARD_WIDTH),
+
+      height:
+        y(CARD_HEIGHT),
+
+      borderRadius:
+        x(CARD_RADIUS),
+
+      overflow:
+        "hidden",
+
+      backgroundColor:
+        SCREEN_BACKGROUND,
+    },
+
+    cardSide: {
+      position:
+        "absolute",
+
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+
+      width:
+        x(CARD_WIDTH),
+
+      height:
+        y(CARD_HEIGHT),
+
+      backgroundColor:
+        SCREEN_BACKGROUND,
+    },
+
+    frontBackground: {
+      position:
+        "absolute",
+
+      left: 0,
+      top: 0,
+
+      width:
+        x(CARD_WIDTH),
+
+      height:
+        y(CARD_HEIGHT),
+    },
+
+    frontTextContainer: {
+      position:
+        "absolute",
+
+      left: x(31),
+      right: x(31),
+
+      top: y(92),
+      bottom: y(88),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+    },
+
+    hiddenFrontText: {
+      opacity: 0,
+    },
+
+    frontText: {
+      width: "100%",
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "LiterataBold",
+
+      textAlign:
+        "center",
+
+      includeFontPadding:
+        false,
+    },
+
+    fixedFooter: {
+      position:
+        "absolute",
+
+      left: x(20),
+      bottom: y(20),
+
+      width: x(362),
+      height: y(105),
+
+      backgroundColor:
+        "transparent",
+
+      zIndex: 50,
+    },
+
+    parentModeLink: {
+      position:
+        "absolute",
+
+      left: 0,
+      top: 0,
+
+      width: x(217),
+      height: y(24),
+
+      justifyContent:
+        "center",
+    },
+
+    parentModeText: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize: x(20),
+      lineHeight: y(24),
+
+      textDecorationLine:
+        "underline",
+    },
+
+    /*
+     * Only this rounded element
+     * has a background.
+     */
+    bottomNav: {
+      position:
+        "absolute",
+
+      left: 0,
+      top: y(33),
+
+      width: x(362),
+      height: y(72),
+
+      borderWidth: x(1),
+
+      borderColor:
+        colors.primary,
+
+      borderRadius: x(50),
+
+      backgroundColor:
+        SCREEN_BACKGROUND,
+
+      overflow:
+        "hidden",
+
+      flexDirection:
+        "row",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "space-around",
+
+      paddingHorizontal:
+        x(18),
+    },
+
+    navItem: {
+      width: x(58),
+      height: y(56.75),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+    },
+
+    navLabel: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize: x(10),
+      lineHeight: y(12),
+
+      marginTop: y(1),
+
+      textAlign:
+        "center",
+    },
+
+    missingScreen: {
+      flex: 1,
+
+      paddingHorizontal:
+        x(30),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      backgroundColor:
+        SCREEN_BACKGROUND,
+    },
+
+    missingTitle: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "OutfitBold",
+
+      fontSize: x(24),
+      lineHeight: y(31),
+
+      textAlign:
+        "center",
+    },
+
+    missingButton: {
+      width: x(210),
+      height: y(52),
+
+      marginTop:
+        y(24),
+
+      borderRadius:
+        x(20),
+
+      backgroundColor:
+        "#E7D8EC",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+    },
+
+    missingButtonText: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Outfit",
+
+      fontSize: x(18),
+    },
+
+    controlPressed: {
+      opacity: 0.65,
+    },
+  });

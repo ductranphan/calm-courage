@@ -1,16 +1,13 @@
-/**
- * Scenario Challenges screen.
- *
- * Matches Figma Screen 7.1:
- * - 20 scenario cards
- * - reward statistics
- * - fixed child navigation
- * - parent-mode access
- */
-
 import { Asset } from "expo-asset";
-import { router, type Href } from "expo-router";
-import { useEffect, useState } from "react";
+import {
+  router,
+  type Href,
+  useLocalSearchParams,
+} from "expo-router";
+import {
+  useEffect,
+  useState,
+} from "react";
 import {
   Pressable,
   ScrollView,
@@ -19,14 +16,13 @@ import {
   View,
 } from "react-native";
 
+import {
+  ScenarioSuccessModal,
+  UnlockConfirmationModal,
+} from "@/components/scenario/ScenarioPopups";
 import { colors } from "@/constants/colors";
-import { GAME_HUB_ACTIVITY_IDS } from "@/constants/activities";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
-import {
-  isHubLevelLocked,
-  useActivityCompleted,
-} from "@/hooks/useActivityCompleted";
 import { useChildRewards } from "@/hooks/useChildRewards";
 import { x, y } from "@/utils/scaling";
 
@@ -41,6 +37,7 @@ import StarIcon from "../../assets/icons/star.svg";
 import WorkbookDashboardIcon from "../../assets/icons/workbook-dashboard.svg";
 
 const FIGMA_CONTENT_HEIGHT = 1815;
+const TOTAL_SCENARIOS = 20;
 
 const FRONT_TEMPLATE = require(
   "../../assets/images/scenarios/scenario-front-template.png",
@@ -56,68 +53,228 @@ const FIRST_ROW_TOP = 226;
 const ROW_DISTANCE = 158;
 
 const scenarios = Array.from(
-  { length: 20 },
+  {
+    length: TOTAL_SCENARIOS,
+  },
   (_, index) => {
-    const scenarioNumber = index + 1;
-    const row = Math.floor(index / 2);
-    const isLeftColumn = index % 2 === 0;
+    const scenarioNumber =
+      index + 1;
+
+    const row =
+      Math.floor(index / 2);
+
+    const isLeftColumn =
+      index % 2 === 0;
 
     return {
       id: scenarioNumber,
-      label: `Scenario ${scenarioNumber}`,
+
+      label:
+        `Scenario ${scenarioNumber}`,
+
       left: isLeftColumn
         ? LEFT_COLUMN
         : RIGHT_COLUMN,
-      top: FIRST_ROW_TOP + row * ROW_DISTANCE,
+
+      top:
+        FIRST_ROW_TOP +
+        row * ROW_DISTANCE,
     };
   },
 );
 
-function formatScore(value: number): string {
-  return value.toString().padStart(2, "0");
+function formatScore(
+  value: number,
+): string {
+  return value
+    .toString()
+    .padStart(2, "0");
+}
+
+function firstParam(
+  value:
+    | string
+    | string[]
+    | undefined,
+): string | undefined {
+  return Array.isArray(value)
+    ? value[0]
+    : value;
 }
 
 export default function ScenarioChallengesScreen() {
-  const { activeChild } = useActiveChild();
-  const { childModeActive } = useParentAccess();
-  const rewards = useChildRewards(activeChild?.id);
-  const { completed: phaseCompleted } =
-    useActivityCompleted(
+  const { activeChild } =
+    useActiveChild();
+
+  const { childModeActive } =
+    useParentAccess();
+
+  const rewards =
+    useChildRewards(
       activeChild?.id,
-      GAME_HUB_ACTIVITY_IDS.scenario,
     );
 
-  const [audioEnabled, setAudioEnabled] =
-    useState(false);
+  /*
+   * scenario-card.tsx sends this
+   * parameter after a scenario is
+   * completed.
+   */
+  const { rewardSuccess } =
+    useLocalSearchParams<{
+      rewardSuccess?:
+        | string
+        | string[];
+    }>();
+
+  const [
+    audioEnabled,
+    setAudioEnabled,
+  ] = useState(false);
+
+  const [
+    unlockModalVisible,
+    setUnlockModalVisible,
+  ] = useState(false);
+
+  const [
+    successModalVisible,
+    setSuccessModalVisible,
+  ] = useState(false);
 
   useEffect(() => {
-    if (!childModeActive || !activeChild) {
+    if (
+      !childModeActive ||
+      !activeChild
+    ) {
       router.replace(
         "/parent-verification" as Href,
       );
     }
-  }, [activeChild, childModeActive]);
+  }, [
+    activeChild,
+    childModeActive,
+  ]);
 
+  /*
+   * Preload the front card template.
+   */
   useEffect(() => {
     void Asset.loadAsync(
       FRONT_TEMPLATE,
-    ).catch((error: unknown) => {
-      console.warn(
-        "Unable to preload the scenario front template:",
-        error,
-      );
-    });
+    ).catch(
+      (error: unknown) => {
+        console.warn(
+          "Unable to preload the scenario front template:",
+          error,
+        );
+      },
+    );
   }, []);
+
+  /*
+   * Show the success modal after
+   * scenario-card navigates back
+   * with rewardSuccess=1.
+   */
+  useEffect(() => {
+    if (
+      firstParam(
+        rewardSuccess,
+      ) === "1"
+    ) {
+      setSuccessModalVisible(
+        true,
+      );
+    }
+  }, [rewardSuccess]);
+
+  function openScenario(
+    scenarioNumber: number,
+  ) {
+    router.push({
+      pathname:
+        "/scenario-card",
+
+      params: {
+        scenarioId:
+          String(
+            scenarioNumber,
+          ),
+      },
+    } as unknown as Href);
+  }
 
   function handleScenarioPress(
     scenarioNumber: number,
   ) {
-    router.push({
-      pathname: "/scenario-card",
-      params: {
-        scenarioId: String(scenarioNumber),
-      },
-    } as unknown as Href);
+    /*
+     * Scenarios 1–19 open directly.
+     *
+     * Scenario 20 shows the
+     * 1-Gem unlock confirmation.
+     */
+    if (
+      scenarioNumber === 20
+    ) {
+      setUnlockModalVisible(
+        true,
+      );
+
+      return;
+    }
+
+    openScenario(
+      scenarioNumber,
+    );
+  }
+
+  function handleCancelUnlock() {
+    setUnlockModalVisible(
+      false,
+    );
+  }
+
+  function handleUnlock() {
+    /*
+     * Frontend protection.
+     *
+     * We display the current real
+     * gem count but do NOT modify
+     * Firebase here.
+     */
+    if (
+      rewards.gems < 1
+    ) {
+      return;
+    }
+
+    setUnlockModalVisible(
+      false,
+    );
+
+    /*
+     * For the frontend flow,
+     * confirmation gives access
+     * to Scenario 20 for this visit.
+     */
+    openScenario(20);
+  }
+
+  function handleClaimReward() {
+    setSuccessModalVisible(
+      false,
+    );
+
+    /*
+     * Clear rewardSuccess so the
+     * popup does not reopen.
+     *
+     * This does not add rewards
+     * in Firebase.
+     */
+    router.replace(
+      "/scenario-challenges" as Href,
+    );
   }
 
   function handleBack() {
@@ -132,23 +289,37 @@ export default function ScenarioChallengesScreen() {
     );
   }
 
-  if (!childModeActive || !activeChild) {
+  if (
+    !childModeActive ||
+    !activeChild
+  ) {
     return null;
   }
 
   return (
     <View style={styles.screen}>
       <ScrollView
-        style={styles.scrollView}
+        style={
+          styles.scrollView
+        }
         contentContainerStyle={
           styles.scrollContent
         }
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={
+          false
+        }
         bounces={false}
       >
-        <View style={styles.figmaContent}>
+        <View
+          style={
+            styles.figmaContent
+          }
+        >
+          {/* BACK */}
           <Pressable
-            style={styles.backButton}
+            style={
+              styles.backButton
+            }
             onPress={handleBack}
             accessibilityRole="button"
             accessibilityLabel="Back to adventure path"
@@ -160,11 +331,15 @@ export default function ScenarioChallengesScreen() {
             />
           </Pressable>
 
+          {/* AUDIO */}
           <Pressable
-            style={styles.audioButton}
+            style={
+              styles.audioButton
+            }
             onPress={() =>
               setAudioEnabled(
-                (current) => !current,
+                (current) =>
+                  !current,
               )
             }
             accessibilityRole="button"
@@ -174,7 +349,8 @@ export default function ScenarioChallengesScreen() {
                 : "Turn audio on"
             }
             accessibilityState={{
-              selected: audioEnabled,
+              selected:
+                audioEnabled,
             }}
             hitSlop={8}
           >
@@ -191,118 +367,207 @@ export default function ScenarioChallengesScreen() {
             )}
           </Pressable>
 
-          <Text style={styles.title}>
+          {/* TITLE */}
+          <Text
+            style={styles.title}
+          >
             Choose Your Courage
           </Text>
 
-          <View style={styles.statistics}>
-            <View style={styles.starIcon}>
+          {/* REWARDS */}
+          <View
+            style={
+              styles.statistics
+            }
+          >
+            <View
+              style={
+                styles.starIcon
+              }
+            >
               <StarIcon
                 width={x(32)}
                 height={x(32)}
               />
             </View>
 
-            <Text style={styles.starValue}>
+            <Text
+              style={
+                styles.starValue
+              }
+            >
               {rewards.stars}
             </Text>
 
-            <View style={styles.diamondIcon}>
+            <View
+              style={
+                styles.diamondIcon
+              }
+            >
               <DiamondIcon
                 width={x(20)}
                 height={x(20)}
               />
             </View>
 
-            <Text style={styles.gemValue}>
-              {formatScore(rewards.gems)}
+            <Text
+              style={
+                styles.gemValue
+              }
+            >
+              {formatScore(
+                rewards.gems,
+              )}
             </Text>
 
-            <View style={styles.badgeIcon}>
+            <View
+              style={
+                styles.badgeIcon
+              }
+            >
               <BadgeIcon
                 width={x(28)}
                 height={x(28)}
               />
             </View>
 
-            <Text style={styles.badgeValue}>
-              {formatScore(rewards.badges.length)}
+            <Text
+              style={
+                styles.badgeValue
+              }
+            >
+              {formatScore(
+                rewards.badges
+                  .length,
+              )}
             </Text>
           </View>
 
-          {scenarios.map((scenario) => {
-            const isLocked = isHubLevelLocked(
-              scenario.id,
-              phaseCompleted,
-            );
+          {/* SCENARIO CARDS */}
+          {scenarios.map(
+            (scenario) => {
+              /*
+               * ONLY Scenario 20
+               * is locked.
+               */
+              const isLocked =
+                scenario.id === 20;
 
-            return (
-              <Pressable
-                key={scenario.id}
-                style={({ pressed }) => [
-                  styles.scenarioCard,
-                  {
-                    left: x(scenario.left),
-                    top: y(scenario.top),
-                  },
-                  isLocked &&
-                    styles.lockedScenarioCard,
-                  pressed &&
-                    !isLocked &&
-                    styles.scenarioCardPressed,
-                ]}
-                onPress={() =>
-                  handleScenarioPress(
-                    scenario.id,
-                  )
-                }
-                disabled={isLocked}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  scenario.label
-                }
-                accessibilityState={{
-                  disabled: isLocked,
-                }}
-              >
-                <Text
-                  style={[
-                    styles.scenarioText,
+              return (
+                <Pressable
+                  key={
+                    scenario.id
+                  }
+                  style={({
+                    pressed,
+                  }) => [
+                    styles.scenarioCard,
+
+                    {
+                      left: x(
+                        scenario.left,
+                      ),
+
+                      top: y(
+                        scenario.top,
+                      ),
+                    },
+
                     isLocked &&
-                      styles.lockedScenarioText,
-                  ]}
-                >
-                  {scenario.label}
-                </Text>
+                      styles.lockedScenarioCard,
 
-                {isLocked ? (
-                  <LockStateIcon
-                    width={x(23)}
-                    height={y(30)}
-                    style={styles.lockIcon}
-                  />
-                ) : null}
-              </Pressable>
-            );
-          })}
+                    pressed &&
+                      styles.scenarioCardPressed,
+                  ]}
+                  onPress={() =>
+                    handleScenarioPress(
+                      scenario.id,
+                    )
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    isLocked
+                      ? `${scenario.label}, locked. Tap to unlock.`
+                      : scenario.label
+                  }
+                  accessibilityHint={
+                    isLocked
+                      ? "Opens the unlock confirmation."
+                      : undefined
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.scenarioText,
+
+                      isLocked &&
+                        styles.lockedScenarioText,
+                    ]}
+                  >
+                    {
+                      scenario.label
+                    }
+                  </Text>
+
+                  {isLocked ? (
+                    <LockStateIcon
+                      width={x(23)}
+                      height={y(30)}
+                      style={
+                        styles.lockIcon
+                      }
+                    />
+                  ) : null}
+                </Pressable>
+              );
+            },
+          )}
         </View>
       </ScrollView>
 
-      <View style={styles.fixedFooter}>
+      {/*
+       * IMPORTANT:
+       *
+       * fixedFooter itself is
+       * transparent.
+       *
+       * There is NO white rectangle
+       * behind the Parent Mode link
+       * and rounded navbar.
+       */}
+      <View
+        style={
+          styles.fixedFooter
+        }
+      >
         <Pressable
-          style={styles.parentModeLink}
-          onPress={handleParentMode}
+          style={
+            styles.parentModeLink
+          }
+          onPress={
+            handleParentMode
+          }
           accessibilityRole="button"
           accessibilityLabel="Switch to Parent Mode"
         >
-          <Text style={styles.parentModeText}>
+          <Text
+            style={
+              styles.parentModeText
+            }
+          >
             Switch to Parent Mode
           </Text>
         </Pressable>
 
-        <View style={styles.bottomNav}>
+        <View
+          style={
+            styles.bottomNav
+          }
+        >
           <Pressable
-            style={styles.navItem}
+            style={
+              styles.navItem
+            }
             onPress={() =>
               router.replace(
                 "/digital-workbook" as Href,
@@ -316,13 +581,19 @@ export default function ScenarioChallengesScreen() {
               height={y(40.07)}
             />
 
-            <Text style={styles.navLabel}>
+            <Text
+              style={
+                styles.navLabel
+              }
+            >
               Workbook
             </Text>
           </Pressable>
 
           <Pressable
-            style={styles.navItem}
+            style={
+              styles.navItem
+            }
             onPress={() =>
               router.replace(
                 "/child-dashboard" as Href,
@@ -336,13 +607,19 @@ export default function ScenarioChallengesScreen() {
               height={x(40)}
             />
 
-            <Text style={styles.navLabel}>
+            <Text
+              style={
+                styles.navLabel
+              }
+            >
               Home
             </Text>
           </Pressable>
 
           <Pressable
-            style={styles.navItem}
+            style={
+              styles.navItem
+            }
             onPress={() =>
               router.replace(
                 "/rewards" as Href,
@@ -356,274 +633,465 @@ export default function ScenarioChallengesScreen() {
               height={x(42)}
             />
 
-            <Text style={styles.navLabel}>
+            <Text
+              style={
+                styles.navLabel
+              }
+            >
               Rewards
             </Text>
           </Pressable>
         </View>
       </View>
+
+      {/* LOCKED SCENARIO MODAL */}
+      <UnlockConfirmationModal
+        visible={
+          unlockModalVisible
+        }
+        gems={rewards.gems}
+        onCancel={
+          handleCancelUnlock
+        }
+        onUnlock={
+          handleUnlock
+        }
+      />
+
+      {/* COMPLETION MODAL */}
+      <ScenarioSuccessModal
+        visible={
+          successModalVisible
+        }
+        stars={15}
+        gems={5}
+        onClaim={
+          handleClaimReward
+        }
+      />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    position: "relative",
-    backgroundColor: colors.background,
-  },
+const styles =
+  StyleSheet.create({
+    screen: {
+      flex: 1,
 
-  scrollView: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+      position:
+        "relative",
 
-  scrollContent: {
-    minHeight: y(
-      FIGMA_CONTENT_HEIGHT + 125,
-    ),
-    paddingBottom: y(125),
-    backgroundColor: colors.background,
-  },
-
-  figmaContent: {
-    width: "100%",
-    height: y(FIGMA_CONTENT_HEIGHT),
-    position: "relative",
-    backgroundColor: colors.background,
-  },
-
-  /*
-   * Header
-   */
-
-  backButton: {
-    position: "absolute",
-    left: x(20),
-    top: y(48),
-    width: x(37.24),
-    height: y(35),
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 10,
-  },
-
-  audioButton: {
-    position: "absolute",
-    left: x(347),
-    top: y(48),
-    width: x(35),
-    height: x(35),
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 10,
-  },
-
-  title: {
-    position: "absolute",
-    left: x(20),
-    top: y(123),
-    width: x(362),
-    height: y(39),
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(30),
-    lineHeight: y(39),
-    textAlign: "center",
-  },
-
-  /*
-   * Reward statistics
-   */
-
-  statistics: {
-    position: "absolute",
-    left: x(168),
-    top: y(179),
-    width: x(212),
-    height: y(32),
-  },
-
-  starIcon: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    width: x(32),
-    height: x(32),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  starValue: {
-    position: "absolute",
-    left: x(39),
-    top: y(4),
-    width: x(24),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textAlign: "center",
-  },
-
-  diamondIcon: {
-    position: "absolute",
-    left: x(83),
-    top: y(6),
-    width: x(20),
-    height: x(20),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  gemValue: {
-    position: "absolute",
-    left: x(115),
-    top: y(4),
-    width: x(30),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textAlign: "center",
-  },
-
-  badgeIcon: {
-    position: "absolute",
-    left: x(153),
-    top: y(2),
-    width: x(28),
-    height: x(28),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  badgeValue: {
-    position: "absolute",
-    left: x(188),
-    top: y(4),
-    width: x(24),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textAlign: "center",
-  },
-
-  /*
-   * Scenario cards
-   */
-
-  scenarioCard: {
-    position: "absolute",
-    width: x(CARD_WIDTH),
-    height: y(CARD_HEIGHT),
-    borderRadius: x(20),
-    backgroundColor: "#DCEAEC",
-    alignItems: "center",
-    justifyContent: "center",
-
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+      backgroundColor:
+        colors.background,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
 
-  scenarioCardPressed: {
-    opacity: 0.8,
-  },
+    scrollView: {
+      flex: 1,
 
-  lockedScenarioCard: {
-    backgroundColor: "#D9D9D9",
-  },
+      backgroundColor:
+        colors.background,
+    },
 
-  lockedScenarioText: {
-    color: "#7D7C7C",
-  },
+    scrollContent: {
+      minHeight: y(
+        FIGMA_CONTENT_HEIGHT +
+          125,
+      ),
 
-  lockIcon: {
-    marginTop: y(8),
-  },
+      paddingBottom:
+        y(125),
 
-  scenarioText: {
-    width: x(168.52),
-    minHeight: y(33),
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(25),
-    lineHeight: y(33),
-    textAlign: "center",
-  },
+      backgroundColor:
+        colors.background,
+    },
 
-  /*
-   * Fixed child-mode footer
-   */
+    figmaContent: {
+      width: "100%",
+
+      height: y(
+        FIGMA_CONTENT_HEIGHT,
+      ),
+
+      position:
+        "relative",
+
+      backgroundColor:
+        colors.background,
+    },
+
+    backButton: {
+      position:
+        "absolute",
+
+      left: x(20),
+      top: y(48),
+
+      width: x(37.24),
+      height: y(35),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      zIndex: 10,
+    },
+
+    audioButton: {
+      position:
+        "absolute",
+
+      left: x(347),
+      top: y(48),
+
+      width: x(35),
+      height: x(35),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      zIndex: 10,
+    },
+
+    title: {
+      position:
+        "absolute",
+
+      left: x(20),
+      top: y(123),
+
+      width: x(362),
+      height: y(39),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Outfit",
+
+      fontSize: x(30),
+      lineHeight: y(39),
+
+      textAlign:
+        "center",
+    },
+
+    statistics: {
+      position:
+        "absolute",
+
+      left: x(168),
+      top: y(179),
+
+      width: x(212),
+      height: y(32),
+    },
+
+    starIcon: {
+      position:
+        "absolute",
+
+      left: 0,
+      top: 0,
+
+      width: x(32),
+      height: x(32),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+    },
+
+    starValue: {
+      position:
+        "absolute",
+
+      left: x(39),
+      top: y(4),
+
+      width: x(24),
+      height: y(24),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize: x(20),
+      lineHeight: y(24),
+
+      textAlign:
+        "center",
+    },
+
+    diamondIcon: {
+      position:
+        "absolute",
+
+      left: x(83),
+      top: y(6),
+
+      width: x(20),
+      height: x(20),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+    },
+
+    gemValue: {
+      position:
+        "absolute",
+
+      left: x(115),
+      top: y(4),
+
+      width: x(30),
+      height: y(24),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize: x(20),
+      lineHeight: y(24),
+
+      textAlign:
+        "center",
+    },
+
+    badgeIcon: {
+      position:
+        "absolute",
+
+      left: x(153),
+      top: y(2),
+
+      width: x(28),
+      height: x(28),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+    },
+
+    badgeValue: {
+      position:
+        "absolute",
+
+      left: x(188),
+      top: y(4),
+
+      width: x(24),
+      height: y(24),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize: x(20),
+      lineHeight: y(24),
+
+      textAlign:
+        "center",
+    },
+
+    scenarioCard: {
+      position:
+        "absolute",
+
+      width:
+        x(CARD_WIDTH),
+
+      height:
+        y(CARD_HEIGHT),
+
+      borderRadius:
+        x(20),
+
+      backgroundColor:
+        "#DCEAEC",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      shadowColor:
+        "#000000",
+
+      shadowOffset: {
+        width: 0,
+        height: y(4),
+      },
+
+      shadowOpacity:
+        0.25,
+
+      shadowRadius:
+        x(4),
+
+      elevation: 5,
+    },
+
+    scenarioCardPressed: {
+      opacity: 0.8,
+    },
+
+    lockedScenarioCard: {
+      backgroundColor:
+        "#D9D9D9",
+    },
+
+    lockedScenarioText: {
+      color:
+        "#7D7C7C",
+    },
+
+    lockIcon: {
+      marginTop: y(8),
+    },
+
+    scenarioText: {
+      width:
+        x(168.52),
+
+      minHeight:
+        y(33),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Outfit",
+
+      fontSize: x(25),
+      lineHeight: y(33),
+
+      textAlign:
+        "center",
+    },
 
     fixedFooter: {
-    position: "absolute",
-    left: x(20),
-    bottom: y(20),
-    width: x(362),
-    height: y(105),
-    backgroundColor: "transparent",
-    zIndex: 50,
+      position:
+        "absolute",
+
+      left: x(20),
+      bottom: y(20),
+
+      width: x(362),
+      height: y(105),
+
+      backgroundColor:
+        "transparent",
+
+      zIndex: 50,
     },
 
-  parentModeLink: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    width: x(217),
-    height: y(24),
-    justifyContent: "center",
-  },
+    parentModeLink: {
+      position:
+        "absolute",
 
-  parentModeText: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textDecorationLine: "underline",
-  },
-  
-  bottomNav: {
-    position: "absolute",
-    left: 0,
-    top: y(33),
-    width: x(362),
-    height: y(72),
-    borderWidth: x(1),
-    borderColor: colors.primary,
-    borderRadius: x(50),
-    backgroundColor: colors.background,
-    overflow: "hidden",
+      left: 0,
+      top: 0,
 
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    paddingHorizontal: x(18),
-  },
+      width: x(217),
+      height: y(24),
 
-  navItem: {
-    width: x(58),
-    height: y(56.75),
-    alignItems: "center",
-    justifyContent: "center",
-  },
+      justifyContent:
+        "center",
+    },
 
-  navLabel: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(10),
-    lineHeight: y(12),
-    marginTop: y(1),
-    textAlign: "center",
-  },
-});
+    parentModeText: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize: x(20),
+      lineHeight: y(24),
+
+      textDecorationLine:
+        "underline",
+    },
+
+    bottomNav: {
+      position:
+        "absolute",
+
+      left: 0,
+      top: y(33),
+
+      width: x(362),
+      height: y(72),
+
+      borderWidth: x(1),
+
+      borderColor:
+        colors.primary,
+
+      borderRadius: x(50),
+
+      backgroundColor:
+        colors.background,
+
+      overflow:
+        "hidden",
+
+      flexDirection:
+        "row",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "space-around",
+
+      paddingHorizontal:
+        x(18),
+    },
+
+    navItem: {
+      width: x(58),
+      height: y(56.75),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+    },
+
+    navLabel: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize: x(10),
+      lineHeight: y(12),
+
+      marginTop: y(1),
+
+      textAlign:
+        "center",
+    },
+  });

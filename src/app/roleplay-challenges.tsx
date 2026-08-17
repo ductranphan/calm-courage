@@ -1,13 +1,3 @@
-/**
- * Roleplay Challenges activities screen.
- *
- * Matches Figma Screen 7.3:
- * - 10 activity cards
- * - reward statistics
- * - fixed child-mode navigation
- * - parent-mode access
- */
-
 import { router, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -19,15 +9,9 @@ import {
 } from "react-native";
 
 import { colors } from "@/constants/colors";
-import { GAME_HUB_ACTIVITY_IDS } from "@/constants/activities";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
-import {
-  isHubLevelLocked,
-  useActivityCompleted,
-} from "@/hooks/useActivityCompleted";
 import { useChildRewards } from "@/hooks/useChildRewards";
-import { openGameLevel } from "@/utils/openGameLevel";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -36,11 +20,12 @@ import BackIcon from "../../assets/icons/back.svg";
 import BadgeIcon from "../../assets/icons/certificate-badge.svg";
 import DiamondIcon from "../../assets/icons/diamond.svg";
 import HouseIcon from "../../assets/icons/house.svg";
-import LockStateIcon from "../../assets/icons/lock-state.svg";
 import StarIcon from "../../assets/icons/star.svg";
 import WorkbookDashboardIcon from "../../assets/icons/workbook-dashboard.svg";
 
 const PAGE_BACKGROUND = "#F1F3F5";
+
+const TOTAL_ROLEPLAY_LEVELS = 10;
 
 const CARD_WIDTH = 171;
 const CARD_HEIGHT = 138;
@@ -55,52 +40,86 @@ const CONTENT_HEIGHT = 1010;
 const FOOTER_SPACE = 125;
 
 const activities = Array.from(
-  { length: 10 },
+  {
+    length:
+      TOTAL_ROLEPLAY_LEVELS,
+  },
   (_, index) => {
-    const activityNumber = index + 1;
-    const row = Math.floor(index / 2);
-    const isLeftColumn = index % 2 === 0;
+    const activityNumber =
+      index + 1;
+
+    const row =
+      Math.floor(index / 2);
+
+    const isLeftColumn =
+      index % 2 === 0;
 
     return {
       id: activityNumber,
-      label: `Activity ${activityNumber}`,
+      label:
+        `Activity ${activityNumber}`,
       left: isLeftColumn
         ? LEFT_COLUMN
         : RIGHT_COLUMN,
-      top: FIRST_ROW_TOP + row * ROW_DISTANCE,
+      top:
+        FIRST_ROW_TOP +
+        row * ROW_DISTANCE,
     };
   },
 );
 
-function formatScore(value: number): string {
-  return value.toString().padStart(2, "0");
+function formatScore(
+  value: number,
+): string {
+  return value
+    .toString()
+    .padStart(2, "0");
 }
 
 export default function RoleplayChallengesScreen() {
-  const { activeChild } = useActiveChild();
-  const { childModeActive } = useParentAccess();
-  const rewards = useChildRewards(activeChild?.id);
-  const { completed: phaseCompleted } =
-    useActivityCompleted(
+  const { activeChild } =
+    useActiveChild();
+
+  const { childModeActive } =
+    useParentAccess();
+
+  const rewards =
+    useChildRewards(
       activeChild?.id,
-      GAME_HUB_ACTIVITY_IDS.roleplay,
     );
 
-  const [audioEnabled, setAudioEnabled] =
-    useState(false);
+  const [
+    audioEnabled,
+    setAudioEnabled,
+  ] = useState(false);
 
   useEffect(() => {
-    if (!childModeActive || !activeChild) {
+    if (
+      !childModeActive ||
+      !activeChild
+    ) {
       router.replace(
         "/parent-verification" as Href,
       );
     }
-  }, [activeChild, childModeActive]);
+  }, [
+    activeChild,
+    childModeActive,
+  ]);
 
   function handleActivityPress(
     activityNumber: number,
   ) {
-    openGameLevel("roleplay", activityNumber);
+    router.push({
+      pathname:
+        "/roleplay-card",
+      params: {
+        roleplayId:
+          String(
+            activityNumber,
+          ),
+      },
+    } as unknown as Href);
   }
 
   function handleBack() {
@@ -115,25 +134,40 @@ export default function RoleplayChallengesScreen() {
     );
   }
 
-  if (!childModeActive || !activeChild) {
+  if (
+    !childModeActive ||
+    !activeChild
+  ) {
     return null;
   }
 
   return (
     <View style={styles.screen}>
       <ScrollView
-        style={styles.scrollView}
+        style={
+          styles.scrollView
+        }
         contentContainerStyle={
           styles.scrollContent
         }
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={
+          false
+        }
         bounces={false}
-        alwaysBounceVertical={false}
+        alwaysBounceVertical={
+          false
+        }
         overScrollMode="never"
       >
-        <View style={styles.figmaContent}>
+        <View
+          style={
+            styles.figmaContent
+          }
+        >
           <Pressable
-            style={styles.backButton}
+            style={
+              styles.backButton
+            }
             onPress={handleBack}
             accessibilityRole="button"
             accessibilityLabel="Back to adventure path"
@@ -146,10 +180,13 @@ export default function RoleplayChallengesScreen() {
           </Pressable>
 
           <Pressable
-            style={styles.audioButton}
+            style={
+              styles.audioButton
+            }
             onPress={() =>
               setAudioEnabled(
-                (current) => !current,
+                (current) =>
+                  !current,
               )
             }
             accessibilityRole="button"
@@ -159,7 +196,8 @@ export default function RoleplayChallengesScreen() {
                 : "Turn audio on"
             }
             accessibilityState={{
-              selected: audioEnabled,
+              selected:
+                audioEnabled,
             }}
             hitSlop={8}
           >
@@ -176,64 +214,98 @@ export default function RoleplayChallengesScreen() {
             )}
           </Pressable>
 
-          <Text style={styles.title}>
+          <Text
+            style={styles.title}
+          >
             Roleplay Challenges
           </Text>
 
-          <View style={styles.statistics}>
-            <View style={styles.starIcon}>
+          <View
+            style={
+              styles.statistics
+            }
+          >
+            <View
+              style={
+                styles.starIcon
+              }
+            >
               <StarIcon
                 width={x(32)}
                 height={x(32)}
               />
             </View>
 
-            <Text style={styles.starValue}>
+            <Text
+              style={
+                styles.starValue
+              }
+            >
               {rewards.stars}
             </Text>
 
-            <View style={styles.diamondIcon}>
+            <View
+              style={
+                styles.diamondIcon
+              }
+            >
               <DiamondIcon
                 width={x(20)}
                 height={x(20)}
               />
             </View>
 
-            <Text style={styles.gemValue}>
-              {formatScore(rewards.gems)}
+            <Text
+              style={
+                styles.gemValue
+              }
+            >
+              {formatScore(
+                rewards.gems,
+              )}
             </Text>
 
-            <View style={styles.badgeIcon}>
+            <View
+              style={
+                styles.badgeIcon
+              }
+            >
               <BadgeIcon
                 width={x(28)}
                 height={x(28)}
               />
             </View>
 
-            <Text style={styles.badgeValue}>
-              {formatScore(rewards.badges.length)}
+            <Text
+              style={
+                styles.badgeValue
+              }
+            >
+              {formatScore(
+                rewards.badges.length,
+              )}
             </Text>
           </View>
 
-          {activities.map((activity) => {
-            const isLocked = isHubLevelLocked(
-              activity.id,
-              phaseCompleted,
-            );
-
-            return (
+          {activities.map(
+            (activity) => (
               <Pressable
                 key={activity.id}
-                style={({ pressed }) => [
+                style={({
+                  pressed,
+                }) => [
                   styles.activityCard,
+
                   {
-                    left: x(activity.left),
-                    top: y(activity.top),
+                    left: x(
+                      activity.left,
+                    ),
+                    top: y(
+                      activity.top,
+                    ),
                   },
-                  isLocked &&
-                    styles.lockedActivityCard,
+
                   pressed &&
-                    !isLocked &&
                     styles.activityCardPressed,
                 ]}
                 onPress={() =>
@@ -241,53 +313,59 @@ export default function RoleplayChallengesScreen() {
                     activity.id,
                   )
                 }
-                disabled={isLocked}
                 accessibilityRole="button"
                 accessibilityLabel={
                   activity.label
                 }
-                accessibilityState={{
-                  disabled: isLocked,
-                }}
               >
                 <Text
-                  style={[
-                    styles.activityText,
-                    isLocked &&
-                      styles.lockedActivityText,
-                  ]}
+                  style={
+                    styles.activityText
+                  }
                 >
-                  {activity.label}
+                  {
+                    activity.label
+                  }
                 </Text>
-
-                {isLocked ? (
-                  <LockStateIcon
-                    width={x(23)}
-                    height={y(30)}
-                    style={styles.lockIcon}
-                  />
-                ) : null}
               </Pressable>
-            );
-          })}
+            ),
+          )}
         </View>
       </ScrollView>
 
-      <View style={styles.fixedFooter}>
+      <View
+        style={
+          styles.fixedFooter
+        }
+      >
         <Pressable
-          style={styles.parentModeLink}
-          onPress={handleParentMode}
+          style={
+            styles.parentModeLink
+          }
+          onPress={
+            handleParentMode
+          }
           accessibilityRole="button"
           accessibilityLabel="Switch to Parent Mode"
         >
-          <Text style={styles.parentModeText}>
+          <Text
+            style={
+              styles.parentModeText
+            }
+          >
             Switch to Parent Mode
           </Text>
         </Pressable>
 
-        <View style={styles.bottomNav}>
+        <View
+          style={
+            styles.bottomNav
+          }
+        >
           <Pressable
-            style={styles.navItem}
+            style={
+              styles.navItem
+            }
             onPress={() =>
               router.replace(
                 "/digital-workbook" as Href,
@@ -301,13 +379,19 @@ export default function RoleplayChallengesScreen() {
               height={y(40.07)}
             />
 
-            <Text style={styles.navLabel}>
+            <Text
+              style={
+                styles.navLabel
+              }
+            >
               Workbook
             </Text>
           </Pressable>
 
           <Pressable
-            style={styles.navItem}
+            style={
+              styles.navItem
+            }
             onPress={() =>
               router.replace(
                 "/child-dashboard" as Href,
@@ -321,13 +405,19 @@ export default function RoleplayChallengesScreen() {
               height={x(40)}
             />
 
-            <Text style={styles.navLabel}>
+            <Text
+              style={
+                styles.navLabel
+              }
+            >
               Home
             </Text>
           </Pressable>
 
           <Pressable
-            style={styles.navItem}
+            style={
+              styles.navItem
+            }
             onPress={() =>
               router.replace(
                 "/rewards" as Href,
@@ -341,7 +431,11 @@ export default function RoleplayChallengesScreen() {
               height={x(42)}
             />
 
-            <Text style={styles.navLabel}>
+            <Text
+              style={
+                styles.navLabel
+              }
+            >
               Rewards
             </Text>
           </Pressable>
@@ -351,249 +445,260 @@ export default function RoleplayChallengesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    position: "relative",
-    backgroundColor: PAGE_BACKGROUND,
-  },
-
-  scrollView: {
-    flex: 1,
-    backgroundColor: PAGE_BACKGROUND,
-  },
-
-  scrollContent: {
-    minHeight: y(
-      CONTENT_HEIGHT + FOOTER_SPACE,
-    ),
-    paddingBottom: y(FOOTER_SPACE),
-    backgroundColor: PAGE_BACKGROUND,
-  },
-
-  figmaContent: {
-    width: "100%",
-    height: y(CONTENT_HEIGHT),
-    position: "relative",
-    backgroundColor: PAGE_BACKGROUND,
-  },
-
-  backButton: {
-    position: "absolute",
-    left: x(20),
-    top: y(48),
-    width: x(37.24),
-    height: y(35),
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 10,
-  },
-
-  audioButton: {
-    position: "absolute",
-    left: x(347),
-    top: y(48),
-    width: x(35),
-    height: x(35),
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 10,
-  },
-
-  title: {
-    position: "absolute",
-    left: x(20),
-    top: y(123),
-    width: x(362),
-    height: y(39),
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(30),
-    lineHeight: y(39),
-    textAlign: "center",
-  },
-
-  statistics: {
-    position: "absolute",
-    left: x(168),
-    top: y(179),
-    width: x(212),
-    height: y(32),
-  },
-
-  starIcon: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    width: x(32),
-    height: x(32),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  starValue: {
-    position: "absolute",
-    left: x(39),
-    top: y(4),
-    width: x(24),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textAlign: "center",
-  },
-
-  diamondIcon: {
-    position: "absolute",
-    left: x(83),
-    top: y(6),
-    width: x(20),
-    height: x(20),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  gemValue: {
-    position: "absolute",
-    left: x(115),
-    top: y(4),
-    width: x(30),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textAlign: "center",
-  },
-
-  badgeIcon: {
-    position: "absolute",
-    left: x(153),
-    top: y(2),
-    width: x(28),
-    height: x(28),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  badgeValue: {
-    position: "absolute",
-    left: x(188),
-    top: y(4),
-    width: x(24),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textAlign: "center",
-  },
-
-  activityCard: {
-    position: "absolute",
-    width: x(CARD_WIDTH),
-    height: y(CARD_HEIGHT),
-    borderRadius: x(20),
-    backgroundColor: "#DCEAEC",
-    alignItems: "center",
-    justifyContent: "center",
-
-    shadowColor: colors.black,
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+const styles =
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      position: "relative",
+      backgroundColor:
+        PAGE_BACKGROUND,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
 
+    scrollView: {
+      flex: 1,
+      backgroundColor:
+        PAGE_BACKGROUND,
+    },
 
-  activityCardPressed: {
-    opacity: 0.8,
-  },
+    scrollContent: {
+      minHeight: y(
+        CONTENT_HEIGHT +
+          FOOTER_SPACE,
+      ),
+      paddingBottom:
+        y(FOOTER_SPACE),
+      backgroundColor:
+        PAGE_BACKGROUND,
+    },
 
-  lockedActivityCard: {
-    backgroundColor: "#D9D9D9",
-  },
+    figmaContent: {
+      width: "100%",
+      height: y(
+        CONTENT_HEIGHT,
+      ),
+      position: "relative",
+      backgroundColor:
+        PAGE_BACKGROUND,
+    },
 
-  lockedActivityText: {
-    color: "#7D7C7C",
-  },
+    backButton: {
+      position: "absolute",
+      left: x(20),
+      top: y(48),
+      width: x(37.24),
+      height: y(35),
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 10,
+    },
 
-  lockIcon: {
-    marginTop: y(8),
-  },
+    audioButton: {
+      position: "absolute",
+      left: x(347),
+      top: y(48),
+      width: x(35),
+      height: x(35),
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor:
+        "transparent",
+      zIndex: 10,
+    },
 
-  activityText: {
-    width: x(168.52),
-    minHeight: y(33),
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(25),
-    lineHeight: y(33),
-    textAlign: "center",
-  },
+    title: {
+      position: "absolute",
+      left: x(20),
+      top: y(123),
+      width: x(362),
+      height: y(39),
+      color:
+        colors.primary,
+      fontFamily: "Outfit",
+      fontSize: x(30),
+      lineHeight: y(39),
+      textAlign: "center",
+    },
 
-  fixedFooter: {
-    position: "absolute",
-    left: x(20),
-    bottom: y(20),
-    width: x(362),
-    height: y(105),
-    backgroundColor: "transparent",
-    zIndex: 50,
-  },
+    statistics: {
+      position: "absolute",
+      left: x(168),
+      top: y(179),
+      width: x(212),
+      height: y(32),
+    },
 
-  parentModeLink: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    width: x(217),
-    height: y(24),
-    justifyContent: "center",
-  },
+    starIcon: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      width: x(32),
+      height: x(32),
+      alignItems: "center",
+      justifyContent: "center",
+    },
 
-  parentModeText: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textDecorationLine: "underline",
-  },
+    starValue: {
+      position: "absolute",
+      left: x(39),
+      top: y(4),
+      width: x(24),
+      height: y(24),
+      color:
+        colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(20),
+      lineHeight: y(24),
+      textAlign: "center",
+    },
 
-  bottomNav: {
-    position: "absolute",
-    left: 0,
-    top: y(33),
-    width: x(362),
-    height: y(72),
-    borderWidth: x(1),
-    borderColor: colors.primary,
-    borderRadius: x(50),
-    backgroundColor: PAGE_BACKGROUND,
-    overflow: "hidden",
+    diamondIcon: {
+      position: "absolute",
+      left: x(83),
+      top: y(6),
+      width: x(20),
+      height: x(20),
+      alignItems: "center",
+      justifyContent: "center",
+    },
 
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    paddingHorizontal: x(18),
-  },
+    gemValue: {
+      position: "absolute",
+      left: x(115),
+      top: y(4),
+      width: x(30),
+      height: y(24),
+      color:
+        colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(20),
+      lineHeight: y(24),
+      textAlign: "center",
+    },
 
-  navItem: {
-    width: x(58),
-    height: y(56.75),
-    alignItems: "center",
-    justifyContent: "center",
-  },
+    badgeIcon: {
+      position: "absolute",
+      left: x(153),
+      top: y(2),
+      width: x(28),
+      height: x(28),
+      alignItems: "center",
+      justifyContent: "center",
+    },
 
-  navLabel: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(10),
-    lineHeight: y(12),
-    marginTop: y(1),
-    textAlign: "center",
-  },
-});
+    badgeValue: {
+      position: "absolute",
+      left: x(188),
+      top: y(4),
+      width: x(24),
+      height: y(24),
+      color:
+        colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(20),
+      lineHeight: y(24),
+      textAlign: "center",
+    },
+
+    activityCard: {
+      position: "absolute",
+      width: x(CARD_WIDTH),
+      height: y(CARD_HEIGHT),
+      borderRadius: x(20),
+      backgroundColor:
+        "#DCEAEC",
+      alignItems: "center",
+      justifyContent: "center",
+
+      shadowColor:
+        "#000000",
+      shadowOffset: {
+        width: 0,
+        height: y(4),
+      },
+      shadowOpacity: 0.25,
+      shadowRadius: x(4),
+      elevation: 5,
+    },
+
+    activityCardPressed: {
+      opacity: 0.8,
+    },
+
+    activityText: {
+      width: x(168.52),
+      minHeight: y(33),
+      color:
+        colors.primary,
+      fontFamily: "Outfit",
+      fontSize: x(25),
+      lineHeight: y(33),
+      textAlign: "center",
+    },
+
+    fixedFooter: {
+      position: "absolute",
+      left: x(20),
+      bottom: y(20),
+      width: x(362),
+      height: y(105),
+      backgroundColor:
+        "transparent",
+      zIndex: 50,
+    },
+
+    parentModeLink: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      width: x(217),
+      height: y(24),
+      justifyContent: "center",
+    },
+
+    parentModeText: {
+      color:
+        colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(20),
+      lineHeight: y(24),
+      textDecorationLine:
+        "underline",
+    },
+
+    bottomNav: {
+      position: "absolute",
+      left: 0,
+      top: y(33),
+      width: x(362),
+      height: y(72),
+      borderWidth: x(1),
+      borderColor:
+        colors.primary,
+      borderRadius: x(50),
+      backgroundColor:
+        PAGE_BACKGROUND,
+      overflow: "hidden",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent:
+        "space-around",
+      paddingHorizontal: x(18),
+    },
+
+    navItem: {
+      width: x(58),
+      height: y(56.75),
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    navLabel: {
+      color:
+        colors.primary,
+      fontFamily: "Literata",
+      fontSize: x(10),
+      lineHeight: y(12),
+      marginTop: y(1),
+      textAlign: "center",
+    },
+  });
