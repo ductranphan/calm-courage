@@ -1,3 +1,7 @@
+/**
+ * Confidence Quest card screen.
+ */
+
 import {
   router,
   type Href,
@@ -10,7 +14,6 @@ import {
   useState,
 } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Keyboard,
   KeyboardAvoidingView,
@@ -309,13 +312,6 @@ export default function ConfidenceQuestCardScreen() {
     [parsedQuestId],
   );
 
-  /*
-   * Reflection is required.
-   * Spaces alone do not count.
-   */
-  const canSave =
-    reflection.trim().length > 0;
-
   useEffect(() => {
     setMode("quest");
     setReflection("");
@@ -468,10 +464,7 @@ export default function ConfidenceQuestCardScreen() {
   ) {
     setReflection(value);
 
-    if (
-      value.trim().length > 0 &&
-      saveError
-    ) {
+    if (saveError) {
       setSaveError(null);
     }
   }
@@ -516,18 +509,6 @@ export default function ConfidenceQuestCardScreen() {
   }
 
   async function handleSave() {
-    /*
-     * Do not allow completion until
-     * something has been written.
-     */
-    if (!canSave) {
-      setSaveError(
-        "Please write a reflection before completing this quest.",
-      );
-
-      return;
-    }
-
     if (
       saving ||
       !user?.uid ||
@@ -564,9 +545,10 @@ export default function ConfidenceQuestCardScreen() {
 
         gemsReward:
           quest.gemsReward,
-
+          
         reflection:
-          reflection.trim(),
+          reflection.trim() ||
+          undefined,
 
         metadata: {
           source:
@@ -874,13 +856,9 @@ export default function ConfidenceQuestCardScreen() {
                   </Text>
 
                   <TextInput
-                    style={[
-                      styles.reflectionInput,
-
-                      !canSave &&
-                        saveError &&
-                        styles.reflectionInputError,
-                    ]}
+                    style={
+                      styles.reflectionInput
+                    }
                     value={reflection}
                     onChangeText={
                       handleReflectionChange
@@ -888,7 +866,7 @@ export default function ConfidenceQuestCardScreen() {
                     multiline
                     textAlignVertical="top"
                     maxLength={280}
-                    accessibilityLabel="Required reflection"
+                    accessibilityLabel="Optional reflection"
                     onFocus={
                       handleReflectionFocus
                     }
@@ -935,20 +913,12 @@ export default function ConfidenceQuestCardScreen() {
                     styles.saveButton,
 
                     pressed &&
-                      canSave &&
                       !saving &&
                       styles.saveButtonPressed,
 
-                    (!canSave ||
-                      saving) &&
+                    saving &&
                       styles.saveButtonDisabled,
                   ]}
-                  /*
-                   * We don't use disabled={!canSave}
-                   * here because this lets us show
-                   * the validation message if the
-                   * user taps SAVE while empty.
-                   */
                   onPress={() => {
                     void handleSave();
                   }}
@@ -956,25 +926,16 @@ export default function ConfidenceQuestCardScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Save Confidence Quest"
                   accessibilityState={{
-                    disabled:
-                      !canSave ||
-                      saving,
+                    disabled: saving,
                   }}
                 >
-                  {saving ? (
-                    <ActivityIndicator
-                      size="small"
-                      color={PRIMARY}
-                    />
-                  ) : (
-                    <Text
-                      style={
-                        styles.saveButtonText
-                      }
-                    >
-                      SAVE
-                    </Text>
-                  )}
+                  <Text
+                    style={
+                      styles.saveButtonText
+                    }
+                  >
+                    SAVE
+                  </Text>
                 </Pressable>
               </Animated.View>
             </ScrollView>
@@ -1645,10 +1606,6 @@ const styles = StyleSheet.create({
     borderColor: "#A83232",
   },
 
-  /*
-   * This is the visible instructional
-   * text before the child taps the field.
-   */
   reflectionPlaceholder: {
     position: "absolute",
     left: x(39),
@@ -1692,12 +1649,8 @@ const styles = StyleSheet.create({
     opacity: 0.82,
   },
 
-  /*
-   * Before anything is written,
-   * SAVE appears inactive.
-   */
   saveButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.7,
   },
 
   saveButtonText: {

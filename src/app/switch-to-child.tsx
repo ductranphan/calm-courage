@@ -4,14 +4,24 @@
  * Shows the parent that it is time to pass the device to the child.
  * Matches Figma Screen 4.0.
  *
- * The exact selected child is stored in ActiveChildContext before the
- * device enters child mode.
+ * The selected child is rendered immediately from route params or
+ * ActiveChildContext whenever possible. Firestore is only used as a
+ * background fallback when the screen does not already have complete
+ * child data.
+ *
+ * This avoids showing a loading spinner before entering child mode.
  */
 
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
+  router,
+  useLocalSearchParams,
+} from "expo-router";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
   Image,
   Pressable,
   ScrollView,
@@ -26,7 +36,6 @@ import ErrorMessage from "@/components/ui/ErrorMessage";
 import { passDeviceImage } from "@/constants/assets";
 import {
   normalizeAvatarId,
-  type AvatarId,
 } from "@/constants/avatars";
 import { colors } from "@/constants/colors";
 import {
@@ -41,108 +50,280 @@ import {
 } from "@/services/children";
 import { x, y } from "@/utils/scaling";
 
-export default function SwitchToChildScreen() {
-  const { user } = useAuth();
-  const { enterChildMode } = useParentAccess();
-  const { selectActiveChild } = useActiveChild();
+function createRouteChild(
+  childId: string | undefined,
+  childName: string | undefined,
+  avatarId: string | undefined,
+): ActiveChild | null {
+  if (
+    !childId ||
+    !childName ||
+    !avatarId
+  ) {
+    return null;
+  }
 
-  const { childId, childName, avatarId } =
+  return {
+    id: childId,
+    name: childName,
+    avatarId:
+      normalizeAvatarId(
+        avatarId,
+      ),
+  };
+}
+
+export default function SwitchToChildScreen() {
+  const { user } =
+    useAuth();
+
+  const {
+    enterChildMode,
+  } = useParentAccess();
+
+  const {
+    activeChild,
+    selectActiveChild,
+  } = useActiveChild();
+
+  const {
+    childId,
+    childName,
+    avatarId,
+  } =
     useLocalSearchParams<{
       childId?: string;
       childName?: string;
       avatarId?: string;
     }>();
 
-  const [selectedChild, setSelectedChild] =
-    useState<ActiveChild | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] =
-    useState<string | null>(null);
+  const routeChild =
+    useMemo(
+      () =>
+        createRouteChild(
+          childId,
+          childName,
+          avatarId,
+        ),
+      [
+        avatarId,
+        childId,
+        childName,
+      ],
+    );
+
+  const initialChild =
+    useMemo(() => {
+      if (routeChild) {
+        return routeChild;
+      }
+
+      if (
+        activeChild &&
+        (
+          !childId ||
+          activeChild.id ===
+            childId
+        )
+      ) {
+        return activeChild;
+      }
+
+      return null;
+    }, [
+      activeChild,
+      childId,
+      routeChild,
+    ]);
+
+  const [
+    selectedChild,
+    setSelectedChild,
+  ] =
+    useState<ActiveChild | null>(
+      initialChild,
+    );
+
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(
+      null,
+    );
 
   useEffect(() => {
-    let stillMounted = true;
+    let stillMounted =
+      true;
 
     async function loadSelectedChild() {
       setError(null);
 
       if (!user?.uid) {
-        if (stillMounted) {
-          setLoading(false);
-          setError("You must be signed in to continue.");
+        if (
+          stillMounted
+        ) {
+          setError(
+            "You must be signed in to continue.",
+          );
         }
+
         return;
       }
 
       /*
-       * Use complete route data immediately when it is available.
-       * This avoids an unnecessary Firestore request and prevents a
-       * temporary wrong child name/avatar from appearing.
+       * Complete route data is already enough to render and continue.
+       * It came from the exact child selected by the parent, so there
+       * is no reason to block the screen with another Firestore read.
        */
-      if (childId && childName && avatarId) {
-        if (stillMounted) {
-          setSelectedChild({
-            id: childId,
-            name: childName,
-            avatarId: normalizeAvatarId(avatarId),
-          });
-          setLoading(false);
+      if (routeChild) {
+        if (
+          stillMounted
+        ) {
+          setSelectedChild(
+            routeChild,
+          );
         }
+
         return;
       }
 
-      setLoading(true);
+      /*
+       * If ActiveChildContext already contains the exact requested
+       * child, keep it visible immediately while we refresh the profile.
+       */
+      if (
+        activeChild &&
+        (
+          !childId ||
+          activeChild.id ===
+            childId
+        )
+      ) {
+        if (
+          stillMounted
+        ) {
+          setSelectedChild(
+            activeChild,
+          );
+        }
+
+        /*
+         * When there is no explicit child ID, ActiveChildContext already
+         * identifies the child the parent was viewing. No list request is
+         * needed just to rediscover the same profile.
+         */
+        if (!childId) {
+          return;
+        }
+      }
 
       try {
-        let child = childId
-          ? await getChild(user.uid, childId)
-          : null;
+        let child =
+          childId
+            ? await getChild(
+                user.uid,
+                childId,
+              )
+            : null;
 
         if (!childId) {
-          const children = await listChildren(user.uid);
+          const children =
+            await listChildren(
+              user.uid,
+            );
 
           /*
            * Never choose an arbitrary profile when several children exist.
            * Send the parent to Child Management so they can select the exact
            * child who will use the device.
            */
-          if (children.length > 1) {
-            router.replace("/children");
+          if (
+            children.length >
+            1
+          ) {
+            router.replace(
+              "/children",
+            );
             return;
           }
 
-          child = children[0] ?? null;
+          child =
+            children[0] ??
+            null;
         }
 
-        if (!stillMounted) {
+        if (
+          !stillMounted
+        ) {
           return;
         }
 
         if (!child) {
-          setSelectedChild(null);
-          setError("No child profile found.");
+          /*
+           * Keep an already-visible matching ActiveChild preview if one
+           * exists. Only clear the screen when there truly is no child data.
+           */
+          const hasMatchingPreview =
+            Boolean(
+              activeChild &&
+                (
+                  !childId ||
+                  activeChild.id ===
+                    childId
+                ),
+            );
+
+          if (
+            !hasMatchingPreview
+          ) {
+            setSelectedChild(
+              null,
+            );
+
+            setError(
+              "No child profile found.",
+            );
+          }
+
           return;
         }
 
         setSelectedChild({
-          id: child.id,
-          name: child.name,
-          avatarId: normalizeAvatarId(child.avatarId),
+          id:
+            child.id,
+
+          name:
+            child.name,
+
+          avatarId:
+            normalizeAvatarId(
+              child.avatarId,
+            ),
         });
       } catch (loadError) {
         console.error(
-          "Unable to load the selected child:",
+          "Unable to refresh the selected child:",
           loadError,
         );
 
-        if (stillMounted) {
-          setSelectedChild(null);
+        const hasMatchingPreview =
+          Boolean(
+            activeChild &&
+              (
+                !childId ||
+                activeChild.id ===
+                  childId
+              ),
+          );
+
+        if (
+          stillMounted &&
+          !hasMatchingPreview
+        ) {
           setError(
             "We couldn’t load the child profile. Please try again.",
           );
-        }
-      } finally {
-        if (stillMounted) {
-          setLoading(false);
         }
       }
     }
@@ -150,18 +331,21 @@ export default function SwitchToChildScreen() {
     void loadSelectedChild();
 
     return () => {
-      stillMounted = false;
+      stillMounted =
+        false;
     };
   }, [
-    user?.uid,
+    activeChild,
     childId,
-    childName,
-    avatarId,
+    routeChild,
+    user?.uid,
   ]);
 
   function handleReadyToPlay() {
     if (!selectedChild) {
-      setError("No child profile found.");
+      setError(
+        "No child profile found.",
+      );
       return;
     }
 
@@ -169,183 +353,359 @@ export default function SwitchToChildScreen() {
      * Save the exact child before locking parent-only screens and
      * handing the device over.
      */
-    selectActiveChild(selectedChild);
+    selectActiveChild(
+      selectedChild,
+    );
+
     enterChildMode();
 
     router.replace({
-      pathname: "/child-welcome",
+      pathname:
+        "/child-welcome",
+
       params: {
-        childId: selectedChild.id,
-        childName: selectedChild.name,
-        avatarId: selectedChild.avatarId,
+        childId:
+          selectedChild.id,
+
+        childName:
+          selectedChild.name,
+
+        avatarId:
+          selectedChild.avatarId,
       },
     });
   }
 
   return (
     <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
+      style={
+        styles.screen
+      }
+      contentContainerStyle={
+        styles.scrollContent
+      }
+      showsVerticalScrollIndicator={
+        false
+      }
+      bounces={false}
+      alwaysBounceVertical={
+        false
+      }
+      overScrollMode="never"
+      contentInsetAdjustmentBehavior="never"
     >
-      <View style={styles.figmaFrame}>
-        <BackButton fallback="/children" />
+      <View
+        style={
+          styles.figmaFrame
+        }
+      >
+        <BackButton
+          fallback="/children"
+        />
 
-        {loading ? (
-          <ActivityIndicator
-            color={colors.primary}
-            style={styles.loader}
+        <Text
+          style={
+            styles.title
+          }
+        >
+          Pass the device to
+          {"\n"}
+          {selectedChild?.name ||
+            "your child"}!
+        </Text>
+
+        <Text
+          style={
+            styles.subtitle
+          }
+        >
+          It&apos;s time for your child to begin their
+          {"\n"}
+          courage journey. Hand over the
+          {"\n"}
+          screen to start playing!
+        </Text>
+
+        <View
+          style={
+            styles.imageWrapper
+          }
+        >
+          <Image
+            source={
+              passDeviceImage
+            }
+            style={
+              styles.image
+            }
+            resizeMode="cover"
+            fadeDuration={0}
           />
-        ) : (
-          <>
-            <Text style={styles.title}>
-              Pass the device to{"\n"}
-              {selectedChild?.name || "your child"}!
-            </Text>
+        </View>
 
-            <Text style={styles.subtitle}>
-              It&apos;s time for your child to begin their{"\n"}
-              courage journey. Hand over the{"\n"}
-              screen to start playing!
-            </Text>
+        <ErrorMessage
+          message={error}
+          style={
+            styles.error
+          }
+        />
 
-            <View style={styles.imageWrapper}>
-              <Image
-                source={passDeviceImage}
-                style={styles.image}
-                resizeMode="cover"
-              />
-            </View>
+        <View
+          style={
+            styles.buttonWrapper
+          }
+        >
+          <AppButton
+            title="Ready to Play!"
+            onPress={
+              handleReadyToPlay
+            }
+            style={
+              styles.readyButton
+            }
+          />
+        </View>
 
-            <ErrorMessage
-              message={error}
-              style={styles.error}
-            />
+        <Pressable
+          onPress={() =>
+            router.replace(
+              "/home",
+            )
+          }
+          style={({
+            pressed,
+          }) => [
+            styles.dashboardLinkWrapper,
 
-            <View style={styles.buttonWrapper}>
-              <AppButton
-                title="Ready to Play!"
-                onPress={handleReadyToPlay}
-                style={styles.readyButton}
-              />
-            </View>
-
-            <Pressable
-              onPress={() =>
-                router.replace("/home")
-              }
-              style={styles.dashboardLinkWrapper}
-            >
-              <Text style={styles.dashboardLink}>
-                Go to Parent Dashboard
-              </Text>
-            </Pressable>
-          </>
-        )}
+            pressed &&
+              styles.controlPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Go to Parent Dashboard"
+        >
+          <Text
+            style={
+              styles.dashboardLink
+            }
+          >
+            Go to Parent Dashboard
+          </Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+const styles =
+  StyleSheet.create({
+    screen: {
+      flex: 1,
 
-  scrollContent: {
-    minHeight: y(960),
-    backgroundColor: colors.background,
-  },
+      backgroundColor:
+        colors.background,
+    },
 
-  figmaFrame: {
-    width: "100%",
-    height: y(960),
-    position: "relative",
-    backgroundColor: colors.background,
-  },
+    scrollContent: {
+      minHeight:
+        y(960),
 
-  loader: {
-    marginTop: y(420),
-  },
+      backgroundColor:
+        colors.background,
+    },
 
-  title: {
-    position: "absolute",
-    left: x(20),
-    top: y(123),
-    width: x(362),
-    height: y(78),
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(30),
-    lineHeight: y(39),
-  },
+    figmaFrame: {
+      width:
+        "100%",
 
-  subtitle: {
-    position: "absolute",
-    left: x(20),
-    top: y(242),
-    width: x(362),
-    height: y(72),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-  },
+      height:
+        y(960),
 
-  imageWrapper: {
-    position: "absolute",
-    left: x(20),
-    top: y(355),
-    width: x(362),
-    height: y(350.42),
-    borderRadius: x(20),
-    overflow: "hidden",
-    backgroundColor: colors.white,
-  },
+      position:
+        "relative",
 
-  image: {
-    width: "100%",
-    height: "100%",
-  },
+      backgroundColor:
+        colors.background,
+    },
 
-  error: {
-    position: "absolute",
-    left: x(20),
-    top: y(724),
-    width: x(362),
-  },
+    title: {
+      position:
+        "absolute",
 
-  buttonWrapper: {
-    position: "absolute",
-    left: x(96),
-    top: y(772),
-    width: x(210),
-    height: y(52),
-  },
+      left:
+        x(20),
 
-  readyButton: {
-    width: x(210),
-    height: y(52),
-    borderRadius: x(20),
-  },
+      top:
+        y(123),
 
-  dashboardLinkWrapper: {
-    position: "absolute",
-    left: x(88),
-    top: y(890),
-    width: x(226),
-    height: y(24),
-    alignItems: "center",
-    justifyContent: "center",
-  },
+      width:
+        x(362),
 
-  dashboardLink: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textAlign: "center",
-    textDecorationLine: "underline",
-  },
-});
+      height:
+        y(78),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Outfit",
+
+      fontSize:
+        x(30),
+
+      lineHeight:
+        y(39),
+    },
+
+    subtitle: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(242),
+
+      width:
+        x(362),
+
+      height:
+        y(72),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize:
+        x(20),
+
+      lineHeight:
+        y(24),
+    },
+
+    imageWrapper: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(355),
+
+      width:
+        x(362),
+
+      height:
+        y(350.42),
+
+      borderRadius:
+        x(20),
+
+      overflow:
+        "hidden",
+
+      backgroundColor:
+        colors.white,
+    },
+
+    image: {
+      width:
+        "100%",
+
+      height:
+        "100%",
+    },
+
+    error: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(724),
+
+      width:
+        x(362),
+    },
+
+    buttonWrapper: {
+      position:
+        "absolute",
+
+      left:
+        x(96),
+
+      top:
+        y(772),
+
+      width:
+        x(210),
+
+      height:
+        y(52),
+    },
+
+    readyButton: {
+      width:
+        x(210),
+
+      height:
+        y(52),
+
+      borderRadius:
+        x(20),
+    },
+
+    dashboardLinkWrapper: {
+      position:
+        "absolute",
+
+      left:
+        x(88),
+
+      top:
+        y(890),
+
+      width:
+        x(226),
+
+      height:
+        y(24),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+    },
+
+    dashboardLink: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize:
+        x(20),
+
+      lineHeight:
+        y(24),
+
+      textAlign:
+        "center",
+
+      textDecorationLine:
+        "underline",
+    },
+
+    controlPressed: {
+      opacity:
+        0.65,
+    },
+  });

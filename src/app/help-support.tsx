@@ -2,6 +2,7 @@
  * Parent Help & Support screen.
  *
  * Provides searchable and filterable help articles.
+ * The Contact Us button opens the dedicated contact form.
  */
 
 import {

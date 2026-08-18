@@ -1,4 +1,11 @@
-import { Asset } from "expo-asset";
+/**
+ * Roleplay card screen.
+ *
+ * The roleplay templates and illustrations are preloaded globally during
+ * app startup. This screen therefore renders its images and text together
+ * immediately instead of waiting for per-image onLoad events.
+ */
+
 import {
   router,
   type Href,
@@ -114,11 +121,6 @@ export default function RoleplayCardScreen() {
     useState(false);
   const [showBack, setShowBack] =
     useState(false);
-  const [frontTemplateLoaded, setFrontTemplateLoaded] =
-    useState(false);
-  const [backTemplateLoaded, setBackTemplateLoaded] =
-    useState(false);
-
   const hasStartedRef = useRef(false);
   const hasCompletedRef = useRef(false);
   const sideProgress = useRef(
@@ -170,21 +172,6 @@ export default function RoleplayCardScreen() {
       );
     }
   }, [activeChild, childModeActive]);
-
-  useEffect(() => {
-    if (!illustration) return;
-
-    void Asset.loadAsync([
-      FRONT_TEMPLATE,
-      BACK_TEMPLATE,
-      illustration,
-    ]).catch((error: unknown) => {
-      console.warn(
-        "Unable to preload roleplay assets:",
-        error,
-      );
-    });
-  }, [illustration]);
 
   useEffect(() => {
     Animated.timing(sideProgress, {
@@ -412,21 +399,11 @@ export default function RoleplayCardScreen() {
               resizeMode="stretch"
               fadeDuration={0}
               style={styles.cardBackground}
-              onLoad={() =>
-                setBackTemplateLoaded(true)
-              }
-              onError={() =>
-                setBackTemplateLoaded(true)
-              }
               accessibilityIgnoresInvertColors
             />
 
             <View
-              style={[
-                styles.backContent,
-                !backTemplateLoaded &&
-                  styles.hiddenContent,
-              ]}
+              style={styles.backContent}
             >
               <Image
                 source={illustration}
@@ -470,21 +447,11 @@ export default function RoleplayCardScreen() {
               resizeMode="stretch"
               fadeDuration={0}
               style={styles.cardBackground}
-              onLoad={() =>
-                setFrontTemplateLoaded(true)
-              }
-              onError={() =>
-                setFrontTemplateLoaded(true)
-              }
               accessibilityIgnoresInvertColors
             />
 
             <View
-              style={[
-                styles.frontTextContainer,
-                !frontTemplateLoaded &&
-                  styles.hiddenContent,
-              ]}
+              style={styles.frontTextContainer}
             >
               <Text
                 style={[
@@ -719,10 +686,6 @@ const styles = StyleSheet.create({
     fontFamily: "Literata",
     textAlign: "center",
     includeFontPadding: false,
-  },
-
-  hiddenContent: {
-    opacity: 0,
   },
 
   controlPressed: {

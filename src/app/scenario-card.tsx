@@ -1,8 +1,14 @@
+/**
+ * Choose Your Courage scenario card.
+ *
+ * The front PNG template is preloaded globally during app startup,
+ * so the card renders its background and text together immediately.
+ * No per-card loading state or image-load gate is used here.
+ */
+
 import type {
   ComponentType,
 } from "react";
-
-import { Asset } from "expo-asset";
 
 import {
   router,
@@ -161,11 +167,6 @@ export default function ScenarioCardScreen() {
     setShowBack,
   ] = useState(false);
 
-  const [
-    frontImageLoaded,
-    setFrontImageLoaded,
-  ] = useState(false);
-
   const hasStartedRef =
     useRef(false);
 
@@ -230,24 +231,6 @@ export default function ScenarioCardScreen() {
   ]);
 
   /*
-   * Preload reusable front template.
-   */
-  useEffect(() => {
-    void Asset.loadAsync(
-      FRONT_TEMPLATE,
-    ).catch(
-      (
-        error: unknown,
-      ) => {
-        console.warn(
-          "Unable to preload the scenario front template:",
-          error,
-        );
-      },
-    );
-  }, []);
-
-  /*
    * Front/back cross-fade.
    */
   useEffect(() => {
@@ -270,6 +253,10 @@ export default function ScenarioCardScreen() {
     sideProgress,
   ]);
 
+  /*
+   * Reset when opening another
+   * scenario.
+   */
   useEffect(() => {
     hasStartedRef.current =
       false;
@@ -279,10 +266,6 @@ export default function ScenarioCardScreen() {
 
     setShowBack(false);
 
-    setFrontImageLoaded(
-      false,
-    );
-
     sideProgress.setValue(
       0,
     );
@@ -291,6 +274,10 @@ export default function ScenarioCardScreen() {
     sideProgress,
   ]);
 
+  /*
+   * Keep existing activity start
+   * tracking.
+   */
   useEffect(() => {
     if (
       !user?.uid ||
@@ -342,6 +329,12 @@ export default function ScenarioCardScreen() {
   ]);
 
   function handleBack() {
+    /*
+     * Back always returns to
+     * Choose Your Courage.
+     *
+     * It does not flip the card.
+     */
     router.replace(
       "/scenario-challenges" as Href,
     );
@@ -370,6 +363,14 @@ export default function ScenarioCardScreen() {
     hasCompletedRef.current =
       true;
 
+    /*
+     * Keep the existing backend
+     * completion tracking.
+     *
+     * The UI does not wait for it
+     * before showing the Figma
+     * success popup.
+     */
     if (
       user?.uid &&
       activeChild?.id &&
@@ -408,6 +409,11 @@ export default function ScenarioCardScreen() {
       );
     }
 
+    /*
+     * Return to the scenario list
+     * and tell it to display the
+     * Figma success modal.
+     */
     router.replace(
       {
         pathname:
@@ -642,16 +648,6 @@ export default function ScenarioCardScreen() {
               }
               resizeMode="stretch"
               fadeDuration={0}
-              onLoad={() =>
-                setFrontImageLoaded(
-                  true,
-                )
-              }
-              onError={() =>
-                setFrontImageLoaded(
-                  true,
-                )
-              }
               style={
                 styles.frontBackground
               }
@@ -659,12 +655,9 @@ export default function ScenarioCardScreen() {
             />
 
             <View
-              style={[
-                styles.frontTextContainer,
-
-                !frontImageLoaded &&
-                  styles.hiddenFrontText,
-              ]}
+              style={
+                styles.frontTextContainer
+              }
             >
               <Text
                 style={[
@@ -700,6 +693,12 @@ export default function ScenarioCardScreen() {
         </View>
       </Pressable>
 
+      {/*
+       * TRANSPARENT FOOTER WRAPPER.
+       *
+       * No white rectangle is
+       * introduced behind navbar.
+       */}
       <View
         style={
           styles.fixedFooter
@@ -995,10 +994,6 @@ const styles =
         "center",
     },
 
-    hiddenFrontText: {
-      opacity: 0,
-    },
-
     frontText: {
       width: "100%",
 
@@ -1015,6 +1010,9 @@ const styles =
         false,
     },
 
+    /*
+     * No white rectangle.
+     */
     fixedFooter: {
       position:
         "absolute",

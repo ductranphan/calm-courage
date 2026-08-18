@@ -1,15 +1,12 @@
 /**
  * Parent Dashboard screen.
  *
- * Displays the selected child's real Firebase profile,
+ * Displays the selected child's Firebase profile,
  * emotion check-in, activity progress, and evening prompt.
  *
- * Parents with multiple children can press "Next" to cycle
- * through each child's dashboard without changing the app's
- * parent/child access mode.
- *
- * The "Switch to Child Mode" link and parent navbar remain
- * fixed at the bottom of the screen.
+ * Previously, this screen displayed a full-screen loading
+ * indicator every time its data refreshed. The dashboard now
+ * remains visible while fresh data is loaded in the background.
  */
 
 import {
@@ -17,14 +14,15 @@ import {
   useFocusEffect,
   useLocalSearchParams,
 } from "expo-router";
+
 import {
   useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
+
 import {
-  ActivityIndicator,
   Image,
   type LayoutChangeEvent,
   Pressable,
@@ -38,17 +36,23 @@ import InsightPromptCard from "@/components/dashboard/InsightPromptCard";
 import ParentBottomNav from "@/components/dashboard/ParentBottomNav";
 import ProgressBar from "@/components/dashboard/ProgressBar";
 import AppButton from "@/components/ui/AppButton";
+
 import {
   avatarImages,
   normalizeAvatarId,
   type AvatarId,
 } from "@/constants/avatars";
+
 import { colors } from "@/constants/colors";
 import { getEmotionImage } from "@/constants/emotions";
+
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
+
 import { useParentDashboardData } from "@/hooks/useParentDashboardData";
+
 import { listChildren } from "@/services/children";
+
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -70,14 +74,18 @@ type DashboardChild = {
 };
 
 export default function ParentDashboardScreen() {
-  const { user } = useAuth();
+  const { user } =
+    useAuth();
 
   const {
     activeChild,
     selectActiveChild,
   } = useActiveChild();
 
-  const { childId, mood } =
+  const {
+    childId,
+    mood,
+  } =
     useLocalSearchParams<{
       childId?: string;
       mood?: string;
@@ -86,22 +94,35 @@ export default function ParentDashboardScreen() {
   const [
     selectedChildId,
     setSelectedChildId,
-  ] = useState<string | null>(
-    childId ?? activeChild?.id ?? null,
-  );
+  ] =
+    useState<string | null>(
+      childId ??
+        activeChild?.id ??
+        null,
+    );
 
-  const [children, setChildren] =
-    useState<DashboardChild[]>([]);
-
+  /*
+   * Keep the child list in memory while it refreshes.
+   *
+   * We intentionally do not use a loading state here because
+   * ActiveChildContext and useParentDashboardData can already
+   * provide enough information to render the dashboard.
+   */
   const [
-    childrenLoading,
-    setChildrenLoading,
-  ] = useState(true);
+    children,
+    setChildren,
+  ] =
+    useState<
+      DashboardChild[]
+    >([]);
 
   const [
     childrenError,
     setChildrenError,
-  ] = useState<string | null>(null);
+  ] =
+    useState<
+      string | null
+    >(null);
 
   const [
     audioEnabled,
@@ -112,7 +133,9 @@ export default function ParentDashboardScreen() {
     promptCardHeight,
     setPromptCardHeight,
   ] = useState(
-    y(DEFAULT_PROMPT_CARD_HEIGHT),
+    y(
+      DEFAULT_PROMPT_CARD_HEIGHT,
+    ),
   );
 
   const dashboardData =
@@ -120,51 +143,69 @@ export default function ParentDashboardScreen() {
       childId:
         selectedChildId ??
         childId,
-      moodOverride: mood,
+
+      moodOverride:
+        mood,
     });
 
   /*
-   * When navigation provides a childId, display that
-   * child on the dashboard.
+   * When navigation explicitly provides a child ID,
+   * display that child on the dashboard.
    */
   useEffect(() => {
     if (childId) {
-      setSelectedChildId(childId);
+      setSelectedChildId(
+        childId,
+      );
     }
   }, [childId]);
 
   /*
-   * Reload all child profiles whenever the screen
-   * receives focus.
+   * Refresh child profiles whenever the screen receives focus.
+   *
+   * Existing dashboard content remains visible while this request
+   * runs, so returning to the dashboard does not flash a loader.
    */
   useFocusEffect(
     useCallback(() => {
-      let stillMounted = true;
+      let stillMounted =
+        true;
 
       async function loadParentChildren() {
-        setChildrenError(null);
+        setChildrenError(
+          null,
+        );
 
         if (!user?.uid) {
-          if (stillMounted) {
-            setChildren([]);
-            setChildrenLoading(false);
+          if (
+            stillMounted
+          ) {
+            setChildren(
+              [],
+            );
           }
 
           return;
         }
 
-        setChildrenLoading(true);
-
         try {
           const loadedChildren =
-            await listChildren(user.uid);
+            await listChildren(
+              user.uid,
+            );
 
           const normalizedChildren: DashboardChild[] =
             loadedChildren.map(
               (child) => ({
-                id: child.id,
-                name: child.name,
-                age: child.age,
+                id:
+                  child.id,
+
+                name:
+                  child.name,
+
+                age:
+                  child.age,
+
                 avatarId:
                   normalizeAvatarId(
                     child.avatarId,
@@ -172,7 +213,9 @@ export default function ParentDashboardScreen() {
               }),
             );
 
-          if (!stillMounted) {
+          if (
+            !stillMounted
+          ) {
             return;
           }
 
@@ -184,17 +227,28 @@ export default function ParentDashboardScreen() {
             normalizedChildren.length ===
             0
           ) {
-            setSelectedChildId(null);
+            setSelectedChildId(
+              null,
+            );
+
             return;
           }
 
+          /*
+           * Keep the currently selected child whenever it still
+           * exists in the refreshed child list.
+           */
           setSelectedChildId(
-            (currentChildId) => {
+            (
+              currentChildId,
+            ) => {
               const currentChildExists =
                 Boolean(
                   currentChildId &&
                     normalizedChildren.some(
-                      (child) =>
+                      (
+                        child,
+                      ) =>
                         child.id ===
                         currentChildId,
                     ),
@@ -210,7 +264,9 @@ export default function ParentDashboardScreen() {
               const routeChild =
                 childId
                   ? normalizedChildren.find(
-                      (child) =>
+                      (
+                        child,
+                      ) =>
                         child.id ===
                         childId,
                     )
@@ -218,26 +274,30 @@ export default function ParentDashboardScreen() {
 
               return (
                 routeChild?.id ??
-                normalizedChildren[0].id
+                normalizedChildren[0]
+                  .id
               );
             },
           );
-        } catch (loadError) {
+        } catch (
+          loadError
+        ) {
           console.error(
             "Unable to load children for parent dashboard:",
             loadError,
           );
 
-          if (stillMounted) {
-            setChildren([]);
-
+          if (
+            stillMounted
+          ) {
+            /*
+             * Do not clear children that are already visible.
+             * A failed background refresh should not make the
+             * dashboard suddenly disappear.
+             */
             setChildrenError(
-              "We couldn’t load the child profiles.",
+              "We couldn’t refresh the child profiles.",
             );
-          }
-        } finally {
-          if (stillMounted) {
-            setChildrenLoading(false);
           }
         }
       }
@@ -245,9 +305,13 @@ export default function ParentDashboardScreen() {
       void loadParentChildren();
 
       return () => {
-        stillMounted = false;
+        stillMounted =
+          false;
       };
-    }, [user?.uid, childId]),
+    }, [
+      user?.uid,
+      childId,
+    ]),
   );
 
   const selectedChild =
@@ -281,17 +345,24 @@ export default function ParentDashboardScreen() {
   const contentHeight =
     useMemo(
       () =>
-        y(PROMPT_CARD_TOP) +
+        y(
+          PROMPT_CARD_TOP,
+        ) +
         promptCardHeight +
-        y(CONTENT_BOTTOM_GAP),
-      [promptCardHeight],
+        y(
+          CONTENT_BOTTOM_GAP,
+        ),
+      [
+        promptCardHeight,
+      ],
     );
 
   function handlePromptCardLayout(
     event: LayoutChangeEvent,
   ) {
     const measuredHeight =
-      event.nativeEvent.layout.height;
+      event.nativeEvent
+        .layout.height;
 
     if (
       measuredHeight > 0 &&
@@ -307,12 +378,15 @@ export default function ParentDashboardScreen() {
   }
 
   function handleNextChild() {
-    if (children.length <= 1) {
+    if (
+      children.length <= 1
+    ) {
       return;
     }
 
     const currentIndex =
-      selectedChildIndex >= 0
+      selectedChildIndex >=
+      0
         ? selectedChildIndex
         : 0;
 
@@ -321,7 +395,8 @@ export default function ParentDashboardScreen() {
       children.length;
 
     setSelectedChildId(
-      children[nextIndex].id,
+      children[nextIndex]
+        .id,
     );
   }
 
@@ -332,14 +407,20 @@ export default function ParentDashboardScreen() {
       dashboardData.childName &&
       dashboardData.avatarId
         ? {
-            id: dashboardData.childId,
+            id:
+              dashboardData.childId,
+
             name:
               dashboardData.childName,
+
             avatarId:
               normalizeAvatarId(
                 dashboardData.avatarId,
               ),
-            age: 0,
+
+            age:
+              dashboardData.childAge ??
+              0,
           }
         : null);
 
@@ -348,17 +429,27 @@ export default function ParentDashboardScreen() {
     }
 
     selectActiveChild({
-      id: currentChild.id,
-      name: currentChild.name,
-      avatarId: currentChild.avatarId,
+      id:
+        currentChild.id,
+
+      name:
+        currentChild.name,
+
+      avatarId:
+        currentChild.avatarId,
     });
 
     router.push({
-      pathname: "/switch-to-child",
+      pathname:
+        "/switch-to-child",
+
       params: {
-        childId: currentChild.id,
+        childId:
+          currentChild.id,
+
         childName:
           currentChild.name,
+
         avatarId:
           currentChild.avatarId,
       },
@@ -366,49 +457,78 @@ export default function ParentDashboardScreen() {
   }
 
   if (
-    childrenLoading ||
-    dashboardData.loading
+    dashboardData.loading &&
+    !dashboardData.childId
   ) {
     return (
-      <View style={styles.statusScreen}>
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-        />
-
-        <Text style={styles.statusText}>
-          Loading dashboard...
-        </Text>
-      </View>
+      <View
+        style={
+          styles.screen
+        }
+      />
     );
   }
 
+  /*
+   * Only replace the dashboard with an error state when there is
+   * genuinely no existing child/dashboard data to continue showing.
+   */
   if (
     childrenError &&
-    children.length === 0
+    children.length === 0 &&
+    !dashboardData.childId
   ) {
     return (
-      <View style={styles.statusScreen}>
-        <Text style={styles.statusTitle}>
+      <View
+        style={
+          styles.statusScreen
+        }
+      >
+        <Text
+          style={
+            styles.statusTitle
+          }
+        >
           Unable to load dashboard
         </Text>
 
-        <Text style={styles.statusText}>
+        <Text
+          style={
+            styles.statusText
+          }
+        >
           {childrenError}
         </Text>
       </View>
     );
   }
 
-  if (dashboardData.error) {
+  if (
+    dashboardData.error &&
+    !dashboardData.childId
+  ) {
     return (
-      <View style={styles.statusScreen}>
-        <Text style={styles.statusTitle}>
+      <View
+        style={
+          styles.statusScreen
+        }
+      >
+        <Text
+          style={
+            styles.statusTitle
+          }
+        >
           Unable to load dashboard
         </Text>
 
-        <Text style={styles.statusText}>
-          {dashboardData.error}
+        <Text
+          style={
+            styles.statusText
+          }
+        >
+          {
+            dashboardData.error
+          }
         </Text>
       </View>
     );
@@ -421,12 +541,24 @@ export default function ParentDashboardScreen() {
     !dashboardData.avatarId
   ) {
     return (
-      <View style={styles.statusScreen}>
-        <Text style={styles.statusTitle}>
+      <View
+        style={
+          styles.statusScreen
+        }
+      >
+        <Text
+          style={
+            styles.statusTitle
+          }
+        >
           No child profile found
         </Text>
 
-        <Text style={styles.statusText}>
+        <Text
+          style={
+            styles.statusText
+          }
+        >
           Add a child profile to view the
           parent dashboard.
         </Text>
@@ -436,15 +568,21 @@ export default function ParentDashboardScreen() {
             router.replace({
               pathname:
                 "/child-profile-info",
+
               params: {
-                source: "children",
+                source:
+                  "children",
               },
             })
           }
           accessibilityRole="button"
           accessibilityLabel="Add child profile"
         >
-          <Text style={styles.statusLink}>
+          <Text
+            style={
+              styles.statusLink
+            }
+          >
             Add Child Profile
           </Text>
         </Pressable>
@@ -452,12 +590,22 @@ export default function ParentDashboardScreen() {
     );
   }
 
+  /*
+   * Prefer the freshly loaded child list because it contains age.
+   * Fall back to the dashboard hook's cached/preview child data.
+   */
   const displayedChild =
     selectedChild ?? {
-      id: dashboardData.childId,
+      id:
+        dashboardData.childId,
+
       name:
         dashboardData.childName,
-      age: 0,
+
+      age:
+        dashboardData.childAge ??
+        0,
+
       avatarId:
         normalizeAvatarId(
           dashboardData.avatarId,
@@ -472,9 +620,15 @@ export default function ParentDashboardScreen() {
       : null;
 
   return (
-    <View style={styles.screen}>
+    <View
+      style={
+        styles.screen
+      }
+    >
       <ScrollView
-        style={styles.scrollView}
+        style={
+          styles.scrollView
+        }
         contentContainerStyle={
           styles.scrollContent
         }
@@ -482,27 +636,37 @@ export default function ParentDashboardScreen() {
           false
         }
         bounces={false}
-        alwaysBounceVertical={false}
+        alwaysBounceVertical={
+          false
+        }
         overScrollMode="never"
         contentInsetAdjustmentBehavior="never"
       >
         <View
           style={[
             styles.figmaFrame,
+
             {
-              height: contentHeight,
+              height:
+                contentHeight,
             },
           ]}
         >
           <Pressable
-            style={({ pressed }) => [
+            style={({
+              pressed,
+            }) => [
               styles.audioButton,
+
               pressed &&
                 styles.controlPressed,
             ]}
             onPress={() =>
               setAudioEnabled(
-                (current) => !current,
+                (
+                  current,
+                ) =>
+                  !current,
               )
             }
             accessibilityRole="button"
@@ -512,7 +676,8 @@ export default function ParentDashboardScreen() {
                 : "Turn audio on"
             }
             accessibilityState={{
-              selected: audioEnabled,
+              selected:
+                audioEnabled,
             }}
             hitSlop={8}
           >
@@ -529,27 +694,40 @@ export default function ParentDashboardScreen() {
             )}
           </Pressable>
 
-          <Text style={styles.title}>
+          <Text
+            style={
+              styles.title
+            }
+          >
             Parent Dashboard
           </Text>
 
           <View
-            style={styles.dividerTop}
+            style={
+              styles.dividerTop
+            }
           />
 
           <View
-            style={styles.childSelector}
+            style={
+              styles.childSelector
+            }
           >
             <View
-              style={styles.avatarCard}
+              style={
+                styles.avatarCard
+              }
             >
               <Image
                 source={
                   avatarImages[
-                    displayedChild.avatarId
+                    displayedChild
+                      .avatarId
                   ]
                 }
-                style={styles.avatarImage}
+                style={
+                  styles.avatarImage
+                }
                 resizeMode="contain"
                 fadeDuration={0}
               />
@@ -561,16 +739,27 @@ export default function ParentDashboardScreen() {
               }
             >
               <Text
-                style={styles.childName}
-                numberOfLines={1}
+                style={
+                  styles.childName
+                }
+                numberOfLines={
+                  1
+                }
               >
                 Name:{" "}
-                {displayedChild.name}
+                {
+                  displayedChild.name
+                }
               </Text>
 
-              <Text style={styles.childAge}>
+              <Text
+                style={
+                  styles.childAge
+                }
+              >
                 Age:{" "}
-                {displayedChild.age > 0
+                {displayedChild.age >
+                0
                   ? displayedChild.age
                   : "—"}
               </Text>
@@ -588,7 +777,9 @@ export default function ParentDashboardScreen() {
                 }
                 style={[
                   styles.nextButton,
-                  children.length <= 1 &&
+
+                  children.length <=
+                    1 &&
                     styles.nextButtonDisabled,
                 ]}
               />
@@ -604,7 +795,11 @@ export default function ParentDashboardScreen() {
             Progress Report
           </Text>
 
-          <Text style={styles.moodText}>
+          <Text
+            style={
+              styles.moodText
+            }
+          >
             Today&apos;s Mood:{" "}
             {dashboardData.todaysMood
               ? `"${dashboardData.moodLabel}"`
@@ -618,8 +813,12 @@ export default function ParentDashboardScreen() {
               }
             >
               <Image
-                source={moodImage}
-                style={styles.moodImage}
+                source={
+                  moodImage
+                }
+                style={
+                  styles.moodImage
+                }
                 resizeMode="contain"
                 fadeDuration={0}
               />
@@ -641,7 +840,9 @@ export default function ParentDashboardScreen() {
               </View>
 
               <Text
-                style={styles.phaseText}
+                style={
+                  styles.phaseText
+                }
               >
                 {
                   dashboardData.progressLabel
@@ -670,11 +871,15 @@ export default function ParentDashboardScreen() {
           )}
 
           <View
-            style={styles.dividerMiddle}
+            style={
+              styles.dividerMiddle
+            }
           />
 
           <Text
-            style={styles.promptTitle}
+            style={
+              styles.promptTitle
+            }
           >
             Evening Conversation Prompt
           </Text>
@@ -698,20 +903,34 @@ export default function ParentDashboardScreen() {
                 dashboardData.todaysMood,
               )}
               onViewMore={() => {
-                // Add the parent insights route later.
+                /*
+                 * Parent insights can be connected
+                 * when that route is implemented.
+                 */
               }}
             />
           </View>
         </View>
       </ScrollView>
 
-      <View style={styles.fixedFooter}>
+      {/*
+       * Keep the footer wrapper transparent.
+       * Only its navbar component provides its own background.
+       */}
+      <View
+        style={
+          styles.fixedFooter
+        }
+      >
         <Pressable
           onPress={
             handleSwitchToChildMode
           }
-          style={({ pressed }) => [
+          style={({
+            pressed,
+          }) => [
             styles.switchWrapper,
+
             pressed &&
               styles.controlPressed,
           ]}
@@ -719,14 +938,18 @@ export default function ParentDashboardScreen() {
           accessibilityLabel={`Switch to ${displayedChild.name}'s child mode`}
         >
           <Text
-            style={styles.switchText}
+            style={
+              styles.switchText
+            }
           >
             Switch to Child Mode
           </Text>
         </Pressable>
 
         <View
-          style={styles.bottomNavWrapper}
+          style={
+            styles.bottomNavWrapper
+          }
         >
           <ParentBottomNav
             activeTab="dashboard"
@@ -737,331 +960,693 @@ export default function ParentDashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    position: "relative",
-    backgroundColor:
-      colors.background,
-  },
+const styles =
+  StyleSheet.create({
+    screen: {
+      flex: 1,
 
-  scrollView: {
-    flex: 1,
-    backgroundColor:
-      colors.background,
-  },
+      position:
+        "relative",
 
-  statusScreen: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: x(30),
-    backgroundColor:
-      colors.background,
-  },
+      backgroundColor:
+        colors.background,
+    },
 
-  statusTitle: {
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(28),
-    lineHeight: y(36),
-    textAlign: "center",
-  },
+    scrollView: {
+      flex: 1,
 
-  statusText: {
-    marginTop: y(16),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(18),
-    lineHeight: y(26),
-    textAlign: "center",
-  },
+      backgroundColor:
+        colors.background,
+    },
 
-  statusLink: {
-    marginTop: y(24),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(26),
-    textAlign: "center",
-    textDecorationLine: "underline",
-  },
+    statusScreen: {
+      flex: 1,
 
-  scrollContent: {
-    paddingBottom: y(
-      FOOTER_SCROLL_SPACE,
-    ),
-    backgroundColor:
-      colors.background,
-  },
+      alignItems:
+        "center",
 
-  figmaFrame: {
-    position: "relative",
-    width: "100%",
-    backgroundColor:
-      colors.background,
-  },
+      justifyContent:
+        "center",
 
-  audioButton: {
-    position: "absolute",
-    left: x(347),
-    top: y(48),
-    width: x(35),
-    height: x(35),
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 10,
-  },
+      paddingHorizontal:
+        x(30),
 
-  title: {
-    position: "absolute",
-    left: x(20),
-    top: y(123),
-    width: x(362),
-    height: y(39),
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(30),
-    lineHeight: y(39),
-    textAlign: "center",
-  },
+      backgroundColor:
+        colors.background,
+    },
 
-  dividerTop: {
-    position: "absolute",
-    left: x(20),
-    top: y(188),
-    width: x(362),
-    height:
-      StyleSheet.hairlineWidth,
-    backgroundColor: colors.primary,
-  },
+    statusTitle: {
+      color:
+        colors.primary,
 
-  childSelector: {
-    position: "absolute",
-    left: x(20),
-    top: y(210),
-    width: x(362),
-    height: y(145),
-  },
+      fontFamily:
+        "Outfit",
 
-  avatarCard: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    width: x(138),
-    height: y(138),
-    borderRadius: x(20),
-    backgroundColor: colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
+      fontSize:
+        x(28),
 
-  avatarImage: {
-    width: x(138),
-    height: y(138),
-  },
+      lineHeight:
+        y(36),
 
-  childDetails: {
-    position: "absolute",
-    left: x(153),
-    top: y(43),
-    width: x(132),
-    minHeight: y(60),
-    justifyContent: "center",
-  },
+      textAlign:
+        "center",
+    },
 
-  childName: {
-    color: colors.primary,
-    fontFamily: "LiterataBold",
-    fontSize: x(20),
-    lineHeight: y(28),
-  },
+    statusText: {
+      marginTop:
+        y(16),
 
-  childAge: {
-    color: colors.primary,
-    fontFamily: "LiterataBold",
-    fontSize: x(20),
-    lineHeight: y(28),
-  },
+      color:
+        colors.primary,
 
-  nextButtonWrapper: {
-    position: "absolute",
-    right: 0,
-    top: y(74),
-    width: x(82),
-    height: y(52),
-  },
+      fontFamily:
+        "Literata",
 
-  nextButton: {
-    width: x(82),
-    height: y(52),
-    borderRadius: x(20),
-  },
+      fontSize:
+        x(18),
 
-  nextButtonDisabled: {
-    opacity: 0.6,
-  },
+      lineHeight:
+        y(26),
 
-  progressReportTitle: {
-    position: "absolute",
-    left: x(20),
-    top: y(377),
-    width: x(362),
-    color: colors.primary,
-    fontFamily: "LiterataBold",
-    fontSize: x(20),
-    lineHeight: y(30),
-    textAlign: "center",
-  },
+      textAlign:
+        "center",
+    },
 
-  moodText: {
-    position: "absolute",
-    left: x(20),
-    top: y(412),
-    width: x(362),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(35),
-    textAlign: "center",
-    textDecorationLine: "underline",
-  },
+    statusLink: {
+      marginTop:
+        y(24),
 
-  moodImageWrapper: {
-    position: "absolute",
-    left: x(171),
-    top: y(453),
-    width: x(60),
-    height: x(60),
-    alignItems: "center",
-    justifyContent: "center",
-  },
+      color:
+        colors.primary,
 
-  moodImage: {
-    width: x(60),
-    height: x(60),
-  },
+      fontFamily:
+        "Literata",
 
-  progressBarWrapper: {
-    position: "absolute",
-    left: x(20),
-    top: y(512),
-    width: x(362),
-    height: y(19),
-  },
+      fontSize:
+        x(20),
 
-  phaseText: {
-    position: "absolute",
-    left: x(20),
-    top: y(535),
-    width: x(218),
-    height: y(35),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(35),
-  },
+      lineHeight:
+        y(26),
 
-  activitiesText: {
-    position: "absolute",
-    left: x(249),
-    top: y(538),
-    width: x(133),
-    height: y(35),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(12),
-    lineHeight: y(35),
-    textAlign: "right",
-  },
+      textAlign:
+        "center",
 
-  progressUnavailableText: {
-    position: "absolute",
-    left: x(20),
-    top: y(521),
-    width: x(362),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(17),
-    lineHeight: y(24),
-    textAlign: "center",
-  },
+      textDecorationLine:
+        "underline",
+    },
 
-  dividerMiddle: {
-    position: "absolute",
-    left: x(20),
-    top: y(585),
-    width: x(362),
-    height:
-      StyleSheet.hairlineWidth,
-    backgroundColor: colors.primary,
-  },
+    scrollContent: {
+      paddingBottom:
+        y(
+          FOOTER_SCROLL_SPACE,
+        ),
 
-  promptTitle: {
-    position: "absolute",
-    left: x(20),
-    top: y(598),
-    width: x(362),
-    height: y(35),
-    color: colors.primary,
-    fontFamily: "LiterataBold",
-    fontSize: x(20),
-    lineHeight: y(35),
-  },
+      backgroundColor:
+        colors.background,
+    },
 
-  promptCardWrapper: {
-    position: "absolute",
-    left: x(20),
-    top: y(PROMPT_CARD_TOP),
-    width: x(362),
-    minHeight: y(
-      DEFAULT_PROMPT_CARD_HEIGHT,
-    ),
-  },
+    figmaFrame: {
+      position:
+        "relative",
 
-  fixedFooter: {
-    position: "absolute",
-    left: x(20),
-    bottom: y(FOOTER_BOTTOM),
-    width: x(362),
-    height: y(
-      FIXED_FOOTER_HEIGHT,
-    ),
-    backgroundColor: "transparent",
-    zIndex: 50,
-  },
+      width:
+        "100%",
 
-  switchWrapper: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    width: x(226),
-    height: y(24),
-    justifyContent: "center",
-  },
+      backgroundColor:
+        colors.background,
+    },
 
-  switchText: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textDecorationLine: "underline",
-  },
+    audioButton: {
+      position:
+        "absolute",
 
-  bottomNavWrapper: {
-    position: "absolute",
-    left: 0,
-    top: y(33),
-    width: x(362),
-    height: y(72),
-    borderRadius: x(50),
-    backgroundColor:
-      colors.background,
-    overflow: "hidden",
-  },
+      left:
+        x(347),
 
-  controlPressed: {
-    opacity: 0.65,
-  },
-});
+      top:
+        y(48),
+
+      width:
+        x(35),
+
+      height:
+        x(35),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      zIndex:
+        10,
+    },
+
+    title: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(123),
+
+      width:
+        x(362),
+
+      height:
+        y(39),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Outfit",
+
+      fontSize:
+        x(30),
+
+      lineHeight:
+        y(39),
+
+      textAlign:
+        "center",
+    },
+
+    dividerTop: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(188),
+
+      width:
+        x(362),
+
+      height:
+        StyleSheet.hairlineWidth,
+
+      backgroundColor:
+        colors.primary,
+    },
+
+    childSelector: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(210),
+
+      width:
+        x(362),
+
+      height:
+        y(145),
+    },
+
+    avatarCard: {
+      position:
+        "absolute",
+
+      left: 0,
+
+      top: 0,
+
+      width:
+        x(138),
+
+      height:
+        y(138),
+
+      borderRadius:
+        x(20),
+
+      backgroundColor:
+        colors.white,
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      overflow:
+        "hidden",
+    },
+
+    avatarImage: {
+      width:
+        x(138),
+
+      height:
+        y(138),
+    },
+
+    childDetails: {
+      position:
+        "absolute",
+
+      left:
+        x(153),
+
+      top:
+        y(43),
+
+      width:
+        x(132),
+
+      minHeight:
+        y(60),
+
+      justifyContent:
+        "center",
+    },
+
+    childName: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "LiterataBold",
+
+      fontSize:
+        x(20),
+
+      lineHeight:
+        y(28),
+    },
+
+    childAge: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "LiterataBold",
+
+      fontSize:
+        x(20),
+
+      lineHeight:
+        y(28),
+    },
+
+    nextButtonWrapper: {
+      position:
+        "absolute",
+
+      right: 0,
+
+      top:
+        y(74),
+
+      width:
+        x(82),
+
+      height:
+        y(52),
+    },
+
+    nextButton: {
+      width:
+        x(82),
+
+      height:
+        y(52),
+
+      borderRadius:
+        x(20),
+    },
+
+    nextButtonDisabled: {
+      opacity:
+        0.6,
+    },
+
+    progressReportTitle: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(377),
+
+      width:
+        x(362),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "LiterataBold",
+
+      fontSize:
+        x(20),
+
+      lineHeight:
+        y(30),
+
+      textAlign:
+        "center",
+    },
+
+    moodText: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(412),
+
+      width:
+        x(362),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize:
+        x(20),
+
+      lineHeight:
+        y(35),
+
+      textAlign:
+        "center",
+
+      textDecorationLine:
+        "underline",
+    },
+
+    moodImageWrapper: {
+      position:
+        "absolute",
+
+      left:
+        x(171),
+
+      top:
+        y(453),
+
+      width:
+        x(60),
+
+      height:
+        x(60),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+    },
+
+    moodImage: {
+      width:
+        x(60),
+
+      height:
+        x(60),
+    },
+
+    progressBarWrapper: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(512),
+
+      width:
+        x(362),
+
+      height:
+        y(19),
+    },
+
+    phaseText: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(535),
+
+      width:
+        x(218),
+
+      height:
+        y(35),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize:
+        x(20),
+
+      lineHeight:
+        y(35),
+    },
+
+    activitiesText: {
+      position:
+        "absolute",
+
+      left:
+        x(249),
+
+      top:
+        y(538),
+
+      width:
+        x(133),
+
+      height:
+        y(35),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize:
+        x(12),
+
+      lineHeight:
+        y(35),
+
+      textAlign:
+        "right",
+    },
+
+    progressUnavailableText: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(521),
+
+      width:
+        x(362),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize:
+        x(17),
+
+      lineHeight:
+        y(24),
+
+      textAlign:
+        "center",
+    },
+
+    dividerMiddle: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(585),
+
+      width:
+        x(362),
+
+      height:
+        StyleSheet.hairlineWidth,
+
+      backgroundColor:
+        colors.primary,
+    },
+
+    promptTitle: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(598),
+
+      width:
+        x(362),
+
+      height:
+        y(35),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "LiterataBold",
+
+      fontSize:
+        x(20),
+
+      lineHeight:
+        y(35),
+    },
+
+    promptCardWrapper: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(
+          PROMPT_CARD_TOP,
+        ),
+
+      width:
+        x(362),
+
+      minHeight:
+        y(
+          DEFAULT_PROMPT_CARD_HEIGHT,
+        ),
+    },
+
+    fixedFooter: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      bottom:
+        y(
+          FOOTER_BOTTOM,
+        ),
+
+      width:
+        x(362),
+
+      height:
+        y(
+          FIXED_FOOTER_HEIGHT,
+        ),
+
+      backgroundColor:
+        "transparent",
+
+      zIndex:
+        50,
+    },
+
+    switchWrapper: {
+      position:
+        "absolute",
+
+      left: 0,
+
+      top: 0,
+
+      width:
+        x(226),
+
+      height:
+        y(24),
+
+      justifyContent:
+        "center",
+    },
+
+    switchText: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize:
+        x(20),
+
+      lineHeight:
+        y(24),
+
+      textDecorationLine:
+        "underline",
+    },
+
+    bottomNavWrapper: {
+      position:
+        "absolute",
+
+      left: 0,
+
+      top:
+        y(33),
+
+      width:
+        x(362),
+
+      height:
+        y(72),
+
+      borderRadius:
+        x(50),
+
+      backgroundColor:
+        colors.background,
+
+      overflow:
+        "hidden",
+    },
+
+    controlPressed: {
+      opacity:
+        0.65,
+    },
+  });

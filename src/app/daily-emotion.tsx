@@ -5,8 +5,9 @@
  * Shows emotion images from assets/images.
  * Saves the selected emotion as a Firebase check-in.
  *
- * Waits for Firebase to save one check-in for the current local day before
- * leaving the screen, so failed writes are never shown as successful.
+ * The check-in itself is still saved before navigation so failed writes
+ * are never shown as successful. The secondary activity-completion update
+ * runs in the background to avoid delaying the next screen.
  */
 
 import {
@@ -16,7 +17,6 @@ import {
 } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Image,
   Pressable,
   ScrollView,
@@ -210,10 +210,6 @@ export default function DailyEmotionScreen() {
           },
         );
 
-      /*
-       * If an older check-in already existed, use its
-       * saved emotion rather than the newly selected card.
-       */
       const savedEmotion =
         isEmotionId(
           savedCheckIn.emotion,
@@ -221,15 +217,17 @@ export default function DailyEmotionScreen() {
           ? savedCheckIn.emotion
           : emotionId;
 
-      /*
-       * The daily emotion check-in completes the first Phase 1 activity.
-       * The service prevents duplicate rewards if this activity was already
-       * completed for the child.
-       */
-      await completeActivityById(
+      void completeActivityById(
         user.uid,
         activeChildId,
         "phase1_name_the_feeling",
+      ).catch(
+        (completionError) => {
+          console.warn(
+            "Unable to complete daily emotion activity:",
+            completionError,
+          );
+        },
       );
 
       router.replace({
@@ -346,8 +344,6 @@ export default function DailyEmotionScreen() {
                       position.top,
                     ),
                   },
-                  savingEmotion &&
-                    styles.disabledEmotion,
                 ]}
                 onPress={() =>
                   void handleSelectEmotion(
@@ -385,22 +381,6 @@ export default function DailyEmotionScreen() {
                       resizeMode="cover"
                       fadeDuration={0}
                     />
-
-                    {savingEmotion ===
-                    emotionOption.id ? (
-                      <View
-                        style={
-                          styles.savingOverlay
-                        }
-                      >
-                        <ActivityIndicator
-                          size="large"
-                          color={
-                            colors.primary
-                          }
-                        />
-                      </View>
-                    ) : null}
                   </View>
                 </View>
 
@@ -531,22 +511,6 @@ const styles = StyleSheet.create({
   emotionImage: {
     width: x(171),
     height: y(138),
-  },
-
-  savingOverlay: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor:
-      "rgba(255, 255, 255, 0.72)",
-  },
-
-  disabledEmotion: {
-    opacity: 0.7,
   },
 
   emotionLabel: {

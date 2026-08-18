@@ -25,6 +25,8 @@
  * - subscriptionTrialEndsAt: Firestore Timestamp | Date | ISO string
  * - trialEndsAt: Firestore Timestamp | Date | ISO string
  *
+ * Settings render immediately. Firestore data refreshes in the
+ * background, and the last loaded values are cached for smooth revisits.
  */
 
 import {
@@ -117,6 +119,16 @@ type SubscriptionDetails = {
   renewsAt: Date | null;
   trialEndsAt: Date | null;
 };
+
+type SettingsCacheEntry = {
+  audioEnabled: boolean;
+  pushNotifications: boolean;
+  weeklyEmailReports: boolean;
+  subscriptionDetails: SubscriptionDetails;
+};
+
+const settingsScreenCache =
+  new Map<string, SettingsCacheEntry>();
 
 type SettingsToggleProps = {
   enabled: boolean;
@@ -343,37 +355,51 @@ export default function SettingsScreen() {
     lockAccess,
   } = useParentAccess();
 
+  const cachedSettings =
+    user?.uid
+      ? settingsScreenCache.get(
+          user.uid,
+        )
+      : undefined;
+
   const [
     audioEnabled,
     setAudioEnabled,
-  ] = useState(false);
+  ] = useState(
+    cachedSettings?.audioEnabled ??
+      false,
+  );
 
   const [
     pushNotifications,
     setPushNotifications,
-  ] = useState(false);
+  ] = useState(
+    cachedSettings?.pushNotifications ??
+      false,
+  );
 
   const [
     weeklyEmailReports,
     setWeeklyEmailReports,
-  ] = useState(false);
+  ] = useState(
+    cachedSettings?.weeklyEmailReports ??
+      false,
+  );
 
   const [
     subscriptionDetails,
     setSubscriptionDetails,
   ] =
-    useState<SubscriptionDetails>({
-      plan: "trial",
-      foundingMember: false,
-      priceLabel: null,
-      renewsAt: null,
-      trialEndsAt: null,
-    });
-
-  const [
-    subscriptionLoading,
-    setSubscriptionLoading,
-  ] = useState(true);
+    useState<SubscriptionDetails>(
+      cachedSettings?.subscriptionDetails ??
+        {
+          plan: "trial",
+          foundingMember: false,
+          priceLabel: null,
+          renewsAt: null,
+          trialEndsAt: null,
+        },
+    );
 
   const [
     legalModalDocument,
@@ -397,55 +423,37 @@ export default function SettingsScreen() {
     useCallback(() => {
       let isMounted = true;
 
-      async function loadSubscription() {
+      async function loadSettings() {
         if (!user?.uid) {
-          if (isMounted) {
-            setSubscriptionLoading(
-              false,
-            );
-          }
-
           return;
         }
 
-        setSubscriptionLoading(true);
-
         try {
-          const snapshot =
-            await getDoc(
+          const [
+            snapshot,
+            preferences,
+          ] = await Promise.all([
+            getDoc(
               doc(
                 db,
                 "parents",
                 user.uid,
               ),
-            );
+            ),
 
-          const preferences =
-            await getParentPreferences(
+            getParentPreferences(
               user.uid,
-            );
+            ),
+          ]);
 
-          if (isMounted) {
-            setAudioEnabled(
-              preferences.audioEnabled,
-            );
-            setPushNotifications(
-              preferences.pushNotifications,
-            );
-            setWeeklyEmailReports(
-              preferences.weeklyEmailReports,
-            );
-          }
-
-          if (
-            !isMounted ||
-            !snapshot.exists()
-          ) {
+          if (!isMounted) {
             return;
           }
 
           const data =
-            snapshot.data();
+            snapshot.exists()
+              ? snapshot.data()
+              : {};
 
           const plan: ParentSubscription =
             data.subscription ===
@@ -467,43 +475,70 @@ export default function SettingsScreen() {
                 data.trialEndsAt,
             );
 
-          setSubscriptionDetails({
-            plan,
-            foundingMember:
-              data.foundingMember ===
-              true,
-            priceLabel:
-              typeof data.subscriptionPriceLabel ===
-              "string"
-                ? data.subscriptionPriceLabel.trim()
-                : null,
-            renewsAt,
-            trialEndsAt,
-          });
-        } catch (error) {
-          console.error(
-            "Unable to load subscription details:",
-            error,
+          const nextSubscriptionDetails: SubscriptionDetails =
+            {
+              plan,
+
+              foundingMember:
+                data.foundingMember ===
+                true,
+
+              priceLabel:
+                typeof data.subscriptionPriceLabel ===
+                "string"
+                  ? data.subscriptionPriceLabel.trim()
+                  : null,
+
+              renewsAt,
+
+              trialEndsAt,
+            };
+
+          /*
+           * Update the visible screen only after both reads finish.
+           * Until then, cached/current values stay on screen.
+           */
+          setAudioEnabled(
+            preferences.audioEnabled,
           );
 
-          if (isMounted) {
-            setSubscriptionDetails(
-              (current) => ({
-                ...current,
-                plan: "trial",
-              }),
-            );
-          }
-        } finally {
-          if (isMounted) {
-            setSubscriptionLoading(
-              false,
-            );
-          }
+          setPushNotifications(
+            preferences.pushNotifications,
+          );
+
+          setWeeklyEmailReports(
+            preferences.weeklyEmailReports,
+          );
+
+          setSubscriptionDetails(
+            nextSubscriptionDetails,
+          );
+
+          settingsScreenCache.set(
+            user.uid,
+            {
+              audioEnabled:
+                preferences.audioEnabled,
+
+              pushNotifications:
+                preferences.pushNotifications,
+
+              weeklyEmailReports:
+                preferences.weeklyEmailReports,
+
+              subscriptionDetails:
+                nextSubscriptionDetails,
+            },
+          );
+        } catch (error) {
+          console.error(
+            "Unable to refresh settings:",
+            error,
+          );
         }
       }
 
-      void loadSubscription();
+      void loadSettings();
 
       return () => {
         isMounted = false;
@@ -522,6 +557,30 @@ export default function SettingsScreen() {
       return;
     }
 
+    /*
+     * Keep the runtime cache aligned with the optimistic UI state
+     * so navigating away and back does not restore stale toggles.
+     */
+    const cached =
+      settingsScreenCache.get(
+        user.uid,
+      ) ?? {
+        audioEnabled,
+        pushNotifications,
+        weeklyEmailReports,
+        subscriptionDetails,
+      };
+
+    settingsScreenCache.set(
+      user.uid,
+      {
+        ...cached,
+        ...patch,
+        subscriptionDetails:
+          cached.subscriptionDetails,
+      },
+    );
+
     try {
       await updateParentPreferences(
         user.uid,
@@ -532,6 +591,7 @@ export default function SettingsScreen() {
         "Unable to save parent preferences:",
         error,
       );
+
       Alert.alert(
         "Could not save",
         "Your preference could not be saved. Please try again.",
@@ -729,25 +789,6 @@ export default function SettingsScreen() {
   function handleDeleteAccount() {
     router.push(
       "/delete-account" as Href,
-    );
-  }
-
-  if (subscriptionLoading) {
-    return (
-      <View
-        style={styles.loadingScreen}
-      >
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-        />
-
-        <Text
-          style={styles.loadingText}
-        >
-          Loading settings...
-        </Text>
-      </View>
     );
   }
 
@@ -1375,22 +1416,6 @@ export default function SettingsScreen() {
 
 const styles =
   StyleSheet.create({
-    loadingScreen: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor:
-        colors.background,
-    },
-
-    loadingText: {
-      marginTop: y(16),
-      color: colors.primary,
-      fontFamily: "Outfit",
-      fontSize: x(18),
-      lineHeight: y(23),
-    },
-
     screen: {
       flex: 1,
       position: "relative",

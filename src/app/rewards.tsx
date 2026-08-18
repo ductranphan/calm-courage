@@ -5,12 +5,15 @@
  * - the Figma empty state when the child has not earned any badges
  * - the collected-badges screen after at least one badge is earned
  * - a full child-mode error state when Firestore cannot load rewards
+ *
+ * Previously loaded rewards are provided by useChildRewards immediately.
+ * On a first uncached load, the screen shell renders without a spinner
+ * while Firestore finishes loading the reward totals.
  */
 
 import { router, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -212,15 +215,16 @@ export default function RewardsScreen() {
 
   if (rewards.loading) {
     return (
-      <View style={styles.loadingScreen}>
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-        />
+      <View style={styles.screen}>
+        <View style={styles.emptyStateContent}>
+          {renderAudioButton()}
 
-        <Text style={styles.loadingText}>
-          Loading rewards...
-        </Text>
+          <Text style={styles.title}>
+            My Rewards
+          </Text>
+        </View>
+
+        {renderFooter()}
       </View>
     );
   }
@@ -435,21 +439,6 @@ export default function RewardsScreen() {
 }
 
 const styles = StyleSheet.create({
-  loadingScreen: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: PAGE_BACKGROUND,
-  },
-
-  loadingText: {
-    marginTop: y(14),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(17),
-    lineHeight: y(24),
-  },
-
   screen: {
     flex: 1,
     position: "relative",

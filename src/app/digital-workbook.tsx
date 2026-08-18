@@ -12,6 +12,10 @@
  *
  * Save uploads audio to Firebase Storage and stores drawing JSON in
  * Firestore. Saving enough pages completes the Proud Moment activity.
+ *
+ * The child's workbook variant is cached for the current app session.
+ * On a first uncached visit, a stable workbook shell is shown while the
+ * child's age is resolved instead of a full-screen loading spinner.
  */
 
 import {
@@ -30,7 +34,6 @@ import {
   useState,
 } from "react";
 import {
-  ActivityIndicator,
   Alert,
   PanResponder,
   Pressable,
@@ -115,11 +118,31 @@ type WorkbookDrawingPages =
 type WorkbookAudioPages =
   Array<string | null>;
 
-type WorkbookVariant =
-  | "loading"
-  | "error"
+type ResolvedWorkbookVariant =
   | "drawing"
   | "ages-9-10";
+
+type WorkbookVariant =
+  | "resolving"
+  | "error"
+  | ResolvedWorkbookVariant;
+
+/**
+ * Runtime-only cache for the workbook layout selected for each child.
+ *
+ * Firestore remains the source of truth. The cache simply avoids
+ * re-resolving the child's age and showing an intermediate state every
+ * time the workbook is revisited during the same app session.
+ */
+const workbookVariantCache =
+  new Map<string, ResolvedWorkbookVariant>();
+
+function getWorkbookVariantCacheKey(
+  parentUid: string,
+  childId: string,
+): string {
+  return `${parentUid}:${childId}`;
+}
 
 function createEmptyDrawingPages(): WorkbookDrawingPages {
   return Array.from(
@@ -270,8 +293,27 @@ export default function DigitalWorkbookScreen() {
       null,
     );
 
-  const [workbookVariant, setWorkbookVariant] =
-    useState<WorkbookVariant>("loading");
+  const [
+    workbookVariant,
+    setWorkbookVariant,
+  ] =
+    useState<WorkbookVariant>(() => {
+      if (
+        !user?.uid ||
+        !activeChild?.id
+      ) {
+        return "resolving";
+      }
+
+      return (
+        workbookVariantCache.get(
+          getWorkbookVariantCacheKey(
+            user.uid,
+            activeChild.id,
+          ),
+        ) ?? "resolving"
+      );
+    });
 
   const [
     workbookReloadKey,
@@ -422,48 +464,87 @@ export default function DigitalWorkbookScreen() {
         !user?.uid
       ) {
         if (stillMounted) {
-          setWorkbookVariant("drawing");
+          setWorkbookVariant(
+            "resolving",
+          );
         }
 
         return;
       }
 
-      setWorkbookVariant("loading");
-
-      try {
-        const child = await getChild(
+      const cacheKey =
+        getWorkbookVariantCacheKey(
           user.uid,
           activeChild.id,
         );
+
+      const cachedVariant =
+        workbookVariantCache.get(
+          cacheKey,
+        );
+
+      /*
+       * When a cached variant exists, keep it visible while Firestore
+       * refreshes. On a first uncached visit, show the stable workbook
+       * shell instead of a spinner.
+       */
+      if (stillMounted) {
+        setWorkbookVariant(
+          cachedVariant ??
+            "resolving",
+        );
+      }
+
+      try {
+        const child =
+          await getChild(
+            user.uid,
+            activeChild.id,
+          );
 
         if (!stillMounted) {
           return;
         }
 
-        const childAge = Number(child?.age);
+        const childAge =
+          Number(child?.age);
 
         const usesAges9To10Workbook =
-          Number.isInteger(childAge) &&
+          Number.isInteger(
+            childAge,
+          ) &&
           childAge >= 9 &&
           childAge <= 10;
+
+        const nextVariant: ResolvedWorkbookVariant =
+          usesAges9To10Workbook
+            ? "ages-9-10"
+            : "drawing";
 
         console.log(
           "Resolved workbook variant:",
           {
-            childId: activeChild.id,
-            storedAge: child?.age,
-            normalizedAge: childAge,
+            childId:
+              activeChild.id,
+
+            storedAge:
+              child?.age,
+
+            normalizedAge:
+              childAge,
+
             variant:
-              usesAges9To10Workbook
-                ? "ages-9-10"
-                : "drawing",
+              nextVariant,
           },
         );
 
+        workbookVariantCache.set(
+          cacheKey,
+          nextVariant,
+        );
+
         setWorkbookVariant(
-          usesAges9To10Workbook
-            ? "ages-9-10"
-            : "drawing",
+          nextVariant,
         );
       } catch (loadError) {
         console.error(
@@ -471,8 +552,18 @@ export default function DigitalWorkbookScreen() {
           loadError,
         );
 
-        if (stillMounted) {
-          setWorkbookVariant("error");
+        if (!stillMounted) {
+          return;
+        }
+
+        /*
+         * A failed background refresh should never replace an already
+         * visible cached workbook with an error screen.
+         */
+        if (!cachedVariant) {
+          setWorkbookVariant(
+            "error",
+          );
         }
       }
     }
@@ -488,7 +579,6 @@ export default function DigitalWorkbookScreen() {
     user?.uid,
     workbookReloadKey,
   ]);
-
   useEffect(() => {
     return () => {
       if (saveMessageTimerRef.current) {
@@ -1049,17 +1139,218 @@ export default function DigitalWorkbookScreen() {
     return null;
   }
 
-  if (workbookVariant === "loading") {
+  if (workbookVariant === "resolving") {
     return (
-      <View style={styles.loadingScreen}>
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-        />
+      <View
+        style={
+          styles.screen
+        }
+      >
+        <View
+          style={
+            styles.resolvingShell
+          }
+        >
+          <Pressable
+            style={
+              styles.audioButton
+            }
+            onPress={() =>
+              setAudioEnabled(
+                (current) =>
+                  !current,
+              )
+            }
+            accessibilityRole="button"
+            accessibilityLabel={
+              audioEnabled
+                ? "Turn audio off"
+                : "Turn audio on"
+            }
+            accessibilityState={{
+              selected:
+                audioEnabled,
+            }}
+            hitSlop={8}
+          >
+            {audioEnabled ? (
+              <AudioOnIcon
+                width={x(35)}
+                height={x(35)}
+              />
+            ) : (
+              <AudioOffIcon
+                width={x(35)}
+                height={x(35)}
+              />
+            )}
+          </Pressable>
 
-        <Text style={styles.loadingText}>
-          Loading workbook...
-        </Text>
+          <View
+            style={
+              styles.statistics
+            }
+          >
+            <StarIcon
+              width={x(32)}
+              height={x(32)}
+            />
+
+            <Text
+              style={
+                styles.statText
+              }
+            >
+              {rewards.stars}
+            </Text>
+
+            <DiamondIcon
+              width={x(20)}
+              height={x(20)}
+            />
+
+            <Text
+              style={
+                styles.statText
+              }
+            >
+              {formatScore(
+                rewards.gems,
+              )}
+            </Text>
+
+            <BadgeIcon
+              width={x(28)}
+              height={x(28)}
+            />
+
+            <Text
+              style={
+                styles.statText
+              }
+            >
+              {formatScore(
+                rewards.badges
+                  .length,
+              )}
+            </Text>
+          </View>
+
+          <Text
+            style={
+              styles.title
+            }
+          >
+            Digital Workbook
+          </Text>
+        </View>
+
+        <View
+          style={
+            styles.fixedFooter
+          }
+        >
+          <Pressable
+            style={
+              styles.parentModeLink
+            }
+            onPress={() =>
+              void handleParentMode()
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Switch to Parent Mode"
+          >
+            <Text
+              style={
+                styles.parentModeText
+              }
+            >
+              Switch to Parent Mode
+            </Text>
+          </Pressable>
+
+          <View
+            style={
+              styles.bottomNav
+            }
+          >
+            <Pressable
+              style={
+                styles.navItem
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Workbook"
+              accessibilityState={{
+                selected: true,
+              }}
+            >
+              <WorkbookDashboardIcon
+                width={x(41.94)}
+                height={y(40.07)}
+              />
+
+              <Text
+                style={
+                  styles.navLabel
+                }
+              >
+                Workbook
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={
+                styles.navItem
+              }
+              onPress={() =>
+                router.replace(
+                  "/child-dashboard" as Href,
+                )
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Home"
+            >
+              <HouseIcon
+                width={x(40)}
+                height={x(40)}
+              />
+
+              <Text
+                style={
+                  styles.navLabel
+                }
+              >
+                Home
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={
+                styles.navItem
+              }
+              onPress={() =>
+                router.replace(
+                  "/rewards" as Href,
+                )
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Rewards"
+            >
+              <StarIcon
+                width={x(42)}
+                height={x(42)}
+              />
+
+              <Text
+                style={
+                  styles.navLabel
+                }
+              >
+                Rewards
+              </Text>
+            </Pressable>
+          </View>
+        </View>
       </View>
     );
   }
@@ -1514,19 +1805,11 @@ export default function DigitalWorkbookScreen() {
 }
 
 const styles = StyleSheet.create({
-  loadingScreen: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+  resolvingShell: {
+    position: "relative",
+    width: "100%",
+    height: y(FIGMA_FRAME_HEIGHT),
     backgroundColor: PAGE_BACKGROUND,
-  },
-
-  loadingText: {
-    marginTop: y(14),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(17),
-    lineHeight: y(24),
   },
 
   screen: {

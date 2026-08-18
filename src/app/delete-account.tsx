@@ -624,6 +624,10 @@ export default function DeleteAccountScreen() {
           presentationStyle="overFullScreen"
           statusBarTranslucent
           onRequestClose={() => {
+            /*
+             * This confirmation is intentionally not dismissible.
+             * The parent returns to the login screen using the button.
+             */
           }}
         >
           <View style={styles.accountDeletedBackdrop}>
@@ -940,6 +944,11 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
 
+  /*
+   * Intentionally transparent.
+   * The Figma screenshot shows a white rectangular area behind the
+   * footer, but this implementation keeps the page background visible.
+   */
   bottomNavWrapper: {
     position: "absolute",
     left: 0,

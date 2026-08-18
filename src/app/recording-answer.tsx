@@ -1,8 +1,14 @@
 /**
  * Voice-answer screen for the emotion encouragement flow.
  *
- * Records a response, saves it locally, uploads to Firebase Storage,
+ * Records a response, saves it locally, uploads it to Firebase Storage,
  * stores metadata, and awards Brave Breath once on first successful save.
+ *
+ * The screen keeps its controls visually stable during async work:
+ * the microphone icon stays visible instead of being replaced by a
+ * loading spinner, while duplicate taps are still blocked with `busy`.
+ *
+ * The local emotion image is preloaded globally at app startup.
  */
 
 import {
@@ -25,7 +31,6 @@ import {
   useState,
 } from "react";
 import {
-  ActivityIndicator,
   Image,
   Pressable,
   ScrollView,
@@ -754,6 +759,8 @@ export default function RecordingAnswerScreen() {
             styles.microphoneButton,
             pressed &&
               styles.controlPressed,
+            busy &&
+              styles.microphoneButtonBusy,
           ]}
           onPress={() =>
             void handleMicrophonePress()
@@ -770,12 +777,7 @@ export default function RecordingAnswerScreen() {
           }}
           disabled={busy}
         >
-          {busy ? (
-            <ActivityIndicator
-              size="large"
-              color={colors.primary}
-            />
-          ) : isRecording ? (
+          {isRecording ? (
             <RecordingMicrophoneOnIcon
               width={x(54)}
               height={y(77.9)}
@@ -983,6 +985,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  microphoneButtonBusy: {
+    opacity: 0.72,
+  },
+
   progressBar: {
     position: "absolute",
     left: x(20),
@@ -1079,7 +1085,7 @@ const styles = StyleSheet.create({
   },
 
   buttonDisabled: {
-    opacity: 0.62,
+    opacity: 0.72,
   },
 
   controlPressed: {

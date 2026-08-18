@@ -1,3 +1,14 @@
+/**
+ * Emotion Match card screen.
+ *
+ * All six cards for the current level are mounted at the same time.
+ * Transitions only animate opacity between already-rendered layers,
+ * which avoids a blank frame while a new PNG/SVG card is mounting.
+ *
+ * The two PNG templates are preloaded globally in preloadAssets.ts.
+ * SVG scene/reaction cards are imported as React components.
+ */
+
 import {
   router,
   type Href,
@@ -111,6 +122,8 @@ const CARD_TOP = 171;
 const CARD_RADIUS = 60;
 
 const FINAL_STEP = 5;
+
+const CARD_COUNT = FINAL_STEP + 1;
 
 const FADE_OUT_DURATION = 130;
 const FADE_IN_DURATION = 180;
@@ -283,9 +296,19 @@ export default function EmotionMatchCardScreen() {
   const isTransitioningRef =
     useRef(false);
 
-  const cardOpacity =
+  const cardOpacities =
     useRef(
-      new Animated.Value(1),
+      Array.from(
+        {
+          length: CARD_COUNT,
+        },
+        (_, index) =>
+          new Animated.Value(
+            index === 0
+              ? 1
+              : 0,
+          ),
+      ),
     ).current;
 
   const parsedLevelId =
@@ -331,10 +354,21 @@ export default function EmotionMatchCardScreen() {
     isTransitioningRef.current =
       false;
 
-    cardOpacity.setValue(1);
+    cardOpacities.forEach(
+      (
+        opacity,
+        index,
+      ) => {
+        opacity.setValue(
+          index === 0
+            ? 1
+            : 0,
+        );
+      },
+    );
   }, [
     parsedLevelId,
-    cardOpacity,
+    cardOpacities,
   ]);
 
   useEffect(() => {
@@ -558,48 +592,61 @@ export default function EmotionMatchCardScreen() {
     isTransitioningRef.current =
       true;
 
-    Animated.timing(
-      cardOpacity,
-      {
-        toValue: 0,
-        duration:
-          FADE_OUT_DURATION,
-        useNativeDriver: true,
-      },
-    ).start(() => {
-      /*
-       * After the final card,
-       * loop directly back to
-       * the first card.
-       */
-      const nextStep =
-        step >= FINAL_STEP
-          ? 0
-          : step + 1;
+    const nextStep =
+      step >= FINAL_STEP
+        ? 0
+        : step + 1;
 
+    /*
+     * Both the current and next cards are already mounted.
+     * We only cross-fade their opacity, so no new card has
+     * to mount in the middle of the transition.
+     */
+    cardOpacities[
+      nextStep
+    ].setValue(0);
+
+    Animated.parallel([
+      Animated.timing(
+        cardOpacities[
+          step
+        ],
+        {
+          toValue: 0,
+          duration:
+            FADE_OUT_DURATION,
+          useNativeDriver:
+            true,
+        },
+      ),
+
+      Animated.timing(
+        cardOpacities[
+          nextStep
+        ],
+        {
+          toValue: 1,
+          duration:
+            FADE_IN_DURATION,
+          useNativeDriver:
+            true,
+        },
+      ),
+    ]).start(() => {
       setStep(nextStep);
 
+      /*
+       * Reaching the final card completes the level.
+       * The completion write does not block the UI.
+       */
       if (
         nextStep === FINAL_STEP
       ) {
         void markLevelComplete();
       }
 
-      requestAnimationFrame(() => {
-        Animated.timing(
-          cardOpacity,
-          {
-            toValue: 1,
-            duration:
-              FADE_IN_DURATION,
-            useNativeDriver:
-              true,
-          },
-        ).start(() => {
-          isTransitioningRef.current =
-            false;
-        });
-      });
+      isTransitioningRef.current =
+        false;
     });
   }
 
@@ -704,8 +751,10 @@ export default function EmotionMatchCardScreen() {
     );
   }
 
-  function renderCurrentCard() {
-    switch (step) {
+  function renderCardForStep(
+    cardStep: number,
+  ) {
+    switch (cardStep) {
       case 0:
         return renderPromptCard(
           frontText,
@@ -858,17 +907,39 @@ export default function EmotionMatchCardScreen() {
             : `Emotion Match Activity ${currentChallenge.id}. Card ${step + 1} of 6. Tap to continue.`
         }
       >
-        <Animated.View
-          style={[
-            styles.cardSurface,
-            {
-              opacity:
-                cardOpacity,
-            },
-          ]}
+        <View
+          style={
+            styles.cardSurface
+          }
         >
-          {renderCurrentCard()}
-        </Animated.View>
+          {Array.from(
+            {
+              length:
+                CARD_COUNT,
+            },
+            (_, cardStep) => (
+              <Animated.View
+                key={
+                  cardStep
+                }
+                pointerEvents="none"
+                style={[
+                  styles.cardLayer,
+                  {
+                    opacity:
+                      cardOpacities[
+                        cardStep
+                      ],
+                  },
+                ]}
+              >
+                {renderCardForStep(
+                  cardStep,
+                )}
+              </Animated.View>
+            ),
+          )}
+        </View>
       </Pressable>
 
       <View
@@ -1093,6 +1164,18 @@ const styles =
 
       backgroundColor:
         "transparent",
+    },
+
+    cardLayer: {
+      position: "absolute",
+
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+
+      width: "100%",
+      height: "100%",
     },
 
     cardFill: {
