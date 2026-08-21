@@ -71,6 +71,7 @@ import {
   getParentPreferences,
   updateParentPreferences,
 } from "@/services/preferences";
+import { enableParentPushNotifications } from "@/services/pushRegistration";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -702,17 +703,11 @@ export default function SettingsScreen() {
     }, [trialDaysLeft]);
 
   function handleSubscribe() {
-    Alert.alert(
-      "Membership Plan",
-      "Subscription purchase functionality will be connected with the app-store billing flow.",
-    );
+    router.push("/paywall" as Href);
   }
 
   function handleManageSubscription() {
-    Alert.alert(
-      "Manage Subscription",
-      "App-store subscription management will be connected when the in-app purchase integration is enabled.",
-    );
+    router.push("/paywall" as Href);
   }
 
   function handleHelpSupport() {
@@ -889,9 +884,22 @@ export default function SettingsScreen() {
                 setPushNotifications(
                   (current) => {
                     const next = !current;
-                    void persistPreference({
-                      pushNotifications: next,
-                    });
+
+                    if (next && user?.uid) {
+                      void enableParentPushNotifications(
+                        user.uid,
+                      ).catch((error) => {
+                        console.warn(
+                          "Unable to register push token:",
+                          error,
+                        );
+                      });
+                    } else {
+                      void persistPreference({
+                        pushNotifications: next,
+                      });
+                    }
+
                     return next;
                   },
                 );

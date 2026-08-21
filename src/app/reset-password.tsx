@@ -1,17 +1,14 @@
 /**
  * Reset password screen.
  *
- * Matches Figma Screen 1.1.3.
- * Lets the user enter and confirm a new password.
- *
- * Firebase note:
- * Later, this screen should receive the Firebase reset code from the email link
- * and use confirmPasswordReset(auth, oobCode, newPassword).
+ * Completes Firebase password reset using the oobCode from the email link
+ * (query param on /reset-password?oobCode=...).
  */
 
-import { router } from "expo-router";
-import { useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -26,19 +23,40 @@ import ErrorMessage from "@/components/ui/ErrorMessage";
 import FloatingTextInput from "@/components/ui/FloatingTextInput";
 import Logo from "@/components/ui/Logo";
 import { colors } from "@/constants/colors";
+import { useAuth } from "@/contexts/AuthContext";
 import { x, y } from "@/utils/scaling";
 
 const MIN_PASSWORD_LENGTH = 6;
 
 export default function ResetPasswordScreen() {
+  const { confirmPasswordReset } = useAuth();
+
+  const params = useLocalSearchParams<{
+    oobCode?: string | string[];
+    mode?: string | string[];
+  }>();
+
+  const oobCode = useMemo(() => {
+    const raw = Array.isArray(params.oobCode)
+      ? params.oobCode[0]
+      : params.oobCode;
+    return typeof raw === "string" ? raw.trim() : "";
+  }, [params.oobCode]);
+
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   function handleNewPasswordChange(text: string) {
     setNewPassword(text);
 
-    if (error && text === confirmPassword && text.length >= MIN_PASSWORD_LENGTH) {
+    if (
+      error &&
+      text === confirmPassword &&
+      text.length >= MIN_PASSWORD_LENGTH
+    ) {
       setError(null);
     }
   }
@@ -46,13 +64,24 @@ export default function ResetPasswordScreen() {
   function handleConfirmPasswordChange(text: string) {
     setConfirmPassword(text);
 
-    if (error && newPassword === text && newPassword.length >= MIN_PASSWORD_LENGTH) {
+    if (
+      error &&
+      newPassword === text &&
+      newPassword.length >= MIN_PASSWORD_LENGTH
+    ) {
       setError(null);
     }
   }
 
-  function handleUpdatePassword() {
+  async function handleUpdatePassword() {
     setError(null);
+
+    if (!oobCode) {
+      setError(
+        "Open the reset link from your email to continue, or request a new reset email.",
+      );
+      return;
+    }
 
     if (!newPassword || !confirmPassword) {
       return;
@@ -68,7 +97,20 @@ export default function ResetPasswordScreen() {
       return;
     }
 
-    router.replace("/login");
+    setLoading(true);
+
+    try {
+      await confirmPasswordReset(oobCode, newPassword);
+      setSuccess(true);
+    } catch (resetError) {
+      setError(
+        resetError instanceof Error
+          ? resetError.message
+          : "Unable to reset password. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -87,48 +129,82 @@ export default function ResetPasswordScreen() {
           </View>
 
           <View style={styles.textWrapper}>
-            <Text style={styles.title}>Reset Your Password</Text>
+            <Text style={styles.title}>
+              {success
+                ? "Password Updated"
+                : "Reset Your Password"}
+            </Text>
 
             <Text style={styles.description}>
-              Please enter a new password for your{"\n"}account.
+              {success
+                ? "Your password was changed.\nYou can sign in with your new password."
+                : "Please enter a new password for your\naccount."}
             </Text>
           </View>
 
-          <View style={styles.newPasswordInput}>
-            <FloatingTextInput
-              label="New password"
-              placeholder="New password"
-              value={newPassword}
-              onChangeText={handleNewPasswordChange}
-              secureTextEntry
-            />
-          </View>
+          {!success ? (
+            <>
+              <View style={styles.newPasswordInput}>
+                <FloatingTextInput
+                  label="New password"
+                  placeholder="New password"
+                  value={newPassword}
+                  onChangeText={handleNewPasswordChange}
+                  secureTextEntry
+                  editable={!loading}
+                />
+              </View>
 
-          <View style={styles.confirmPasswordInput}>
-            <FloatingTextInput
-              label="Confirm new password"
-              placeholder="Confirm new password"
-              value={confirmPassword}
-              onChangeText={handleConfirmPasswordChange}
-              secureTextEntry
-            />
-          </View>
+              <View style={styles.confirmPasswordInput}>
+                <FloatingTextInput
+                  label="Confirm new password"
+                  placeholder="Confirm new password"
+                  value={confirmPassword}
+                  onChangeText={handleConfirmPasswordChange}
+                  secureTextEntry
+                  editable={!loading}
+                />
+              </View>
 
-          <ErrorMessage message={error} style={styles.errorText} />
+              <ErrorMessage
+                message={error}
+                style={styles.errorText}
+              />
 
-          <View style={styles.buttonWrapper}>
-            <AppButton
-              title="Update Password"
-              onPress={handleUpdatePassword}
-              style={styles.updateButton}
-            />
-          </View>
+              <View style={styles.buttonWrapper}>
+                {loading ? (
+                  <ActivityIndicator
+                    size="large"
+                    color={colors.primary}
+                  />
+                ) : (
+                  <AppButton
+                    title="Update Password"
+                    onPress={() => {
+                      void handleUpdatePassword();
+                    }}
+                    style={styles.updateButton}
+                  />
+                )}
+              </View>
+            </>
+          ) : (
+            <View style={styles.buttonWrapper}>
+              <AppButton
+                title="Go to Login"
+                onPress={() => router.replace("/login")}
+                style={styles.updateButton}
+              />
+            </View>
+          )}
 
           <Pressable
             onPress={() => router.replace("/login")}
             style={styles.backLoginWrapper}
           >
-            <Text style={styles.backLoginText}>← Back to Login</Text>
+            <Text style={styles.backLoginText}>
+              ← Back to Login
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -216,6 +292,8 @@ const styles = StyleSheet.create({
     top: y(710),
     width: x(210),
     height: y(84),
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   updateButton: {

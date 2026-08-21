@@ -6,9 +6,7 @@
  * - Emotion Puzzle Match
  * - Roleplay Challenges
  * - Confidence Quests
- *
- * Quest Board is intentionally hidden in V1
- * and is reserved for a future version.
+ * - Quest Board (weekly)
  */
 
 import {
@@ -58,13 +56,12 @@ const PAGE_BACKGROUND =
 
 const PATH_VERTICAL_SHIFT = -28;
 
-const FIGMA_CONTENT_HEIGHT = 1290;
+const FIGMA_CONTENT_HEIGHT = 1380;
 
 const FOOTER_SPACE = 125;
 
 /*
- * Quest Board has intentionally been
- * removed from this list for V1.
+ * V1 adventure tiles on the child path.
  */
 const ACTIVITY_TILES = [
   {
@@ -96,7 +93,14 @@ const ACTIVITY_TILES = [
     label:
       "Confidence\nQuests",
     left: 213,
-    top: 1072.16,
+    top: 1020,
+  },
+
+  {
+    id: "quest-board",
+    label: "Quest\nBoard",
+    left: 20,
+    top: 1090,
   },
 ] as const;
 
@@ -240,6 +244,12 @@ export default function ChildDashboardScreen() {
       case "confidence":
         router.push(
           "/confidence-quests" as Href,
+        );
+        break;
+
+      case "quest-board":
+        router.push(
+          "/quest-board" as Href,
         );
         break;
 

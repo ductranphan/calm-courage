@@ -15,12 +15,18 @@ export type ParentPreferences = {
   audioEnabled: boolean;
   pushNotifications: boolean;
   weeklyEmailReports: boolean;
+  /**
+   * Last known Expo/FCM push token when notifications are enabled.
+   * Delivery still requires a Cloud Function / push server.
+   */
+  pushToken?: string | null;
 };
 
 const DEFAULT_PREFERENCES: ParentPreferences = {
   audioEnabled: false,
   pushNotifications: false,
   weeklyEmailReports: false,
+  pushToken: null,
 };
 
 function parentRef(parentUid: string) {
@@ -53,6 +59,10 @@ export async function getParentPreferences(
       preferences.pushNotifications === true,
     weeklyEmailReports:
       preferences.weeklyEmailReports === true,
+    pushToken:
+      typeof preferences.pushToken === "string"
+        ? preferences.pushToken
+        : null,
   };
 }
 
@@ -72,4 +82,30 @@ export async function updateParentPreferences(
   });
 
   return next;
+}
+
+/**
+ * Stores a device push token when the parent enables notifications.
+ * Does not send pushes by itself — a server/Cloud Function must use the token.
+ */
+export async function registerPushToken(
+  parentUid: string,
+  pushToken: string,
+): Promise<void> {
+  const token = pushToken.trim();
+
+  if (!token) {
+    return;
+  }
+
+  await updateParentPreferences(parentUid, {
+    pushNotifications: true,
+    pushToken: token,
+  });
+
+  await updateDoc(parentRef(parentUid), {
+    pushToken: token,
+    pushTokenUpdatedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
 }

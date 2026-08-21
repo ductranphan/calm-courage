@@ -26,7 +26,7 @@ import { CONFIDENCE_QUEST_TOTAL_LEVELS } from "@/constants/confidenceQuests";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
 import { useChildRewards } from "@/hooks/useChildRewards";
-import { isPremiumActivity } from "@/utils/premiumAccess";
+import { requiresPaywall, usePremiumAccess } from "@/utils/premiumAccess";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -113,6 +113,8 @@ export default function ConfidenceQuestsScreen() {
       activeChild?.id,
     );
 
+  const { hasPremium } = usePremiumAccess();
+
   const [
     audioEnabled,
     setAudioEnabled,
@@ -141,8 +143,9 @@ export default function ConfidenceQuestsScreen() {
      * the user can see the subscription page.
      */
     if (
-      isPremiumActivity(
+      requiresPaywall(
         sessionNumber,
+        hasPremium,
       )
     ) {
       router.push(

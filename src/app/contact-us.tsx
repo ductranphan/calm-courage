@@ -37,6 +37,7 @@ import Logo from "@/components/ui/Logo";
 import { colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
+import { createSupportTicket } from "@/services/support";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -233,14 +234,33 @@ export default function ContactUsScreen() {
     setSubmitting(true);
 
     try {
+      try {
+        await createSupportTicket({
+          parentUid: user?.uid ?? null,
+          email: email.trim(),
+          subject: `[${issueType}] ${subject.trim()}`,
+          message: message.trim(),
+        });
+      } catch (ticketError) {
+        console.warn(
+          "Unable to save support ticket:",
+          ticketError,
+        );
+      }
+
       const available =
         await MailComposer.isAvailableAsync();
 
       if (!available) {
         Alert.alert(
-          "Email unavailable",
-          "No email application is configured on this device.",
+          "Request saved",
+          "Your support request was saved. No email application is configured on this device.",
         );
+        setSubject("");
+        setMessage("");
+        setAttachment(null);
+        setFocusedInput(null);
+        setSuccessModalVisible(true);
         return;
       }
 

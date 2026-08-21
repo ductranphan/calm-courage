@@ -1,18 +1,20 @@
 /**
  * Subscription paywall shown before premium activities.
  *
- * Activity 1 in each game is free. Activities 2 and above
- * navigate here until subscription access is connected.
+ * Activity 1 in each game is free. Activities 2+ require an
+ * active subscription entitlement on the parent profile.
  *
- * The purchase sheet and success modal are frontend previews
- * of the Figma flow. They do not create a real subscription.
- * Real purchase confirmation must later come from the App
- * Store / Google Play billing integration.
+ * The purchase sheet still uses a Face ID preview control for
+ * QA. On success it writes the founding-member trial to Firestore
+ * so premium levels unlock. Replace that step with real Store
+ * receipt validation before App Store release.
  */
 
 import { router } from "expo-router";
 import { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   Modal,
   Pressable,
@@ -21,6 +23,9 @@ import {
   View,
 } from "react-native";
 
+import { colors } from "@/constants/colors";
+import { useAuth } from "@/contexts/AuthContext";
+import { activateSubscription } from "@/services/subscription";
 import { x, y } from "@/utils/scaling";
 
 import FaceIdIcon from "../../assets/icons/face-id.svg";
@@ -229,6 +234,8 @@ function getFirstBillingDate(): string {
 }
 
 export default function PaywallScreen() {
+  const { user } = useAuth();
+
   const [
     purchaseSheetVisible,
     setPurchaseSheetVisible,
@@ -239,6 +246,9 @@ export default function PaywallScreen() {
     setSuccessModalVisible,
   ] = useState(false);
 
+  const [activating, setActivating] =
+    useState(false);
+
   const [
     firstBillingDate,
   ] = useState(
@@ -246,41 +256,45 @@ export default function PaywallScreen() {
   );
 
   function handleStartTrial() {
-    /*
-     * Frontend-only preview.
-     *
-     * The real purchase result must later come from the
-     * App Store / Google Play billing integration.
-     */
     setPurchaseSheetVisible(true);
   }
 
-  function handlePaymentSuccess() {
-    /*
-     * TEMPORARY FRONTEND DEMO:
-     *
-     * The app cannot detect the iPhone side-button payment
-     * confirmation itself. The App Store purchase flow will
-     * provide the real success result later.
-     *
-     * For now, tapping the Face ID area closes the purchase
-     * preview and opens the Figma subscription-success modal.
-     */
-    setPurchaseSheetVisible(false);
+  async function handlePaymentSuccess() {
+    if (!user?.uid || activating) {
+      return;
+    }
 
-    setTimeout(() => {
-      setSuccessModalVisible(true);
-    }, 150);
+    setActivating(true);
+
+    try {
+      await activateSubscription(user.uid, {
+        plan: "monthly",
+        foundingMember: true,
+        trialDays: 7,
+        source: "paywall_preview",
+      });
+
+      setPurchaseSheetVisible(false);
+
+      setTimeout(() => {
+        setSuccessModalVisible(true);
+      }, 150);
+    } catch (error) {
+      console.error(
+        "Unable to activate subscription:",
+        error,
+      );
+      Alert.alert(
+        "Subscription unavailable",
+        "We couldn’t activate your trial. Please try again.",
+      );
+    } finally {
+      setActivating(false);
+    }
   }
 
   function handleStartExploring() {
     setSuccessModalVisible(false);
-
-    /*
-     * Return to the activity list that opened the paywall.
-     * Once real subscription entitlements are connected,
-     * premium activities should open normally after this.
-     */
     router.back();
   }
 
@@ -354,11 +368,19 @@ export default function PaywallScreen() {
         onClose={() =>
           setPurchaseSheetVisible(false)
         }
-        onPaymentSuccess={
-          handlePaymentSuccess
-        }
+        onPaymentSuccess={() => {
+          void handlePaymentSuccess();
+        }}
       />
 
+      {activating ? (
+        <View style={styles.activatingOverlay}>
+          <ActivityIndicator
+            size="large"
+            color={colors.primary}
+          />
+        </View>
+      ) : null}
       <SubscriptionSuccessModal
         visible={successModalVisible}
         firstBillingDate={
@@ -378,6 +400,14 @@ const styles = StyleSheet.create({
     position: "relative",
     backgroundColor:
       PAGE_BACKGROUND,
+  },
+
+  activatingOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(241,243,245,0.72)",
+    zIndex: 20,
   },
 
   title: {
