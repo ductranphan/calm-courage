@@ -7,6 +7,7 @@
  */
 
 import {
+  confirmPasswordReset as firebaseConfirmPasswordReset,
   EmailAuthProvider,
   createUserWithEmailAndPassword,
   deleteUser,
@@ -108,6 +109,12 @@ export function mapAuthError(
 
     case "auth/requires-recent-login":
       return "Please sign out, sign in again, and retry account deletion.";
+
+    case "auth/expired-action-code":
+      return "This reset link has expired. Request a new password reset email.";
+
+    case "auth/invalid-action-code":
+      return "This reset link is invalid. Request a new password reset email.";
 
     default:
       return "Something went wrong. Please try again.";
@@ -525,6 +532,40 @@ export async function resetPassword(
     await sendPasswordResetEmail(
       auth,
       normalizedEmail,
+    );
+  } catch (error) {
+    throw new Error(
+      getErrorMessage(error),
+    );
+  }
+}
+
+/**
+ * Completes a password reset using the oobCode from the email link.
+ */
+export async function confirmPasswordReset(
+  oobCode: string,
+  newPassword: string,
+): Promise<void> {
+  const code = oobCode.trim();
+
+  if (!code) {
+    throw new Error(
+      "This reset link is missing or invalid. Request a new password reset email.",
+    );
+  }
+
+  if (newPassword.length < 6) {
+    throw new Error(
+      "Password must be at least 6 characters.",
+    );
+  }
+
+  try {
+    await firebaseConfirmPasswordReset(
+      auth,
+      code,
+      newPassword,
     );
   } catch (error) {
     throw new Error(

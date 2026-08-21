@@ -22,6 +22,8 @@ import {
 } from "react";
 
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -51,12 +53,16 @@ import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useAuth } from "@/contexts/AuthContext";
 
 import { getTodayCheckIn } from "@/services/checkIns";
-import { listChildren } from "@/services/children";
+import {
+  deleteChild,
+  listChildren,
+} from "@/services/children";
 
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
 import AudioOnIcon from "../../assets/icons/audio-on.svg";
+import TrashIcon from "../../assets/icons/trash.svg";
 
 const FIXED_NAV_HEIGHT = 72;
 const FIXED_NAV_BOTTOM = 20;
@@ -286,6 +292,63 @@ export default function ChildrenScreen() {
           "children",
       },
     });
+  }
+
+  function confirmDeleteChild(
+    child: ChildManagementData,
+  ) {
+    if (!user?.uid) {
+      return;
+    }
+
+    Alert.alert(
+      "Delete child profile",
+      `Permanently delete ${child.name}'s profile, check-ins, progress, and media? This cannot be undone.`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void handleDeleteChild(child);
+          },
+        },
+      ],
+    );
+  }
+
+  async function handleDeleteChild(
+    child: ChildManagementData,
+  ) {
+    if (!user?.uid) {
+      return;
+    }
+
+    try {
+      await deleteChild(user.uid, child.childId);
+
+      setChildrenData((current) => {
+        const next = current.filter(
+          (item) => item.childId !== child.childId,
+        );
+
+        childrenScreenCache.set(user.uid, next);
+        return next;
+      });
+    } catch (error) {
+      console.error(
+        "Unable to delete child profile:",
+        error,
+      );
+
+      Alert.alert(
+        "Delete failed",
+        "We couldn’t delete this child profile. Please try again.",
+      );
+    }
   }
 
   function openParentDashboard(
@@ -576,6 +639,35 @@ export default function ChildrenScreen() {
                       styles.editButton
                     }
                   />
+
+                  <Pressable
+                    onPress={() =>
+                      confirmDeleteChild(
+                        child,
+                      )
+                    }
+                    style={({
+                      pressed,
+                    }) => [
+                      styles.deleteChildButton,
+                      pressed &&
+                        styles.controlPressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${child.name}'s profile`}
+                  >
+                    <TrashIcon
+                      width={x(22)}
+                      height={x(22)}
+                    />
+                    <Text
+                      style={
+                        styles.deleteChildText
+                      }
+                    >
+                      Delete
+                    </Text>
+                  </Pressable>
 
                   <Pressable
                     onPress={() =>
@@ -982,6 +1074,22 @@ const styles =
 
       borderRadius:
         x(15),
+    },
+
+    deleteChildButton: {
+      marginTop: y(8),
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: x(4),
+      minHeight: y(28),
+    },
+
+    deleteChildText: {
+      color: "#B00020",
+      fontFamily: "Literata",
+      fontSize: x(12),
+      lineHeight: y(16),
     },
 
     childModeButton: {

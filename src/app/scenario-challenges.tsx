@@ -33,7 +33,7 @@ import { colors } from "@/constants/colors";
 import { useActiveChild } from "@/contexts/ActiveChildContext";
 import { useParentAccess } from "@/contexts/ParentAccessContext";
 import { useChildRewards } from "@/hooks/useChildRewards";
-import { isPremiumActivity } from "@/utils/premiumAccess";
+import { requiresPaywall, usePremiumAccess } from "@/utils/premiumAccess";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -114,6 +114,8 @@ export default function ScenarioChallengesScreen() {
 
   const { childModeActive } =
     useParentAccess();
+
+  const { hasPremium } = usePremiumAccess();
 
   const rewards =
     useChildRewards(
@@ -201,8 +203,9 @@ export default function ScenarioChallengesScreen() {
      * route to the subscription paywall.
      */
     if (
-      isPremiumActivity(
+      requiresPaywall(
         scenarioNumber,
+        hasPremium,
       )
     ) {
       router.push(

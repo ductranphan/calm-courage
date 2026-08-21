@@ -16,6 +16,7 @@ import type { User } from "firebase/auth";
 
 import {
   acceptTerms,
+  confirmPasswordReset,
   deleteParentAccount,
   reloadCurrentUser,
   resetPassword,
@@ -33,6 +34,7 @@ type AuthContextValue = {
   signUp: typeof signUp;
   signOut: typeof signOutUser;
   resetPassword: typeof resetPassword;
+  confirmPasswordReset: typeof confirmPasswordReset;
   sendVerificationEmail: typeof sendVerificationEmail;
   reloadUser: typeof reloadCurrentUser;
   acceptTerms: typeof acceptTerms;
@@ -62,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       signOut: signOutUser,
       resetPassword,
+      confirmPasswordReset,
       sendVerificationEmail,
       reloadUser: reloadCurrentUser,
       acceptTerms,
