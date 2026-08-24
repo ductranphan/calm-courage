@@ -6,12 +6,17 @@
  * access as entering the correct PIN. It does not change or reset pinHash.
  */
 
-import { router, type Href } from "expo-router";
-import { useEffect, useState } from "react";
+import {
+  router,
+  type Href,
+} from "expo-router";
+import {
+  useEffect,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -48,15 +53,24 @@ type MathChallenge = {
 
 function createMathChallenge(): MathChallenge {
   /*
-   * Keep both numbers two digits and the result below.
+   * Keep both numbers two digits and the result below 100.
    */
-  const firstNumber = Math.floor(Math.random() * 30) + 20;
-  const secondNumber = Math.floor(Math.random() * 30) + 20;
+  const firstNumber =
+    Math.floor(
+      Math.random() * 30,
+    ) + 20;
+
+  const secondNumber =
+    Math.floor(
+      Math.random() * 30,
+    ) + 20;
 
   return {
     firstNumber,
     secondNumber,
-    answer: firstNumber + secondNumber,
+    answer:
+      firstNumber +
+      secondNumber,
   };
 }
 
@@ -64,28 +78,54 @@ export default function ForgotPinMathScreen() {
   const {
     user,
     loading: authLoading,
-  } = useAuth();
+  } =
+    useAuth();
 
   const {
     childModeActive,
+    parentAccessGranted,
     unlockParentAccess,
-  } = useParentAccess();
+  } =
+    useParentAccess();
 
-  const [challenge] = useState<MathChallenge>(
-    createMathChallenge,
-  );
+  const [challenge] =
+    useState<MathChallenge>(
+      createMathChallenge,
+    );
 
-  const [enteredAnswer, setEnteredAnswer] =
+  const [
+    enteredAnswer,
+    setEnteredAnswer,
+  ] =
     useState("");
 
-  const [audioEnabled, setAudioEnabled] =
+  const [
+    audioEnabled,
+    setAudioEnabled,
+  ] =
     useState(false);
 
-  const [verifying, setVerifying] =
+  const [
+    verifying,
+    setVerifying,
+  ] =
     useState(false);
 
-  const [error, setError] =
-    useState<string | null>(null);
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(
+      null,
+    );
+
+  const [
+    destinationAfterUnlock,
+    setDestinationAfterUnlock,
+  ] =
+    useState<Href | null>(
+      null,
+    );
 
   useEffect(() => {
     if (authLoading) {
@@ -93,30 +133,70 @@ export default function ForgotPinMathScreen() {
     }
 
     if (!user) {
-      router.replace("/login");
+      router.replace(
+        "/login",
+      );
       return;
     }
 
     if (!user.emailVerified) {
-      router.replace("/verify-email");
+      router.replace(
+        "/verify-email",
+      );
     }
-  }, [authLoading, user]);
+  }, [
+    authLoading,
+    user,
+  ]);
 
-  function handleNumberPress(number: string) {
+
+  /*
+   * Wait until ParentAccessContext has actually updated before opening a
+   * protected parent route. Navigating to /home immediately after calling
+   * unlockParentAccess() can race with the context update, causing /home
+   * to think parent access is still locked and redirect back to the PIN
+   * screen.
+   */
+  useEffect(() => {
+    if (
+      parentAccessGranted &&
+      destinationAfterUnlock
+    ) {
+      const destination =
+        destinationAfterUnlock;
+
+      setDestinationAfterUnlock(
+        null,
+      );
+
+      router.replace(
+        destination,
+      );
+    }
+  }, [
+    destinationAfterUnlock,
+    parentAccessGranted,
+  ]);
+
+  function handleNumberPress(
+    number: string,
+  ) {
     if (
       verifying ||
-      enteredAnswer.length >= MAX_ANSWER_LENGTH
+      enteredAnswer.length >=
+        MAX_ANSWER_LENGTH
     ) {
       return;
     }
 
     setError(null);
 
-    setEnteredAnswer((current) =>
-      `${current}${number}`.slice(
-        0,
-        MAX_ANSWER_LENGTH,
-      ),
+    setEnteredAnswer(
+      (current) =>
+        `${current}${number}`.slice(
+          0,
+          MAX_ANSWER_LENGTH,
+        ),
     );
   }
 
@@ -126,8 +206,13 @@ export default function ForgotPinMathScreen() {
     }
 
     setError(null);
-    setEnteredAnswer((current) =>
-      current.slice(0, -1),
+
+    setEnteredAnswer(
+      (current) =>
+        current.slice(
+          0,
+          -1,
+        ),
     );
   }
 
@@ -136,7 +221,9 @@ export default function ForgotPinMathScreen() {
       return;
     }
 
-    router.replace("/parent-verification");
+    router.replace(
+      "/parent-verification",
+    );
   }
 
   async function handleVerifyAnswer() {
@@ -147,35 +234,60 @@ export default function ForgotPinMathScreen() {
     setError(null);
 
     if (!user?.uid) {
-      setError("You must be signed in to continue.");
-      return;
-    }
-
-    if (!enteredAnswer) {
-      setError("Please enter the answer.");
-      return;
-    }
-
-    if (Number(enteredAnswer) !== challenge.answer) {
-      setEnteredAnswer("");
       setError(
-        "That answer is not correct. Please try again.",
+        "You must be signed in to continue.",
       );
       return;
     }
 
-    setVerifying(true);
+    if (!enteredAnswer) {
+      setError(
+        "Please enter the answer.",
+      );
+      return;
+    }
+
+    if (
+      Number(
+        enteredAnswer,
+      ) !==
+      challenge.answer
+    ) {
+      setEnteredAnswer(
+        "",
+      );
+
+      setError(
+        "That answer is not correct. Please try again.",
+      );
+
+      return;
+    }
+
+    setVerifying(
+      true,
+    );
 
     try {
-      const children = await listChildren(user.uid);
+      const children =
+        await listChildren(
+          user.uid,
+        );
 
       /*
        * A verified parent without a child profile still needs to
        * finish the child setup flow.
        */
-      if (children.length === 0) {
+      if (
+        children.length ===
+        0
+      ) {
+        setDestinationAfterUnlock(
+          "/child-profile-info" as Href,
+        );
+
         unlockParentAccess();
-        router.replace("/child-profile-info");
+
         return;
       }
 
@@ -183,14 +295,25 @@ export default function ForgotPinMathScreen() {
        * Repair older test accounts that already have a child but
        * still contain onboardingComplete: false.
        */
-      const profile = await getUserProfile(user.uid);
+      const profile =
+        await getUserProfile(
+          user.uid,
+        );
 
-      if (profile && !profile.onboardingComplete) {
-        await completeOnboarding(user.uid);
+      if (
+        profile &&
+        !profile.onboardingComplete
+      ) {
+        await completeOnboarding(
+          user.uid,
+        );
       }
 
+      setDestinationAfterUnlock(
+        "/home" as Href,
+      );
+
       unlockParentAccess();
-      router.replace("/home");
     } catch (verificationError) {
       console.error(
         "Unable to complete math verification:",
@@ -198,39 +321,70 @@ export default function ForgotPinMathScreen() {
       );
 
       setError(
-        verificationError instanceof Error
+        verificationError instanceof
+          Error
           ? verificationError.message
           : "We couldn’t open the parent area. Please try again.",
       );
     } finally {
-      setVerifying(false);
+      setVerifying(
+        false,
+      );
     }
   }
 
-  if (authLoading || !user) {
+  if (
+    authLoading ||
+    !user
+  ) {
     return (
-      <View style={styles.loadingScreen}>
+      <View
+        style={
+          styles.loadingScreen
+        }
+      >
         <ActivityIndicator
           size="large"
-          color={colors.primary}
+          color={
+            colors.primary
+          }
         />
       </View>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
+    <View
+      style={
+        styles.screen
+      }
     >
-      <View style={styles.figmaFrame}>
+      <View
+        style={
+          styles.figmaFrame
+        }
+      >
         <Pressable
-          style={styles.audioButton}
+          style={({
+            pressed,
+          }) => [
+            styles.audioButton,
+
+            pressed &&
+              styles.controlPressed,
+
+            verifying &&
+              styles.disabledButton,
+          ]}
           onPress={() =>
-            setAudioEnabled((current) => !current)
+            setAudioEnabled(
+              (current) =>
+                !current,
+            )
           }
-          disabled={verifying}
+          disabled={
+            verifying
+          }
           accessibilityRole="button"
           accessibilityLabel={
             audioEnabled
@@ -238,9 +392,13 @@ export default function ForgotPinMathScreen() {
               : "Turn audio on"
           }
           accessibilityState={{
-            selected: audioEnabled,
-            disabled: verifying,
+            selected:
+              audioEnabled,
+
+            disabled:
+              verifying,
           }}
+          hitSlop={8}
         >
           {audioEnabled ? (
             <AudioOnIcon
@@ -255,104 +413,225 @@ export default function ForgotPinMathScreen() {
           )}
         </Pressable>
 
-        <Text style={styles.title}>
+        <Text
+          style={
+            styles.title
+          }
+        >
           Parent Verification
         </Text>
 
-        <Text style={styles.subtitle}>
+        <Text
+          style={
+            styles.subtitle
+          }
+        >
           Please solve the math problem to
           {"\n"}
           prove you are an adult.
         </Text>
 
-        <Text style={styles.mathProblem}>
-          {challenge.firstNumber} + {challenge.secondNumber} =
-        </Text>
-
         <View
-          style={styles.answerBox}
-          accessibilityLabel={
-            enteredAnswer
-              ? `Entered answer ${enteredAnswer}`
-              : "Answer is empty"
+          style={
+            styles.challengeRow
           }
         >
-          <Text style={styles.answerText}>
-            {enteredAnswer}
+          <Text
+            style={
+              styles.mathProblem
+            }
+          >
+            {challenge.firstNumber} +{" "}
+            {challenge.secondNumber} =
           </Text>
+
+          <View
+            style={
+              styles.answerBox
+            }
+            accessibilityLabel={
+              enteredAnswer
+                ? `Entered answer ${enteredAnswer}`
+                : "Answer is empty"
+            }
+          >
+            <Text
+              style={
+                styles.answerText
+              }
+            >
+              {enteredAnswer}
+            </Text>
+          </View>
         </View>
 
-        <View style={styles.keypad}>
-          {numberRows.map((row, rowIndex) => (
-            <View
-              key={rowIndex}
-              style={styles.numberRow}
-            >
-              {row.map((number) => (
-                <Pressable
-                  key={number}
-                  style={[
-                    styles.numberButton,
-                    verifying && styles.disabledButton,
-                  ]}
-                  onPress={() =>
-                    handleNumberPress(number)
-                  }
-                  disabled={verifying}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Enter ${number}`}
-                >
-                  <Text style={styles.numberText}>
-                    {number}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          ))}
+        <View
+          style={
+            styles.keypad
+          }
+        >
+          {numberRows.map(
+            (
+              row,
+              rowIndex,
+            ) => (
+              <View
+                key={
+                  rowIndex
+                }
+                style={
+                  styles.numberRow
+                }
+              >
+                {row.map(
+                  (number) => (
+                    <Pressable
+                      key={
+                        number
+                      }
+                      style={({
+                        pressed,
+                      }) => [
+                        styles.numberButton,
 
-          <View style={styles.specialRow}>
+                        pressed &&
+                          !verifying &&
+                          styles.numberButtonPressed,
+
+                        verifying &&
+                          styles.disabledButton,
+                      ]}
+                      onPress={() =>
+                        handleNumberPress(
+                          number,
+                        )
+                      }
+                      disabled={
+                        verifying
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`Enter ${number}`}
+                    >
+                      <Text
+                        style={
+                          styles.numberText
+                        }
+                      >
+                        {
+                          number
+                        }
+                      </Text>
+                    </Pressable>
+                  ),
+                )}
+              </View>
+            ),
+          )}
+
+          <View
+            style={
+              styles.specialRow
+            }
+          >
             <Pressable
-              style={[
+              style={({
+                pressed,
+              }) => [
                 styles.usePinButton,
-                verifying && styles.disabledButton,
+
+                pressed &&
+                  !verifying &&
+                  styles.numberButtonPressed,
+
+                verifying &&
+                  styles.disabledButton,
               ]}
-              onPress={handleUsePin}
-              disabled={verifying}
+              onPress={
+                handleUsePin
+              }
+              disabled={
+                verifying
+              }
               accessibilityRole="button"
               accessibilityLabel="Use PIN instead"
             >
-              <Text style={styles.specialButtonText}>
+              <Text
+                style={
+                  styles.specialButtonText
+                }
+              >
                 Use PIN
               </Text>
             </Pressable>
 
             <Pressable
-              style={[
+              style={({
+                pressed,
+              }) => [
                 styles.zeroButton,
-                verifying && styles.disabledButton,
+
+                pressed &&
+                  !verifying &&
+                  styles.numberButtonPressed,
+
+                verifying &&
+                  styles.disabledButton,
               ]}
-              onPress={() => handleNumberPress("0")}
-              disabled={verifying}
+              onPress={() =>
+                handleNumberPress(
+                  "0",
+                )
+              }
+              disabled={
+                verifying
+              }
               accessibilityRole="button"
               accessibilityLabel="Enter zero"
             >
-              <Text style={styles.numberText}>0</Text>
+              <Text
+                style={
+                  styles.numberText
+                }
+              >
+                0
+              </Text>
             </Pressable>
 
             <Pressable
-              style={[
+              style={({
+                pressed,
+              }) => [
                 styles.deleteButton,
-                (verifying || enteredAnswer.length === 0) &&
+
+                pressed &&
+                  !verifying &&
+                  enteredAnswer.length >
+                    0 &&
+                  styles.numberButtonPressed,
+
+                (
+                  verifying ||
+                  enteredAnswer.length ===
+                    0
+                ) &&
                   styles.disabledButton,
               ]}
-              onPress={handleDelete}
+              onPress={
+                handleDelete
+              }
               disabled={
-                verifying || enteredAnswer.length === 0
+                verifying ||
+                enteredAnswer.length ===
+                  0
               }
               accessibilityRole="button"
               accessibilityLabel="Delete last answer digit"
             >
-              <Text style={styles.specialButtonText}>
+              <Text
+                style={
+                  styles.specialButtonText
+                }
+              >
                 Delete
               </Text>
             </Pressable>
@@ -361,286 +640,668 @@ export default function ForgotPinMathScreen() {
 
         <ErrorMessage
           message={error}
-          style={styles.error}
+          style={
+            styles.error
+          }
         />
 
-        <View style={styles.verifyButtonWrapper}>
+        <View
+          style={
+            styles.verifyButtonWrapper
+          }
+        >
           {verifying ? (
             <ActivityIndicator
-              size="large"
-              color={colors.primary}
+              size="small"
+              color={
+                colors.primary
+              }
             />
           ) : (
             <AppButton
               title="Verify & Enter"
-              onPress={handleVerifyAnswer}
-              style={styles.actionButton}
+              onPress={
+                handleVerifyAnswer
+              }
+              style={
+                styles.actionButton
+              }
             />
           )}
         </View>
 
         {childModeActive ? (
-          <View style={styles.backButtonWrapper}>
+          <View
+            style={
+              styles.backButtonWrapper
+            }
+          >
             <AppButton
               title="Back to Child Mode"
               onPress={() =>
-                router.replace("/child-dashboard" as Href)
+                router.replace(
+                  "/child-dashboard" as Href,
+                )
               }
-              disabled={verifying}
-              style={styles.actionButton}
+              disabled={
+                verifying
+              }
+              style={
+                styles.actionButton
+              }
             />
           </View>
         ) : null}
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+const styles =
+  StyleSheet.create({
+    screen: {
+      flex: 1,
 
-  loadingScreen: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.background,
-  },
+      backgroundColor:
+        colors.background,
 
-  scrollContent: {
-    minHeight: y(1206),
-    backgroundColor: colors.background,
-  },
-
-  figmaFrame: {
-    width: "100%",
-    height: y(1206),
-    position: "relative",
-    backgroundColor: colors.background,
-  },
-
-  audioButton: {
-    position: "absolute",
-    left: x(347),
-    top: y(30),
-    width: x(35),
-    height: x(35),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  title: {
-    position: "absolute",
-    left: x(20),
-    top: y(123),
-    width: x(362),
-    height: y(39),
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(30),
-    lineHeight: y(39),
-    textAlign: "center",
-  },
-
-  subtitle: {
-    position: "absolute",
-    left: x(20),
-    top: y(213),
-    width: x(362),
-    minHeight: y(48),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-  },
-
-  mathProblem: {
-    position: "absolute",
-    left: x(67),
-    top: y(374),
-    width: x(145),
-    height: y(39),
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(30),
-    lineHeight: y(39),
-    textAlign: "center",
-  },
-
-  answerBox: {
-    position: "absolute",
-    left: x(219),
-    top: y(351),
-    width: x(116),
-    height: y(85),
-    borderRadius: x(20),
-    backgroundColor: colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+      overflow:
+        "hidden",
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
 
-  answerText: {
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(30),
-    lineHeight: y(39),
-    textAlign: "center",
-  },
+    loadingScreen: {
+      flex: 1,
 
-  keypad: {
-    position: "absolute",
-    left: x(20),
-    top: y(498),
-    width: x(362),
-  },
+      alignItems:
+        "center",
 
-  numberRow: {
-    width: x(258),
-    height: y(85),
-    marginLeft: x(47),
-    marginBottom: y(13),
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
+      justifyContent:
+        "center",
 
-  numberButton: {
-    width: x(76),
-    height: y(85),
-    borderRadius: x(20),
-    backgroundColor: "#DDEAEC",
-    alignItems: "center",
-    justifyContent: "center",
-
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+      backgroundColor:
+        colors.background,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
 
-  numberText: {
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(30),
-    lineHeight: y(39),
-    textAlign: "center",
-  },
+    /*
+     * Everything fits inside the visible screen. There is intentionally
+     * no ScrollView on this page.
+     */
+    figmaFrame: {
+      flex: 1,
 
-  specialRow: {
-    width: x(362),
-    height: y(85),
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
+      width:
+        "100%",
 
-  usePinButton: {
-    width: x(123),
-    height: y(85),
-    borderRadius: x(20),
-    backgroundColor: "#DDEAEC",
-    alignItems: "center",
-    justifyContent: "center",
+      position:
+        "relative",
 
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+      backgroundColor:
+        colors.background,
+
+      overflow:
+        "hidden",
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
 
-  zeroButton: {
-    width: x(76),
-    height: y(85),
-    borderRadius: x(20),
-    backgroundColor: "#DDEAEC",
-    alignItems: "center",
-    justifyContent: "center",
+    audioButton: {
+      position:
+        "absolute",
 
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+      left:
+        x(347),
+
+      top:
+        y(48),
+
+      width:
+        x(35),
+
+      height:
+        x(35),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      zIndex:
+        20,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
 
-  deleteButton: {
-    width: x(123),
-    height: y(85),
-    borderRadius: x(20),
-    backgroundColor: "#DDEAEC",
-    alignItems: "center",
-    justifyContent: "center",
+    title: {
+      position:
+        "absolute",
 
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+      left:
+        x(20),
+
+      top:
+        y(104),
+
+      width:
+        x(362),
+
+      height:
+        y(39),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Outfit",
+
+      fontSize:
+        x(30),
+
+      lineHeight:
+        y(39),
+
+      textAlign:
+        "center",
+
+      includeFontPadding:
+        false,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
 
-  specialButtonText: {
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textAlign: "center",
-  },
+    subtitle: {
+      position:
+        "absolute",
 
-  disabledButton: {
-    opacity: 0.55,
-  },
+      left:
+        x(20),
 
-  error: {
-    position: "absolute",
-    left: x(20),
-    top: y(866),
-    width: x(362),
-  },
+      top:
+        y(158),
 
-  verifyButtonWrapper: {
-    position: "absolute",
-    left: x(96),
-    top: y(911),
-    width: x(210),
-    height: y(52),
-    alignItems: "center",
-    justifyContent: "center",
-  },
+      width:
+        x(362),
 
-  backButtonWrapper: {
-    position: "absolute",
-    left: x(96),
-    top: y(973),
-    width: x(210),
-    height: y(52),
-  },
+      minHeight:
+        y(48),
 
-  actionButton: {
-    width: x(210),
-    height: y(52),
-    borderRadius: x(20),
-  },
-});
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize:
+        x(20),
+
+      lineHeight:
+        y(24),
+
+      textAlign:
+        "center",
+
+      includeFontPadding:
+        false,
+    },
+
+    challengeRow: {
+      position:
+        "absolute",
+
+      left:
+        x(40),
+
+      top:
+        y(224),
+
+      width:
+        x(322),
+
+      height:
+        y(70),
+
+      flexDirection:
+        "row",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      columnGap:
+        x(10),
+    },
+
+    mathProblem: {
+      width:
+        x(175),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Outfit",
+
+      fontSize:
+        x(28),
+
+      lineHeight:
+        y(36),
+
+      textAlign:
+        "right",
+
+      includeFontPadding:
+        false,
+    },
+
+    answerBox: {
+      width:
+        x(92),
+
+      height:
+        y(62),
+
+      borderRadius:
+        x(18),
+
+      backgroundColor:
+        colors.white,
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      shadowColor:
+        "#000000",
+
+      shadowOffset: {
+        width: 0,
+        height:
+          y(3),
+      },
+
+      shadowOpacity:
+        0.22,
+
+      shadowRadius:
+        x(4),
+
+      elevation:
+        4,
+    },
+
+    answerText: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Outfit",
+
+      fontSize:
+        x(28),
+
+      lineHeight:
+        y(36),
+
+      textAlign:
+        "center",
+
+      includeFontPadding:
+        false,
+    },
+
+    keypad: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(326),
+
+      width:
+        x(362),
+    },
+
+    numberRow: {
+      width:
+        x(240),
+
+      height:
+        y(62),
+
+      marginLeft:
+        x(61),
+
+      marginBottom:
+        y(10),
+
+      flexDirection:
+        "row",
+
+      justifyContent:
+        "space-between",
+    },
+
+    numberButton: {
+      width:
+        x(66),
+
+      height:
+        y(62),
+
+      borderRadius:
+        x(18),
+
+      backgroundColor:
+        "#DDEAEC",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      shadowColor:
+        "#000000",
+
+      shadowOffset: {
+        width: 0,
+        height:
+          y(3),
+      },
+
+      shadowOpacity:
+        0.22,
+
+      shadowRadius:
+        x(4),
+
+      elevation:
+        4,
+    },
+
+    numberText: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Outfit",
+
+      fontSize:
+        x(28),
+
+      lineHeight:
+        y(36),
+
+      textAlign:
+        "center",
+
+      includeFontPadding:
+        false,
+    },
+
+    specialRow: {
+      width:
+        x(322),
+
+      height:
+        y(62),
+
+      marginLeft:
+        x(20),
+
+      flexDirection:
+        "row",
+
+      justifyContent:
+        "space-between",
+    },
+
+    usePinButton: {
+      width:
+        x(112),
+
+      height:
+        y(62),
+
+      borderRadius:
+        x(18),
+
+      backgroundColor:
+        "#DDEAEC",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      paddingHorizontal:
+        x(6),
+
+      shadowColor:
+        "#000000",
+
+      shadowOffset: {
+        width: 0,
+        height:
+          y(3),
+      },
+
+      shadowOpacity:
+        0.22,
+
+      shadowRadius:
+        x(4),
+
+      elevation:
+        4,
+    },
+
+    zeroButton: {
+      width:
+        x(66),
+
+      height:
+        y(62),
+
+      borderRadius:
+        x(18),
+
+      backgroundColor:
+        "#DDEAEC",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      shadowColor:
+        "#000000",
+
+      shadowOffset: {
+        width: 0,
+        height:
+          y(3),
+      },
+
+      shadowOpacity:
+        0.22,
+
+      shadowRadius:
+        x(4),
+
+      elevation:
+        4,
+    },
+
+    deleteButton: {
+      width:
+        x(112),
+
+      height:
+        y(62),
+
+      borderRadius:
+        x(18),
+
+      backgroundColor:
+        "#DDEAEC",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      paddingHorizontal:
+        x(6),
+
+      shadowColor:
+        "#000000",
+
+      shadowOffset: {
+        width: 0,
+        height:
+          y(3),
+      },
+
+      shadowOpacity:
+        0.22,
+
+      shadowRadius:
+        x(4),
+
+      elevation:
+        4,
+    },
+
+    specialButtonText: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Outfit",
+
+      fontSize:
+        x(17),
+
+      lineHeight:
+        y(22),
+
+      textAlign:
+        "center",
+
+      includeFontPadding:
+        false,
+    },
+
+    numberButtonPressed: {
+      opacity:
+        0.7,
+
+      transform: [
+        {
+          scale:
+            0.97,
+        },
+      ],
+    },
+
+    disabledButton: {
+      opacity:
+        0.55,
+    },
+
+    error: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(615),
+
+      width:
+        x(362),
+
+      minHeight:
+        y(34),
+    },
+
+    verifyButtonWrapper: {
+      position:
+        "absolute",
+
+      left:
+        x(96),
+
+      top:
+        y(665),
+
+      width:
+        x(210),
+
+      height:
+        y(52),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+    },
+
+    backButtonWrapper: {
+      position:
+        "absolute",
+
+      left:
+        x(96),
+
+      top:
+        y(741),
+
+      width:
+        x(210),
+
+      height:
+        y(52),
+    },
+
+    actionButton: {
+      width:
+        x(210),
+
+      height:
+        y(52),
+
+      borderRadius:
+        x(20),
+
+      shadowColor:
+        "#000000",
+
+      shadowOffset: {
+        width: 0,
+        height:
+          y(4),
+      },
+
+      shadowOpacity:
+        0.25,
+
+      shadowRadius:
+        x(4),
+
+      elevation:
+        5,
+    },
+
+    controlPressed: {
+      opacity:
+        0.65,
+    },
+  });

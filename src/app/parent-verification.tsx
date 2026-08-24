@@ -12,7 +12,6 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -56,19 +55,26 @@ export default function ParentVerificationScreen() {
   } = useParentAccess();
 
   const [pin, setPin] = useState("");
+
   const [
     audioEnabled,
     setAudioEnabled,
   ] = useState(false);
 
-  const [verifying, setVerifying] =
-    useState(false);
+  const [
+    verifying,
+    setVerifying,
+  ] = useState(false);
 
-  const [error, setError] =
-    useState<string | null>(null);
+  const [
+    error,
+    setError,
+  ] = useState<string | null>(null);
 
-  const [destinationAfterUnlock, setDestinationAfterUnlock] =
-    useState<Href | null>(null);
+  const [
+    destinationAfterUnlock,
+    setDestinationAfterUnlock,
+  ] = useState<Href | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -81,7 +87,9 @@ export default function ParentVerificationScreen() {
       parentAccessGranted &&
       destinationAfterUnlock
     ) {
-      const destination = destinationAfterUnlock;
+      const destination =
+        destinationAfterUnlock;
+
       setDestinationAfterUnlock(null);
       router.replace(destination);
     }
@@ -90,7 +98,9 @@ export default function ParentVerificationScreen() {
     parentAccessGranted,
   ]);
 
-  function handleNumberPress(number: string) {
+  function handleNumberPress(
+    number: string,
+  ) {
     if (
       verifying ||
       pin.length >= PIN_LENGTH
@@ -100,19 +110,25 @@ export default function ParentVerificationScreen() {
 
     setError(null);
 
-    const nextPin = `${pin}${number}`.slice(
-      0,
-      PIN_LENGTH,
-    );
+    const nextPin =
+      `${pin}${number}`.slice(
+        0,
+        PIN_LENGTH,
+      );
 
     setPin(nextPin);
 
     /*
-     * Auto-submit once all four digits are entered so parents do not
-     * need to find the Verify button below the keypad.
+     * Auto-submit when the fourth digit is entered.
+     * The Verify button remains available as a manual fallback.
      */
-    if (nextPin.length === PIN_LENGTH) {
-      void handleVerifyPin(nextPin);
+    if (
+      nextPin.length ===
+      PIN_LENGTH
+    ) {
+      void handleVerifyPin(
+        nextPin,
+      );
     }
   }
 
@@ -122,8 +138,13 @@ export default function ParentVerificationScreen() {
     }
 
     setError(null);
-    setPin((current) =>
-      current.slice(0, -1),
+
+    setPin(
+      (current) =>
+        current.slice(
+          0,
+          -1,
+        ),
     );
   }
 
@@ -133,7 +154,10 @@ export default function ParentVerificationScreen() {
     }
 
     setError(null);
-    router.push("./forgot-pin-math");
+
+    router.push(
+      "./forgot-pin-math",
+    );
   }
 
   async function handleVerifyPin(
@@ -146,40 +170,59 @@ export default function ParentVerificationScreen() {
     setError(null);
 
     if (!user?.uid) {
-      setError("You must be signed in to continue.");
+      setError(
+        "You must be signed in to continue.",
+      );
       return;
     }
 
-    if (!isValidPin(pinToVerify)) {
-      setError("Please enter your four-digit PIN.");
+    if (
+      !isValidPin(
+        pinToVerify,
+      )
+    ) {
+      setError(
+        "Please enter your four-digit PIN.",
+      );
       return;
     }
 
     setVerifying(true);
 
     try {
-      const pinIsCorrect = await verifyParentPin(
-        user.uid,
-        pinToVerify,
-      );
+      const pinIsCorrect =
+        await verifyParentPin(
+          user.uid,
+          pinToVerify,
+        );
 
       if (!pinIsCorrect) {
         setPin("");
-        setError("The PIN you entered is incorrect.");
+
+        setError(
+          "The PIN you entered is incorrect.",
+        );
+
         return;
       }
 
-      const children = await listChildren(user.uid);
+      const children =
+        await listChildren(
+          user.uid,
+        );
 
       /*
        * A verified parent account without a child profile has not
-       * finished onboarding yet. Continue from child setup instead
-       * of opening an empty parent dashboard.
+       * completed onboarding yet.
        */
-      if (children.length === 0) {
+      if (
+        children.length ===
+        0
+      ) {
         setDestinationAfterUnlock(
           "/child-profile-info",
         );
+
         unlockParentAccess();
         return;
       }
@@ -188,13 +231,24 @@ export default function ParentVerificationScreen() {
        * Repair older accounts that already have a child but still
        * contain onboardingComplete: false in Firestore.
        */
-      const profile = await getUserProfile(user.uid);
+      const profile =
+        await getUserProfile(
+          user.uid,
+        );
 
-      if (profile && !profile.onboardingComplete) {
-        await completeOnboarding(user.uid);
+      if (
+        profile &&
+        !profile.onboardingComplete
+      ) {
+        await completeOnboarding(
+          user.uid,
+        );
       }
 
-      setDestinationAfterUnlock("/home");
+      setDestinationAfterUnlock(
+        "/home",
+      );
+
       unlockParentAccess();
     } catch (verificationError) {
       console.error(
@@ -203,7 +257,8 @@ export default function ParentVerificationScreen() {
       );
 
       setError(
-        verificationError instanceof Error
+        verificationError instanceof
+          Error
           ? verificationError.message
           : "We couldn’t open the parent area. Please try again.",
       );
@@ -214,29 +269,46 @@ export default function ParentVerificationScreen() {
 
   if (authLoading) {
     return (
-      <View style={styles.loadingScreen}>
+      <View
+        style={
+          styles.loadingScreen
+        }
+      >
         <ActivityIndicator
           size="large"
-          color={colors.primary}
+          color={
+            colors.primary
+          }
         />
       </View>
     );
   }
 
   return (
-    <ScrollView
+    <View
       style={styles.screen}
-      contentContainerStyle={
-        styles.scrollContent
-      }
-      showsVerticalScrollIndicator={false}
     >
-      <View style={styles.figmaFrame}>
+      <View
+        style={
+          styles.figmaFrame
+        }
+      >
         <Pressable
-          style={styles.audioButton}
+          style={({
+            pressed,
+          }) => [
+            styles.audioButton,
+
+            pressed &&
+              styles.controlPressed,
+
+            verifying &&
+              styles.disabledButton,
+          ]}
           onPress={() =>
             setAudioEnabled(
-              (current) => !current,
+              (current) =>
+                !current,
             )
           }
           disabled={verifying}
@@ -247,9 +319,13 @@ export default function ParentVerificationScreen() {
               : "Turn audio on"
           }
           accessibilityState={{
-            selected: audioEnabled,
-            disabled: verifying,
+            selected:
+              audioEnabled,
+
+            disabled:
+              verifying,
           }}
+          hitSlop={8}
         >
           {audioEnabled ? (
             <AudioOnIcon
@@ -264,91 +340,159 @@ export default function ParentVerificationScreen() {
           )}
         </Pressable>
 
-        <Text style={styles.title}>
+        <Text
+          style={styles.title}
+        >
           Parent Verification
         </Text>
 
-        <Text style={styles.subtitle}>
+        <Text
+          style={
+            styles.subtitle
+          }
+        >
           Enter your 4-digit PIN to access
           {"\n"}
           Parent Settings.
         </Text>
 
-        <Text style={styles.pinLabel}>
+        <Text
+          style={
+            styles.pinLabel
+          }
+        >
           PIN
         </Text>
 
-        <View style={styles.pinBoxesRow}>
+        <View
+          style={
+            styles.pinBoxesRow
+          }
+        >
           {Array.from(
-            { length: PIN_LENGTH },
+            {
+              length:
+                PIN_LENGTH,
+            },
             (_, index) => (
               <View
                 key={index}
-                style={styles.pinBox}
+                style={
+                  styles.pinBox
+                }
                 accessibilityLabel={
                   pin[index]
                     ? `PIN digit ${
-                        index + 1
+                        index +
+                        1
                       } entered`
                     : `PIN digit ${
-                        index + 1
+                        index +
+                        1
                       } empty`
                 }
               >
-                <Text style={styles.pinDot}>
-                  {pin[index] ? "•" : ""}
+                <Text
+                  style={
+                    styles.pinDot
+                  }
+                >
+                  {pin[index]
+                    ? "•"
+                    : ""}
                 </Text>
               </View>
             ),
           )}
         </View>
 
-        <View style={styles.keypad}>
+        <View
+          style={
+            styles.keypad
+          }
+        >
           {numberRows.map(
-            (row, rowIndex) => (
+            (
+              row,
+              rowIndex,
+            ) => (
               <View
-                key={rowIndex}
-                style={styles.numberRow}
+                key={
+                  rowIndex
+                }
+                style={
+                  styles.numberRow
+                }
               >
-                {row.map((number) => (
-                  <Pressable
-                    key={number}
-                    style={[
-                      styles.numberButton,
-                      verifying &&
-                        styles.disabledButton,
-                    ]}
-                    onPress={() =>
-                      handleNumberPress(
-                        number,
-                      )
-                    }
-                    disabled={verifying}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Enter ${number}`}
-                  >
-                    <Text
-                      style={
-                        styles.numberText
+                {row.map(
+                  (number) => (
+                    <Pressable
+                      key={
+                        number
                       }
+                      style={({
+                        pressed,
+                      }) => [
+                        styles.numberButton,
+
+                        pressed &&
+                          !verifying &&
+                          styles.numberButtonPressed,
+
+                        verifying &&
+                          styles.disabledButton,
+                      ]}
+                      onPress={() =>
+                        handleNumberPress(
+                          number,
+                        )
+                      }
+                      disabled={
+                        verifying
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`Enter ${number}`}
                     >
-                      {number}
-                    </Text>
-                  </Pressable>
-                ))}
+                      <Text
+                        style={
+                          styles.numberText
+                        }
+                      >
+                        {
+                          number
+                        }
+                      </Text>
+                    </Pressable>
+                  ),
+                )}
               </View>
             ),
           )}
 
-          <View style={styles.specialRow}>
+          <View
+            style={
+              styles.specialRow
+            }
+          >
             <Pressable
-              style={[
+              style={({
+                pressed,
+              }) => [
                 styles.specialButton,
+
+                pressed &&
+                  !verifying &&
+                  styles.numberButtonPressed,
+
                 verifying &&
                   styles.disabledButton,
               ]}
-              onPress={handleForgotPin}
-              disabled={verifying}
+              onPress={
+                handleForgotPin
+              }
+              disabled={
+                verifying
+              }
               accessibilityRole="button"
               accessibilityLabel="Forgot PIN"
             >
@@ -362,39 +506,73 @@ export default function ParentVerificationScreen() {
             </Pressable>
 
             <Pressable
-              style={[
+              style={({
+                pressed,
+              }) => [
                 styles.zeroButton,
+
+                pressed &&
+                  !verifying &&
+                  styles.numberButtonPressed,
+
                 verifying &&
                   styles.disabledButton,
               ]}
               onPress={() =>
-                handleNumberPress("0")
+                handleNumberPress(
+                  "0",
+                )
               }
-              disabled={verifying}
+              disabled={
+                verifying
+              }
               accessibilityRole="button"
               accessibilityLabel="Enter zero"
             >
-              <Text style={styles.numberText}>
+              <Text
+                style={
+                  styles.numberText
+                }
+              >
                 0
               </Text>
             </Pressable>
 
             <Pressable
-              style={[
+              style={({
+                pressed,
+              }) => [
                 styles.specialButton,
-                (verifying ||
-                  pin.length === 0) &&
+
+                pressed &&
+                  !verifying &&
+                  pin.length >
+                    0 &&
+                  styles.numberButtonPressed,
+
+                (
+                  verifying ||
+                  pin.length ===
+                    0
+                ) &&
                   styles.disabledButton,
               ]}
-              onPress={handleDelete}
+              onPress={
+                handleDelete
+              }
               disabled={
                 verifying ||
-                pin.length === 0
+                pin.length ===
+                  0
               }
               accessibilityRole="button"
               accessibilityLabel="Delete last PIN digit"
             >
-              <Text style={styles.deleteText}>
+              <Text
+                style={
+                  styles.deleteText
+                }
+              >
                 Delete
               </Text>
             </Pressable>
@@ -413,8 +591,10 @@ export default function ParentVerificationScreen() {
         >
           {verifying ? (
             <ActivityIndicator
-              size="large"
-              color={colors.primary}
+              size="small"
+              color={
+                colors.primary
+              }
             />
           ) : (
             <AppButton
@@ -422,14 +602,18 @@ export default function ParentVerificationScreen() {
               onPress={() => {
                 void handleVerifyPin();
               }}
-              style={styles.actionButton}
+              style={
+                styles.actionButton
+              }
             />
           )}
         </View>
 
         {childModeActive ? (
           <View
-            style={styles.backButtonWrapper}
+            style={
+              styles.backButtonWrapper
+            }
           >
             <AppButton
               title="Back to Child Mode"
@@ -438,266 +622,603 @@ export default function ParentVerificationScreen() {
                   "/child-dashboard" as Href,
                 )
               }
-              style={styles.actionButton}
+              style={
+                styles.actionButton
+              }
             />
           </View>
         ) : null}
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+const styles =
+  StyleSheet.create({
+    screen: {
+      flex: 1,
 
-  loadingScreen: {
-    flex: 1,
-    backgroundColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+      backgroundColor:
+        colors.background,
 
-  scrollContent: {
-    minHeight: y(1206),
-    backgroundColor: colors.background,
-  },
-
-  figmaFrame: {
-    width: "100%",
-    height: y(1206),
-    position: "relative",
-    backgroundColor: colors.background,
-  },
-
-  audioButton: {
-    position: "absolute",
-    left: x(347),
-    top: y(30),
-    width: x(35),
-    height: x(35),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  title: {
-    position: "absolute",
-    left: x(20),
-    top: y(123),
-    width: x(362),
-    height: y(39),
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(30),
-    lineHeight: y(39),
-    textAlign: "center",
-  },
-
-  subtitle: {
-    position: "absolute",
-    left: x(20),
-    top: y(213),
-    width: x(362),
-    minHeight: y(48),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-  },
-
-  pinLabel: {
-    position: "absolute",
-    left: x(20),
-    top: y(312),
-    width: x(292),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-  },
-
-  pinBoxesRow: {
-    position: "absolute",
-    left: x(20),
-    top: y(351),
-    width: x(362),
-    height: y(85),
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-
-  pinBox: {
-    width: x(76),
-    height: y(85),
-    borderRadius: x(20),
-    backgroundColor: colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+      overflow:
+        "hidden",
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
 
-  pinDot: {
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(32),
-    lineHeight: y(39),
-    textAlign: "center",
-  },
+    loadingScreen: {
+      flex: 1,
 
-  keypad: {
-    position: "absolute",
-    left: x(20),
-    top: y(514),
-    width: x(362),
-  },
+      backgroundColor:
+        colors.background,
 
-  numberRow: {
-    width: x(258),
-    height: y(85),
-    marginLeft: x(47),
-    marginBottom: y(13),
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
+      alignItems:
+        "center",
 
-  numberButton: {
-    width: x(76),
-    height: y(85),
-    borderRadius: x(20),
-    backgroundColor: "#DDEAEC",
-    alignItems: "center",
-    justifyContent: "center",
-
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+      justifyContent:
+        "center",
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
 
-  numberText: {
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(30),
-    lineHeight: y(39),
-    textAlign: "center",
-  },
+    /*
+     * The whole screen uses the original 402 x 874 Figma coordinate
+     * system and therefore never needs a ScrollView.
+     */
+    figmaFrame: {
+      flex: 1,
 
-  specialRow: {
-    width: x(362),
-    height: y(85),
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
+      width:
+        "100%",
 
-  specialButton: {
-    width: x(123),
-    height: y(85),
-    borderRadius: x(20),
-    backgroundColor: "#DDEAEC",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: x(5),
+      position:
+        "relative",
 
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+      backgroundColor:
+        colors.background,
+
+      overflow:
+        "hidden",
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
 
-  zeroButton: {
-    width: x(76),
-    height: y(85),
-    borderRadius: x(20),
-    backgroundColor: "#DDEAEC",
-    alignItems: "center",
-    justifyContent: "center",
+    audioButton: {
+      position:
+        "absolute",
 
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+      left:
+        x(347),
+
+      top:
+        y(48),
+
+      width:
+        x(35),
+
+      height:
+        x(35),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      zIndex: 20,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
 
-  disabledButton: {
-    opacity: 0.55,
-  },
+    title: {
+      position:
+        "absolute",
 
-  specialButtonText: {
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(18),
-    lineHeight: y(21),
-    textAlign: "center",
-  },
+      left:
+        x(20),
 
-  deleteText: {
-    color: colors.primary,
-    fontFamily: "Outfit",
-    fontSize: x(20),
-    lineHeight: y(25),
-    textAlign: "center",
-  },
+      top:
+        y(104),
 
-  error: {
-    position: "absolute",
-    left: x(20),
-    top: y(930),
-    width: x(362),
-  },
+      width:
+        x(362),
 
-  verifyButtonWrapper: {
-    position: "absolute",
-    left: x(96),
-    top: y(991),
-    width: x(210),
-    height: y(52),
-    alignItems: "center",
-    justifyContent: "center",
-  },
+      height:
+        y(39),
 
-  backButtonWrapper: {
-    position: "absolute",
-    left: x(96),
-    top: y(1063),
-    width: x(210),
-    height: y(52),
-  },
+      color:
+        colors.primary,
 
-  actionButton: {
-    width: x(210),
-    height: y(52),
-    borderRadius: x(20),
+      fontFamily:
+        "Outfit",
 
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: y(4),
+      fontSize:
+        x(30),
+
+      lineHeight:
+        y(39),
+
+      textAlign:
+        "center",
+
+      includeFontPadding:
+        false,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: x(4),
-    elevation: 5,
-  },
-});
+
+    subtitle: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(158),
+
+      width:
+        x(362),
+
+      minHeight:
+        y(48),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize:
+        x(20),
+
+      lineHeight:
+        y(24),
+
+      textAlign:
+        "center",
+
+      includeFontPadding:
+        false,
+    },
+
+    pinLabel: {
+      position:
+        "absolute",
+
+      left:
+        x(40),
+
+      top:
+        y(224),
+
+      width:
+        x(322),
+
+      height:
+        y(24),
+
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize:
+        x(20),
+
+      lineHeight:
+        y(24),
+
+      includeFontPadding:
+        false,
+    },
+
+    pinBoxesRow: {
+      position:
+        "absolute",
+
+      left:
+        x(40),
+
+      top:
+        y(258),
+
+      width:
+        x(322),
+
+      height:
+        y(62),
+
+      flexDirection:
+        "row",
+
+      justifyContent:
+        "space-between",
+    },
+
+    pinBox: {
+      width:
+        x(66),
+
+      height:
+        y(62),
+
+      borderRadius:
+        x(18),
+
+      backgroundColor:
+        colors.white,
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      shadowColor:
+        "#000000",
+
+      shadowOffset: {
+        width: 0,
+        height:
+          y(3),
+      },
+
+      shadowOpacity:
+        0.22,
+
+      shadowRadius:
+        x(4),
+
+      elevation:
+        4,
+    },
+
+    pinDot: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Literata",
+
+      fontSize:
+        x(30),
+
+      lineHeight:
+        y(36),
+
+      textAlign:
+        "center",
+
+      includeFontPadding:
+        false,
+    },
+
+    keypad: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(352),
+
+      width:
+        x(362),
+    },
+
+    numberRow: {
+      width:
+        x(240),
+
+      height:
+        y(62),
+
+      marginLeft:
+        x(61),
+
+      marginBottom:
+        y(10),
+
+      flexDirection:
+        "row",
+
+      justifyContent:
+        "space-between",
+    },
+
+    numberButton: {
+      width:
+        x(66),
+
+      height:
+        y(62),
+
+      borderRadius:
+        x(18),
+
+      backgroundColor:
+        "#DDEAEC",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      shadowColor:
+        "#000000",
+
+      shadowOffset: {
+        width: 0,
+        height:
+          y(3),
+      },
+
+      shadowOpacity:
+        0.22,
+
+      shadowRadius:
+        x(4),
+
+      elevation:
+        4,
+    },
+
+    numberButtonPressed: {
+      opacity:
+        0.7,
+
+      transform: [
+        {
+          scale:
+            0.97,
+        },
+      ],
+    },
+
+    numberText: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Outfit",
+
+      fontSize:
+        x(28),
+
+      lineHeight:
+        y(36),
+
+      textAlign:
+        "center",
+
+      includeFontPadding:
+        false,
+    },
+
+    specialRow: {
+      width:
+        x(322),
+
+      height:
+        y(62),
+
+      marginLeft:
+        x(20),
+
+      flexDirection:
+        "row",
+
+      justifyContent:
+        "space-between",
+    },
+
+    specialButton: {
+      width:
+        x(112),
+
+      height:
+        y(62),
+
+      borderRadius:
+        x(18),
+
+      backgroundColor:
+        "#DDEAEC",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      paddingHorizontal:
+        x(5),
+
+      shadowColor:
+        "#000000",
+
+      shadowOffset: {
+        width: 0,
+        height:
+          y(3),
+      },
+
+      shadowOpacity:
+        0.22,
+
+      shadowRadius:
+        x(4),
+
+      elevation:
+        4,
+    },
+
+    zeroButton: {
+      width:
+        x(66),
+
+      height:
+        y(62),
+
+      borderRadius:
+        x(18),
+
+      backgroundColor:
+        "#DDEAEC",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      shadowColor:
+        "#000000",
+
+      shadowOffset: {
+        width: 0,
+        height:
+          y(3),
+      },
+
+      shadowOpacity:
+        0.22,
+
+      shadowRadius:
+        x(4),
+
+      elevation:
+        4,
+    },
+
+    disabledButton: {
+      opacity:
+        0.55,
+    },
+
+    specialButtonText: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Outfit",
+
+      fontSize:
+        x(15),
+
+      lineHeight:
+        y(18),
+
+      textAlign:
+        "center",
+
+      includeFontPadding:
+        false,
+    },
+
+    deleteText: {
+      color:
+        colors.primary,
+
+      fontFamily:
+        "Outfit",
+
+      fontSize:
+        x(18),
+
+      lineHeight:
+        y(23),
+
+      textAlign:
+        "center",
+
+      includeFontPadding:
+        false,
+    },
+
+    error: {
+      position:
+        "absolute",
+
+      left:
+        x(20),
+
+      top:
+        y(642),
+
+      width:
+        x(362),
+
+      minHeight:
+        y(34),
+    },
+
+    verifyButtonWrapper: {
+      position:
+        "absolute",
+
+      left:
+        x(96),
+
+      top:
+        y(690),
+
+      width:
+        x(210),
+
+      height:
+        y(52),
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+    },
+
+    backButtonWrapper: {
+      position:
+        "absolute",
+
+      left:
+        x(96),
+
+      top:
+        y(762),
+
+      width:
+        x(210),
+
+      height:
+        y(52),
+    },
+
+    actionButton: {
+      width:
+        x(210),
+
+      height:
+        y(52),
+
+      borderRadius:
+        x(20),
+
+      shadowColor:
+        "#000000",
+
+      shadowOffset: {
+        width: 0,
+        height:
+          y(4),
+      },
+
+      shadowOpacity:
+        0.25,
+
+      shadowRadius:
+        x(4),
+
+      elevation:
+        5,
+    },
+
+    controlPressed: {
+      opacity:
+        0.65,
+    },
+  });
