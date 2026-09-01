@@ -3,10 +3,11 @@
  *
  * Displays the Figma loading screen while Firebase restores
  * the saved session and verifies the current user's state.
+ * Unauthenticated users must clear the COPPA age gate first.
  */
 
 import type { User } from "firebase/auth";
-import { Redirect } from "expo-router";
+import { Redirect, type Href } from "expo-router";
 import {
   useEffect,
   useState,
@@ -14,6 +15,7 @@ import {
 
 import LoadingScreen from "@/components/ui/LoadingScreen";
 import { useAuth } from "@/contexts/AuthContext";
+import { getAgeGateRecord } from "@/utils/ageGate";
 
 export default function Index() {
   const {
@@ -30,6 +32,9 @@ export default function Index() {
     setCheckingVerification,
   ] = useState(true);
 
+  const [ageGateAllowed, setAgeGateAllowed] =
+    useState<boolean | null>(null);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -39,8 +44,13 @@ export default function Index() {
       }
 
       if (!user) {
-        setResolvedUser(null);
-        setCheckingVerification(false);
+        const ageGate = await getAgeGateRecord();
+
+        if (!cancelled) {
+          setResolvedUser(null);
+          setAgeGateAllowed(ageGate?.status === "allowed");
+          setCheckingVerification(false);
+        }
         return;
       }
 
@@ -54,6 +64,7 @@ export default function Index() {
           setResolvedUser(
             refreshedUser ?? user,
           );
+          setAgeGateAllowed(true);
         }
       } catch (error) {
         console.error(
@@ -63,6 +74,7 @@ export default function Index() {
 
         if (!cancelled) {
           setResolvedUser(user);
+          setAgeGateAllowed(true);
         }
       } finally {
         if (!cancelled) {
@@ -84,12 +96,19 @@ export default function Index() {
 
   if (
     authLoading ||
-    checkingVerification
+    checkingVerification ||
+    (!resolvedUser && ageGateAllowed === null)
   ) {
     return <LoadingScreen />;
   }
 
   if (!resolvedUser) {
+    if (!ageGateAllowed) {
+      return (
+        <Redirect href={"/age-gate" as Href} />
+      );
+    }
+
     return (
       <Redirect href="/onboarding" />
     );

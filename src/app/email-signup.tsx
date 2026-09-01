@@ -21,6 +21,7 @@ import {
 import CheckIcon from "../../assets/icons/check.svg";
 
 import TermsModal from "@/components/modals/TermsModal";
+import RequireAdultAgeGate from "@/components/RequireAdultAgeGate";
 import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import FloatingTextInput from "@/components/ui/FloatingTextInput";
@@ -220,10 +221,11 @@ export default function EmailSignupScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
+    <RequireAdultAgeGate>
+      <KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -347,7 +349,7 @@ export default function EmailSignupScreen() {
           <ConsentRow
             checked={consent.parentGuardianConsent}
             disabled={loading}
-            label="I give Parent / Guardian Consent."
+            label="I am the parent/guardian and I consent to child data collection."
             accessibilityLabel="Give Parent or Guardian Consent"
             onToggle={() => updateConsent("parentGuardianConsent")}
             onOpenDocument={() =>
@@ -388,6 +390,7 @@ export default function EmailSignupScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </RequireAdultAgeGate>
   );
 }
 

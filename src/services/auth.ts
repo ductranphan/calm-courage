@@ -17,8 +17,10 @@ import {
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
+  type ActionCodeSettings,
   type User,
 } from "firebase/auth";
+import * as Linking from "expo-linking";
 import {
   addDoc,
   collection,
@@ -522,6 +524,27 @@ export async function signOutUser(): Promise<void> {
   }
 }
 
+function getAuthActionCodeSettings(): ActionCodeSettings {
+  const continueUrl = Linking.createURL("/reset-password");
+
+  return {
+    url: continueUrl,
+    handleCodeInApp: true,
+    iOS: {
+      bundleId:
+        process.env.EXPO_PUBLIC_IOS_BUNDLE_ID?.trim() ||
+        "com.calmcourage.app",
+    },
+    android: {
+      packageName:
+        process.env.EXPO_PUBLIC_ANDROID_PACKAGE?.trim() ||
+        "com.calmcourage.app",
+      installApp: true,
+      minimumVersion: "1",
+    },
+  };
+}
+
 export async function resetPassword(
   email: string,
 ): Promise<void> {
@@ -532,6 +555,7 @@ export async function resetPassword(
     await sendPasswordResetEmail(
       auth,
       normalizedEmail,
+      getAuthActionCodeSettings(),
     );
   } catch (error) {
     throw new Error(

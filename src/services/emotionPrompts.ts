@@ -8,6 +8,7 @@
 import { doc, getDoc } from "firebase/firestore";
 
 import { db } from "@/config/firebase";
+import { DEFAULT_EMOTION_PROMPTS } from "@/constants/defaultEmotionPrompts";
 import { type EmotionId } from "@/constants/emotions";
 
 export type EmotionPrompt = {
@@ -43,7 +44,8 @@ export async function getEmotionPrompt(
   );
 
   if (!snapshot.exists()) {
-    return null;
+    const fallback = DEFAULT_EMOTION_PROMPTS[emotionId];
+    return { id: emotionId, ...fallback };
   }
 
   const data = snapshot.data() as Record<string, unknown>;

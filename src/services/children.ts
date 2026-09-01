@@ -170,6 +170,18 @@ export async function createChild(
       throw new Error("Parent profile not found.");
     }
 
+    const parentData = parentSnapshot.data() as Record<string, unknown>;
+
+    /*
+     * COPPA: child profile data may only be created after documented
+     * Parent/Guardian Consent on the parent account.
+     */
+    if (parentData.parentGuardianConsentAccepted !== true) {
+      throw new Error(
+        "Parent/Guardian Consent is required before creating a child profile.",
+      );
+    }
+
     transaction.set(childRef, {
       name: data.name.trim(),
       age: data.age,
@@ -181,7 +193,7 @@ export async function createChild(
       updatedAt: serverTimestamp(),
     });
 
-    if (parentSnapshot.data().onboardingComplete !== true) {
+    if (parentData.onboardingComplete !== true) {
       transaction.update(parentRef, {
         onboardingComplete: true,
         onboardingCompletedAt: serverTimestamp(),
