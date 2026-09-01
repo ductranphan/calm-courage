@@ -1,20 +1,17 @@
 /**
  * Parent subscription entitlement service.
  *
- * Writes/reads subscription fields on parents/{uid}.
- * Real App Store / Play Billing should call activateSubscription
- * only after a verified purchase receipt. The paywall currently
- * activates a founding-member trial for QA and soft-launch testing.
+ * Reads remain client-side. Writes go through Cloud Functions because
+ * Firestore rules block clients from granting themselves a subscription.
  */
 
 import {
   doc,
   getDoc,
-  serverTimestamp,
-  updateDoc,
 } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
 
-import { db } from "@/config/firebase";
+import { db, functions } from "@/config/firebase";
 
 export type SubscriptionPlan =
   | "trial"
@@ -53,8 +50,8 @@ function parseDateValue(value: unknown): Date | null {
   }
 
   if (
+    value &&
     typeof value === "object" &&
-    value !== null &&
     "toDate" in value &&
     typeof (value as { toDate?: unknown }).toDate === "function"
   ) {
@@ -86,10 +83,6 @@ function computeIsActive(
       return true;
     }
 
-    /*
-     * Active paid plan without an expired renew date.
-     * Soft-launch: treat monthly/yearly as active until cancelled.
-     */
     return !renewsAt || renewsAt.getTime() > now;
   }
 
@@ -139,55 +132,44 @@ export type ActivateSubscriptionInput = {
   priceLabel?: string;
   trialDays?: number;
   source?: string;
+  platform?: "ios" | "android" | "web" | string;
+  receiptId?: string;
 };
 
 /**
- * Activates a founding-member subscription/trial on the parent profile.
- * Call only after a successful (or QA-simulated) purchase confirmation.
+ * Activates subscription via Cloud Function (Admin SDK write).
  */
 export async function activateSubscription(
-  parentUid: string,
+  _parentUid: string,
   input: ActivateSubscriptionInput = {},
 ): Promise<SubscriptionEntitlement> {
-  const plan = input.plan ?? "monthly";
-  const trialDays = input.trialDays ?? 7;
-  const priceLabel =
-    input.priceLabel ??
-    (plan === "yearly" ? "$79.99/year" : "$7.99/month");
+  const callable = httpsCallable(
+    functions,
+    "activateSubscription",
+  );
 
-  const trialEndsAt = new Date();
-  trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
-
-  const renewsAt = new Date(trialEndsAt);
-
-  await updateDoc(parentRef(parentUid), {
-    subscription: plan,
+  await callable({
+    plan: input.plan ?? "monthly",
     foundingMember: input.foundingMember !== false,
-    subscriptionPriceLabel: priceLabel,
-    subscriptionTrialEndsAt: trialEndsAt.toISOString(),
-    trialEndsAt: trialEndsAt.toISOString(),
-    subscriptionRenewsAt: renewsAt.toISOString(),
-    nextBillingDate: renewsAt.toISOString(),
-    subscriptionSource: input.source ?? "paywall",
-    subscriptionActivatedAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    priceLabel: input.priceLabel,
+    trialDays: input.trialDays ?? 7,
+    source: input.source ?? "paywall",
+    platform: input.platform ?? null,
+    receiptId: input.receiptId ?? null,
   });
 
-  return getSubscriptionEntitlement(parentUid);
+  const userUid = _parentUid;
+  return getSubscriptionEntitlement(userUid);
 }
 
 export async function clearSubscription(
   parentUid: string,
 ): Promise<void> {
-  await updateDoc(parentRef(parentUid), {
-    subscription: "trial",
-    foundingMember: false,
-    subscriptionPriceLabel: null,
-    subscriptionTrialEndsAt: null,
-    trialEndsAt: null,
-    subscriptionRenewsAt: null,
-    nextBillingDate: null,
-    subscriptionCancelledAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
+  const callable = httpsCallable(
+    functions,
+    "clearSubscription",
+  );
+
+  await callable({});
+  await getSubscriptionEntitlement(parentUid);
 }

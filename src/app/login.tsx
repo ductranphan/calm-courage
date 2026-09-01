@@ -19,14 +19,11 @@ import {
   View,
 } from "react-native";
 
-import GoogleIcon from "../../assets/images/google.svg";
-import AppleIcon from "../../assets/images/apple.svg";
-import FacebookIcon from "../../assets/images/facebook.svg";
-
 import AppButton from "@/components/ui/AppButton";
 import BackButton from "@/components/ui/BackButton";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import FloatingTextInput from "@/components/ui/FloatingTextInput";
+import RequireAdultAgeGate from "@/components/RequireAdultAgeGate";
 import { colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { x, y } from "@/utils/scaling";
@@ -76,107 +73,84 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <RequireAdultAgeGate>
+      <KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <View style={styles.figmaFrame}>
-          <BackButton fallback="/onboarding" />
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.figmaFrame}>
+            <BackButton fallback="/onboarding" />
 
-          <Text style={styles.title}>Parent Log In</Text>
+            <Text style={styles.title}>Parent Log In</Text>
 
-          <Text style={styles.subtitle}>
-            Welcome Back!{"\n"}
-            Please enter your details to sign in.
-          </Text>
-
-          <View style={styles.emailInput}>
-            <FloatingTextInput
-              label="Email address"
-              placeholder="Enter your email"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-            />
-          </View>
-
-          <View style={styles.passwordInput}>
-            <FloatingTextInput
-              label="Password"
-              placeholder="Enter password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-          </View>
-
-          <Pressable
-            onPress={() => router.push("/forgot-password")}
-            style={styles.forgotPasswordWrapper}
-          >
-            <Text style={styles.forgotPasswordText}>Forgot?</Text>
-          </Pressable>
-
-          <ErrorMessage
-            message={error}
-            style={styles.errorText}
-          />
-
-          <View style={styles.buttonWrapper}>
-            {loading ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : (
-              <AppButton
-                title="Log In"
-                onPress={handleLogin}
-                style={styles.loginButton}
-              />
-            )}
-          </View>
-
-          <Text style={styles.orText}>OR</Text>
-
-          <View style={styles.socialRow}>
-            <Pressable style={styles.socialButton}>
-              <GoogleIcon
-                width={x(55)}
-                height={x(55)}
-              />
-            </Pressable>
-
-            <Pressable style={styles.socialButton}>
-              <AppleIcon
-                width={x(55)}
-                height={x(55)}
-              />
-            </Pressable>
-
-            <Pressable style={styles.socialButton}>
-              <FacebookIcon
-                width={x(55)}
-                height={x(55)}
-              />
-            </Pressable>
-          </View>
-
-          <Pressable
-            onPress={() => router.push("/create-account")}
-            style={styles.createAccountWrapper}
-          >
-            <Text style={styles.createAccountText}>
-              Don’t have an account?
+            <Text style={styles.subtitle}>
+              Welcome Back!{"\n"}
+              Please enter your details to sign in.
             </Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+            <View style={styles.emailInput}>
+              <FloatingTextInput
+                label="Email address"
+                placeholder="Enter your email"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+              />
+            </View>
+
+            <View style={styles.passwordInput}>
+              <FloatingTextInput
+                label="Password"
+                placeholder="Enter password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+            </View>
+
+            <Pressable
+              onPress={() => router.push("/forgot-password")}
+              style={styles.forgotPasswordWrapper}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot?</Text>
+            </Pressable>
+
+            <ErrorMessage
+              message={error}
+              style={styles.errorText}
+            />
+
+            <View style={styles.buttonWrapper}>
+              {loading ? (
+                <ActivityIndicator color={colors.primary} />
+              ) : (
+                <AppButton
+                  title="Log In"
+                  onPress={handleLogin}
+                  style={styles.loginButton}
+                />
+              )}
+            </View>
+
+            <Pressable
+              onPress={() => router.push("/create-account")}
+              style={styles.createAccountWrapper}
+            >
+              <Text style={styles.createAccountText}>
+                Don’t have an account?
+              </Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </RequireAdultAgeGate>
   );
 }
 
@@ -273,41 +247,10 @@ const styles = StyleSheet.create({
     borderRadius: x(20),
   },
 
-  orText: {
-    position: "absolute",
-    left: x(20),
-    top: y(686),
-    width: x(362),
-    height: y(24),
-    color: colors.primary,
-    fontFamily: "Literata",
-    fontSize: x(20),
-    lineHeight: y(24),
-    textAlign: "center",
-  },
-
-  socialRow: {
-    position: "absolute",
-    left: x(104),
-    top: y(766),
-    width: x(194),
-    height: y(60),
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  socialButton: {
-    width: x(55),
-    height: x(55),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
   createAccountWrapper: {
     position: "absolute",
     left: x(20),
-    top: y(872),
+    top: y(686),
     width: x(250),
     height: y(24),
     justifyContent: "center",

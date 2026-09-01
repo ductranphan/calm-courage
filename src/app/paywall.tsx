@@ -17,6 +17,7 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -28,7 +29,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { activateSubscription } from "@/services/subscription";
 import { x, y } from "@/utils/scaling";
 
-import FaceIdIcon from "../../assets/icons/face-id.svg";
+import FaceIdIcon from "../../assets/icons/lock.svg";
 
 const PAGE_BACKGROUND = "#F1F3F5";
 const PRIMARY = "#2F448B";
@@ -271,7 +272,8 @@ export default function PaywallScreen() {
         plan: "monthly",
         foundingMember: true,
         trialDays: 7,
-        source: "paywall_preview",
+        source: "paywall_soft_launch",
+        platform: Platform.OS,
       });
 
       setPurchaseSheetVisible(false);
@@ -284,9 +286,19 @@ export default function PaywallScreen() {
         "Unable to activate subscription:",
         error,
       );
+
+      const message =
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        typeof (error as { code?: unknown }).code === "string" &&
+        (error as { code: string }).code.includes("functions/")
+          ? "Subscription service is temporarily unavailable. Confirm Cloud Functions are deployed, then try again."
+          : "We couldn’t activate your trial. Please try again.";
+
       Alert.alert(
         "Subscription unavailable",
-        "We couldn’t activate your trial. Please try again.",
+        message,
       );
     } finally {
       setActivating(false);

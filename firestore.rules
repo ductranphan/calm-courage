@@ -3,6 +3,45 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isOwner(parentId) {
+      return request.auth != null
+        && request.auth.uid == parentId;
+    }
+
+    /**
+     * Clients must never grant themselves a paid subscription.
+     * Entitlements are written only by Admin SDK (Cloud Functions).
+     */
+    function subscriptionFields() {
+      return [
+        "subscription",
+        "foundingMember",
+        "subscriptionPriceLabel",
+        "subscriptionTrialEndsAt",
+        "trialEndsAt",
+        "subscriptionRenewsAt",
+        "nextBillingDate",
+        "subscriptionSource",
+        "subscriptionActivatedAt",
+        "subscriptionCancelledAt",
+        "subscriptionReceiptId",
+        "subscriptionPlatform"
+      ];
+    }
+
+    function doesNotChangeSubscriptionFields() {
+      return !request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasAny(subscriptionFields());
+    }
+
+    function createHasNoPaidSubscription() {
+      return !("subscription" in request.resource.data)
+        || request.resource.data.subscription == "trial"
+        || request.resource.data.subscription == null;
+    }
+
     match /emotionPrompts/{emotionId} {
       allow read: if request.auth != null;
       allow write: if false;
@@ -10,42 +49,54 @@ service cloud.firestore {
 
     match /accountDeletionFeedback/{feedbackId} {
       allow create: if request.auth != null
-        && request.resource.data.parentUid == request.auth.uid;
+        && request.resource.data.parentUid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          "parentUid",
+          "reasons",
+          "feedback",
+          "createdAt"
+        ]);
       allow read, update, delete: if false;
     }
 
     match /supportTickets/{ticketId} {
       allow create: if request.auth != null
-        && request.resource.data.parentUid == request.auth.uid;
+        && request.resource.data.parentUid == request.auth.uid
+        && request.resource.data.email is string
+        && request.resource.data.subject is string
+        && request.resource.data.message is string
+        && request.resource.data.status == "open";
       allow read, update, delete: if false;
     }
 
     match /parents/{parentId} {
-      allow read, write: if request.auth != null
-        && request.auth.uid == parentId;
+      allow read: if isOwner(parentId);
+
+      allow create: if isOwner(parentId)
+        && createHasNoPaidSubscription();
+
+      allow update: if isOwner(parentId)
+        && doesNotChangeSubscriptionFields();
+
+      allow delete: if isOwner(parentId);
 
       match /children/{childId} {
-        allow read, write: if request.auth != null
-          && request.auth.uid == parentId;
+        allow read, write: if isOwner(parentId);
 
         match /checkIns/{checkInId} {
-          allow read, write: if request.auth != null
-            && request.auth.uid == parentId;
+          allow read, write: if isOwner(parentId);
         }
 
         match /activityAttempts/{attemptId} {
-          allow read, write: if request.auth != null
-            && request.auth.uid == parentId;
+          allow read, write: if isOwner(parentId);
         }
 
         match /quests/{questId} {
-          allow read, write: if request.auth != null
-            && request.auth.uid == parentId;
+          allow read, write: if isOwner(parentId);
         }
 
         match /media/{mediaId} {
-          allow read, write: if request.auth != null
-            && request.auth.uid == parentId;
+          allow read, write: if isOwner(parentId);
         }
       }
     }

@@ -6,11 +6,14 @@
  * - Swipeable onboarding statements
  * - Fixed page indicators
  * - Navigation buttons for account creation and login
+ *
+ * Requires COPPA adult age-gate clearance first.
  */
 import { router } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
 import OnboardingPager from "@/components/onboarding/OnboardingPager";
+import RequireAdultAgeGate from "@/components/RequireAdultAgeGate";
 import AppButton from "@/components/ui/AppButton";
 import { colors } from "@/constants/colors";
 import { x, y } from "@/utils/scaling";
@@ -19,30 +22,29 @@ import LogoSvg from "../../assets/images/logo.svg";
 
 export default function OnboardingScreen() {
   return (
-    <View style={styles.container}>
-      {/* Main app logo */}
-      <View style={styles.logoContainer}>
-        <View style={styles.logoShadow}>
-          <LogoSvg width={x(359)} height={y(134)} />
+    <RequireAdultAgeGate>
+      <View style={styles.container}>
+        <View style={styles.logoContainer}>
+          <View style={styles.logoShadow}>
+            <LogoSvg width={x(359)} height={y(134)} />
+          </View>
+        </View>
+
+        <OnboardingPager />
+
+        <View style={styles.buttons}>
+          <AppButton
+            title="Get Started"
+            onPress={() => router.push("/create-account")}
+          />
+
+          <AppButton
+            title="Log In"
+            onPress={() => router.push("/login")}
+          />
         </View>
       </View>
-
-      {/* Swipeable onboarding text */}
-      <OnboardingPager />
-
-      {/* Primary navigation buttons */}
-      <View style={styles.buttons}>
-        <AppButton
-          title="Get Started"
-          onPress={() => router.push("/create-account")}
-        />
-
-        <AppButton
-          title="Log In"
-          onPress={() => router.push("/login")}
-        />
-      </View>
-    </View>
+    </RequireAdultAgeGate>
   );
 }
 

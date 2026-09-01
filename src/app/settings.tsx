@@ -717,9 +717,7 @@ export default function SettingsScreen() {
   }
 
   function handleLegalDocuments() {
-    setLegalModalDocument(
-      "termsOfUse",
-    );
+    router.push("/privacy-policy" as Href);
   }
 
   function handleChangePassword() {
@@ -1134,12 +1132,12 @@ export default function SettingsScreen() {
 
           <SettingsRow
             label={
-              "Terms of Service\n& Privacy Policy"
+              "Privacy Policy"
             }
             onPress={
               handleLegalDocuments
             }
-            accessibilityLabel="Open Terms of Service and Privacy Policy"
+            accessibilityLabel="Open Privacy Policy"
             top={
               activeLayout.legalRowTop
             }

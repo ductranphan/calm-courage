@@ -24,6 +24,7 @@ import {
   View,
 } from "react-native";
 
+import AuthDeepLinkHandler from "@/components/AuthDeepLinkHandler";
 import LoadingScreen from "@/components/ui/LoadingScreen";
 import { preloadQuestImages } from "@/constants/questAssets";
 import { ActiveChildProvider } from "@/contexts/ActiveChildContext";
@@ -213,6 +214,7 @@ export default function RootLayout() {
         <AuthProvider>
           <ParentAccessProvider>
             <ActiveChildProvider>
+              <AuthDeepLinkHandler />
               <AppStack />
             </ActiveChildProvider>
           </ParentAccessProvider>
