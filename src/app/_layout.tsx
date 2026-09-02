@@ -165,7 +165,6 @@ export default function RootLayout() {
           }),
 
           preloadImages(),
-          preloadQuestImages(),
         ]);
       } catch (error) {
         console.error(
@@ -180,6 +179,13 @@ export default function RootLayout() {
     }
 
     void loadAssets();
+
+    void preloadQuestImages().catch((error: unknown) => {
+      console.warn(
+        "Quest image preload failed (will retry on Quest Board):",
+        error,
+      );
+    });
 
     return () => {
       stillMounted = false;
