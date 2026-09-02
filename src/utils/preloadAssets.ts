@@ -66,47 +66,9 @@ const APP_IMAGES = [
   ),
 
   /*
-   * Roleplay illustrations
+   * Roleplay illustrations are loaded on the roleplay card screen
+   * (see roleplay-card.tsx) — not at startup, to keep memory low in Expo Go.
    */
-  require(
-    "../../assets/images/roleplay/roleplay-01.png",
-  ),
-
-  require(
-    "../../assets/images/roleplay/roleplay-02.png",
-  ),
-
-  require(
-    "../../assets/images/roleplay/roleplay-03.png",
-  ),
-
-  require(
-    "../../assets/images/roleplay/roleplay-04.png",
-  ),
-
-  require(
-    "../../assets/images/roleplay/roleplay-05.png",
-  ),
-
-  require(
-    "../../assets/images/roleplay/roleplay-06.png",
-  ),
-
-  require(
-    "../../assets/images/roleplay/roleplay-07.png",
-  ),
-
-  require(
-    "../../assets/images/roleplay/roleplay-08.png",
-  ),
-
-  require(
-    "../../assets/images/roleplay/roleplay-09.png",
-  ),
-
-  require(
-    "../../assets/images/roleplay/roleplay-10.png",
-  ),
 ];
 
 /**
