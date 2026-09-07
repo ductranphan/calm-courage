@@ -1,4 +1,4 @@
-# Calm Courage — Comprehensive Handover for Ashley / Incoming Developer
+# Calm Courage — Comprehensive Documentation - September 7th 2026
 
 **Date:** 4 Sep 2026  
 **Prepared for:** Ashley / next developer  
