@@ -1,56 +1,112 @@
-# Welcome to your Expo app 👋
+# Calm Courage
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A parent-guided mobile app that helps children build emotional awareness and courage through daily check-ins, games, quests, and guided activities.
 
-## Get started
+Built with **Expo (SDK 57)**, **React Native**, and **Firebase** (Auth, Firestore, Storage, Cloud Functions).
 
-1. Install dependencies
+## Features
+
+- COPPA-aware age gate and parent/guardian consent flows
+- Parent accounts (email/password) with PIN-protected parent mode
+- Child profiles, rewards (stars / gems / badges), and progress tracking
+- Daily emotion check-in and encouragement prompts
+- V1 activities: Choose Your Courage, Emotion Puzzle Match, Roleplay, Confidence Quests, Quest Board, Digital Workbook
+- Soft-launch subscription entitlement via Cloud Functions (real App Store / Play Billing still pending)
+
+## Prerequisites
+
+- Node.js 20+
+- npm
+- [Expo Go](https://expo.dev/go) on a physical device, **or** Android Studio emulator / Xcode Simulator
+- A Firebase project with Email/Password auth enabled (team members: ask for `.env` values)
+
+> Prefer a **physical device** or an **EAS preview build** for QA. Some card assets are very large and can crash Expo Go on low-RAM emulators.
+
+## Setup
+
+1. Clone and install:
 
    ```bash
+   git clone https://github.com/ductranphan/calm-courage.git
+   cd calm-courage
    npm install
+   npm run functions:install
    ```
 
-2. Start the app
+2. Create your env file:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Fill in the Firebase web config and related keys from Firebase Console → Project settings → Your apps → Web app. Never commit `.env`.
+
+3. Start the app:
 
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+   Or clear the Metro cache after dependency / env changes:
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+   ```bash
+   npx expo start --clear
+   ```
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Opening the app
 
-## Get a fresh project
+After Metro starts, use any of these:
 
-When you're ready, run:
+| Option | How |
+|--------|-----|
+| **Expo Go (phone)** | Scan the QR code with Expo Go (Android) or Camera (iOS) |
+| **Android emulator** | Press `a` in the terminal |
+| **iOS simulator** (macOS) | Press `i` in the terminal |
+| **Web** | Press `w` (limited; not the primary target) |
+
+Useful scripts:
 
 ```bash
-npm run reset-project
+npm start                 # expo start
+npm run android           # expo run:android
+npm run ios               # expo run:ios
+npm run lint              # ESLint
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Project structure
 
-### Other setup steps
+```text
+src/app/          Expo Router screens (file-based routes)
+src/components/   Shared UI and providers
+src/services/     Firebase / business logic
+src/constants/    Activities, consent copy, etc.
+src/utils/        Helpers (age gate, premium access, assets)
+assets/           Images, fonts, game art
+functions/        Cloud Functions (subscriptions)
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Backend (optional for local UI work)
 
-## Learn more
+Firestore rules, Storage rules, and Cloud Functions live in this repo and are deployed to Firebase project `calm-courage-co`.
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+npm run firebase:deploy
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Only needed when rules or Functions change — not for everyday UI work.
 
-## Join the community
+## More docs
 
-Join our community of developers creating universal apps.
+| Doc | Purpose |
+|-----|---------|
+| [HANDOVER.md](./HANDOVER.md) | Full status, outstanding work, and handoff notes |
+| [PRODUCTION.md](./PRODUCTION.md) | Production / store deploy checklist and smoke tests |
+| [.env.example](./.env.example) | Required environment variable names |
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Tech stack
+
+- Expo Router, React Native, TypeScript
+- Firebase Auth, Firestore, Storage, Callable Cloud Functions
+- EAS Build profiles in `eas.json` (`development`, `preview`, `production`)
+
+App IDs: `com.calmcourage.app` · URL scheme: `calm-courage`
