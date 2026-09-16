@@ -23,6 +23,23 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
+/*
+ * EXPO_PUBLIC_* values are inlined at build time, so a release built without
+ * them silently produces an app where every auth and Firestore call fails.
+ * Fail loudly instead, naming the variables the build is missing.
+ */
+const missingConfigKeys = Object.entries(firebaseConfig)
+  .filter(([, value]) => !value)
+  .map(([key]) => key);
+
+if (missingConfigKeys.length > 0) {
+  throw new Error(
+    `Firebase config is missing: ${missingConfigKeys.join(", ")}. ` +
+      "Set the matching EXPO_PUBLIC_FIREBASE_* variables in .env for local " +
+      "runs, or in the EAS environment for builds (npm run eas:env:sync).",
+  );
+}
+
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 function createAuth() {

@@ -54,7 +54,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "seed:emotion-prompts": "node ./scripts/seed-emotion-prompts.mjs",
-    "firebase:deploy": "npx firebase-tools deploy --only firestore:rules,storage,functions",
+    "eas:env:sync": "node ./scripts/sync-eas-env.mjs",
+    "firebase:deploy": "npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage,functions",
     "functions:install": "npm install --prefix functions"
   },
   "private": true

@@ -41,8 +41,14 @@ cd functions
 npm install
 cd ..
 npx firebase-tools login
-npx firebase-tools deploy --only firestore:rules,storage,functions
+npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage,functions
+# or: npm run firebase:deploy
 ```
+
+Optional: copy `functions/.env.example` guidance into Firebase Console → Functions →
+Environment variables. For soft-launch leave `ALLOW_UNVERIFIED_SUBSCRIPTION_GRANT`
+unset/true. Before public store release set it to `false` and implement receipt
+verification in `functions/index.js`.
 
 Optional content seed (Admin credentials required):
 
@@ -58,21 +64,35 @@ App also ships **local fallback** emotion prompts if Firestore docs are missing.
 
 Copy `.env.example` → `.env` and fill Firebase web config + support email + bundle ids + **privacy policy URL**.
 
+`EXPO_PUBLIC_*` values are inlined at build time and `.env` is gitignored, so EAS never sees it. Cloud builds read these from the EAS environment instead. After changing `.env`:
+
+```bash
+npx eas-cli login
+npx eas-cli init          # once, if extra.eas.projectId is missing from app config
+npm run eas:env:sync      # pushes EXPO_PUBLIC_* to development/preview/production
+```
+
+`src/config/firebase.ts` throws on startup naming any missing variable, so a misconfigured build fails immediately instead of silently breaking every auth and Firestore call.
+
 Critical: after rules deploy, subscription writes **must** go through Cloud Function `activateSubscription`. The app already uses `httpsCallable`.
 
-## 4. Soft-launch subscription behavior
+## 4. Subscription behavior (backend)
 
-- Paywall QA path (Face ID sheet) calls `activateSubscription` without a store receipt.
-- Functions default: `ALLOW_UNVERIFIED_SUBSCRIPTION_GRANT` is allowed unless set to `"false"`.
-- Before App Store: implement receipt verification and set `ALLOW_UNVERIFIED_SUBSCRIPTION_GRANT=false`.
+Cloud Function `activateSubscription` grants entitlement after the client calls it:
+
+- Soft-launch default: `ALLOW_UNVERIFIED_SUBSCRIPTION_GRANT` is allowed unless set to `"false"`. The paywall can activate a trial without a store receipt.
+- Before public App Store / Play release: implement receipt verification (`TODO(store)` in `functions/index.js`) and set `ALLOW_UNVERIFIED_SUBSCRIPTION_GRANT=false` on Functions.
+
+Frontend note: the paywall still shows a simulated Face ID purchase sheet. That must be gated or replaced with StoreKit / Play Billing before store submission (App Store 3.1.1 / Play payments policy). Flag helper: `EXPO_PUBLIC_ENABLE_QA_PURCHASE` + `src/constants/featureFlags.ts` (`QA_PURCHASE_ENABLED`). Wire the paywall to that flag before shipping.
 
 ## 5. EAS / store build
 
 1. `npx eas-cli login`
-2. Run `npx eas-cli init` if this repo is not linked yet (writes `extra.eas.projectId` into app config).
-3. Confirm `ios.bundleIdentifier` / `android.package` match store listings and Firebase Auth settings.
-4. Confirm store listings link to `EXPO_PUBLIC_PRIVACY_POLICY_URL`.
-5. `npx eas-cli build --platform all --profile production`
+2. Run `npx eas-cli init` if this repo is not linked yet (writes `extra.eas.projectId` into app config). Push notifications also need this id.
+3. `npm run eas:env:sync` so builds have Firebase config.
+4. Confirm `ios.bundleIdentifier` / `android.package` match store listings and Firebase Auth settings.
+5. Confirm store listings link to `EXPO_PUBLIC_PRIVACY_POLICY_URL`.
+6. `npx eas-cli build --platform all --profile production`
 
 ## 6. Smoke test after deploy
 
@@ -83,7 +103,7 @@ Critical: after rules deploy, subscription writes **must** go through Cloud Func
 - [ ] Privacy Policy opens in-app; hosted URL opens if env set
 - [ ] Daily emotion → encouragement (fallback or seeded)
 - [ ] Level 1 activity free; Level 2+ opens paywall
-- [ ] Paywall activates trial via Cloud Function (premium unlocks)
+- [ ] Paywall → Cloud Function activates trial only on internal/QA builds; store builds must not fake IAP
 - [ ] Forgot password email → deep link → `/reset-password` sets new password
 - [ ] Contact Us creates `supportTickets` doc
 - [ ] Delete child / delete account cascade

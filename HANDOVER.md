@@ -98,14 +98,17 @@ Child dashboard (`child-dashboard.tsx`) documents V1 activities:
 
 1. Hosted **HTTPS Privacy Policy** URL (+ paste into App Store / Play listings)
 2. Optional hosted **Terms of Use** URL
-3. Set `EXPO_PUBLIC_PRIVACY_POLICY_URL` / `EXPO_PUBLIC_TERMS_OF_USE_URL` / `EXPO_PUBLIC_SUPPORT_EMAIL` in EAS secrets
+3. Set `EXPO_PUBLIC_PRIVACY_POLICY_URL` / `EXPO_PUBLIC_TERMS_OF_USE_URL` / `EXPO_PUBLIC_SUPPORT_EMAIL` in `.env`, then `npm run eas:env:sync`
 4. **Apple Developer** + **Google Play Console** access
-5. EAS project link (`eas init` if needed) + cloud builds
+5. EAS project link (`eas init` — still required; `extra.eas.projectId` is not set yet)
 6. Device QA / smoke tests (`PRODUCTION.md` §6)
 7. **Real Apple/Google IAP** + receipt verification in Cloud Functions
 8. Set `ALLOW_UNVERIFIED_SUBSCRIPTION_GRANT=false` on Functions before public release
 9. Legal review of consent copy in `src/constants/consent.ts`
 10. Asset performance fix (convert huge embedded-photo SVGs → PNG/WebP; load per card)
+11. Gate or replace the paywall Face ID simulation before store builds (`QA_PURCHASE_ENABLED` flag exists; paywall not wired yet)
+
+Done on backend (16 Sep 2026): EAS build profiles use `environment` (development/preview/production), `npm run eas:env:sync` pushes `EXPO_PUBLIC_*` into those environments, Firebase client config fails fast if vars are missing, Cloud Functions validate/sanitize entitlement input and document turning off unverified grants, `firestore.indexes.json` is wired into deploy, and `functions/.env.example` documents Functions env vars.
 
 ### Soft-launch / internal testing can proceed earlier with
 
@@ -122,10 +125,11 @@ Child dashboard (`child-dashboard.tsx`) documents V1 activities:
 | Task | Why |
 |------|-----|
 | Replace paywall Face ID simulation with StoreKit / Play Billing | Required for real money + App Review |
+| Wire paywall to `QA_PURCHASE_ENABLED` until real IAP exists | Prevents fake purchase UI in store builds |
 | Implement receipt verification in `functions/index.js` (TODO already marked) | Stop unverified entitlement grants |
 | Convert Emotion Match + Scenario SVGs to optimized PNG/WebP | ~143MB + ~50MB of giant SVGs cause Expo Go crashes / huge bundles |
 | Lazy-load / split other heavy screens if needed (workbook, rewards SVGs, roleplay) | Startup stability |
-| Wire `EXPO_PUBLIC_*` into EAS production env/secrets | Store builds need Firebase config |
+| Run `eas init` to create `extra.eas.projectId` | Builds and Expo push tokens both need it |
 | Confirm password-reset ActionCodeSettings + authorized domains in Firebase Auth | Deep links must open app |
 | Merge `duc` → `main` via PR when company is ready | Keep default branch current |
 | Clean ESLint / React Compiler issues (pre-existing in several screens) | Quality; not currently blocking builds |
@@ -207,7 +211,7 @@ From `PRODUCTION.md` §6 (still unchecked):
 
 1. Company Apple + Google accounts
 2. Expo account + `eas login` / `eas init`
-3. Configure EAS secrets for all `EXPO_PUBLIC_*`
+3. `npm run eas:env:sync` to push `EXPO_PUBLIC_*` into the EAS environments
 4. `eas build --profile preview` (internal) then `production`
 5. `eas submit` to stores
 6. Store listing assets (screenshots, description, age rating, privacy URL)
@@ -426,8 +430,10 @@ npx expo start --clear
 | `.env.example` | Required env var names |
 | `.firebaserc` / `.firebaserc.example` | Firebase project binding |
 | `firebase.json` | Rules + functions deploy config |
-| `eas.json` | Build/submit profiles |
+| `eas.json` | Build/submit profiles (wired to EAS environments) |
+| `scripts/sync-eas-env.mjs` | Pushes `EXPO_PUBLIC_*` from `.env` into EAS environments |
 | `functions/index.js` | Entitlement Functions + soft-launch notes |
+| `src/constants/featureFlags.ts` | `QA_PURCHASE_ENABLED` — paywall must read this before store builds |
 
 ### Access Ashley needs
 
