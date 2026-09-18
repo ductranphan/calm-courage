@@ -1,6 +1,6 @@
-# Calm Courage — Comprehensive Documentation - September 7th 2026
+# Calm Courage — Comprehensive Documentation - September 18th 2026
 
-**Date:** 4 Sep 2026  
+**Date:** 18 Sep 2026  
 **Prepared for:** Ashley / next developer  
 **Source of truth branch:** `duc`  
 **Repo:** https://github.com/ductranphan/calm-courage  
@@ -13,8 +13,113 @@
 2. Local working tree on `duc` should be kept **clean and up to date with `origin/duc`**.
 3. **Firebase backend for project `calm-courage-co` is already deployed** (rules + Cloud Functions).
 4. **App Store / Google Play submission has not happened.**
-5. **Do not treat Expo Go emulator testing as “app is broken”** — oversized SVG card assets commonly cause OOM / slow starts. Prefer EAS builds / real devices for QA.
-6. **Never commit `.env`.** Keys live locally / in EAS secrets / password manager only.
+5. **Card art OOM risk is largely mitigated on `duc`** (photo SVGs → JPEG/PNG; assets ~262 MB → ~34 MB). Prefer physical devices / EAS preview for final QA; first Metro bundle after `--clear` can still be slow.
+6. **Never commit `.env`.** Keys live locally / in EAS secrets / a password manager only.
+7. **There is no shared “admin” login baked into the app.** Access = platform accounts (GitHub, Firebase, Expo) + a filled `.env` + signing up (or using) a parent email/password in the app. Confirm every invite **before** the previous developer leaves.
+
+---
+
+## 0A. Access & credentials (must confirm before handover is complete)
+
+This section is what prevents lock-out when the previous engineer is unavailable. **Tick each box only after Ashley (or the company owner) can open that console with their own email.**
+
+### Platforms connected to this app
+
+| Platform | What it is for | Where | Access Ashley must have | Status to confirm |
+|----------|----------------|--------|-------------------------|-------------------|
+| **GitHub** | Source code | https://github.com/ductranphan/calm-courage | **Write** on the repo (ideally Admin if ownership will transfer) | [ ] Invited |
+| **Firebase / GCP** | Auth, Firestore, Storage, Cloud Functions, billing | https://console.firebase.google.com/project/calm-courage-co/overview | **Editor or Owner** on project `calm-courage-co` + Blaze billing visibility | [ ] Invited |
+| **Expo / EAS** | Cloud builds, env vars, submit | https://expo.dev (org/project for `calm-courage`) | Member/Admin who can `eas login`, `eas build`, `eas:env:sync` | [ ] Invited |
+| **Apple Developer + App Store Connect** | iOS store builds / listing | developer.apple.com / appstoreconnect.apple.com | Company team member (may not exist yet) | [ ] N/A or invited |
+| **Google Play Console** | Android store builds / listing | play.google.com/console | Company account (may not exist yet) | [ ] N/A or invited |
+| **Password manager** | Real `.env`, service accounts, keystores | Company 1Password / Bitwarden / etc. | Shared vault item(s) — **not** git, not Slack | [ ] Shared |
+| **Support inbox** | Contact Us / store listing | Address used for `EXPO_PUBLIC_SUPPORT_EMAIL` | Can receive mail | [ ] Confirmed |
+| **Privacy Policy host** | Store listing URL | Company site / Notion / legal host | Edit access when URL is live | [ ] Confirmed |
+
+**Historical Firebase owner email noted in prior handovers:** `hello@calmcourageco.ca` — **verify current IAM** in Firebase Console → Project settings → Users and permissions. Do not assume that mailbox alone is enough for Ashley.
+
+### Secrets that must be handed over (password manager only)
+
+Hand these as a vault item titled e.g. `Calm Courage — developer secrets`. Never commit them.
+
+1. Complete local **`.env`** contents (all `EXPO_PUBLIC_FIREBASE_*` + support/privacy URLs when set).
+2. Any **Google service-account JSON** used for `npm run seed:emotion-prompts` / Admin SDK offline work.
+3. Expo account email + org name (password via SSO or vault — not this file).
+4. When they exist: iOS **`.p8` / provisioning**, Android **keystore** (`.jks`), Play service account for `eas submit`.
+
+Template of required env **names** (values are secret): see `.env.example`.
+
+### What Ashley must set up on their machine
+
+```bash
+# 1) Code
+git clone https://github.com/ductranphan/calm-courage.git
+cd calm-courage
+git fetch origin
+git checkout duc
+git pull
+npm install
+npm run functions:install
+
+# 2) Env (values from password manager — not from this markdown file)
+cp .env.example .env
+# Paste EXPO_PUBLIC_FIREBASE_* and related values into .env
+
+# 3) Run
+npx expo start --clear
+```
+
+Optional later (store / cloud builds):
+
+```bash
+npx eas-cli login
+npx eas-cli init          # once — writes extra.eas.projectId (still required)
+npm run eas:env:sync      # push EXPO_PUBLIC_* into EAS environments
+```
+
+Firebase CLI (only when redeploying rules/functions):
+
+```bash
+npx firebase-tools login
+npm run firebase:deploy
+```
+
+---
+
+## 0B. How to log into the app and reach all features
+
+There is **no hardcoded staff password**. Use Firebase Auth email/password like any parent.
+
+### First-time path (full access to product surfaces)
+
+1. Launch the app (Expo Go or EAS preview / emulator).
+2. **Age gate** → enter an adult birth year (13+ clearance stored locally).
+3. **Onboarding → Create account** → email + password; accept Terms, Privacy, Parent/Guardian Consent.
+4. **Verify email** (check inbox / spam for Firebase verification).
+5. Set **Parent PIN**, then **create a child** profile (avatar, etc.).
+6. Use **Switch to child** / parent mode as needed to open:
+   - Parent home (`/home`), children, settings, contact us, privacy policy
+   - Child dashboard: daily emotion, scenarios, emotion match, roleplay, confidence quests, quest board, workbook, rewards
+7. **Level 1** activities are free. **Level 2+** opens the paywall.
+
+### Soft-launch / QA subscription unlock
+
+- In **local `.env` only**, set `EXPO_PUBLIC_ENABLE_QA_PURCHASE=true`, restart Metro (`npx expo start --clear`), then use the paywall Face ID sheet to call `activateSubscription`.
+- Leave the flag **unset/false** for any App Store / Play build (fake purchase UI is a policy violation).
+- `npm run eas:env:sync` **does not** push this flag; set it on EAS dashboard for internal profiles only if needed.
+
+### If login fails
+
+| Symptom | Check |
+|---------|--------|
+| App throws on startup naming missing Firebase keys | `.env` incomplete; see `src/config/firebase.ts` fail-fast |
+| Auth / Firestore errors | Firebase Console → Auth Email/Password enabled; project id is `calm-courage-co` |
+| Password reset email doesn’t open the app | Auth ActionCodeSettings + authorized domains; scheme `calm-courage://reset-password` |
+| Cannot deploy Functions | Need Firebase Editor/Owner + Blaze |
+
+### Suggested QA parent account (create and record in password manager)
+
+Create one dedicated test parent (e.g. `qa+ashley@yourcompany.com`), record email + password + PIN in the vault. Do **not** put that password in this file or in git.
 
 ---
 
@@ -105,8 +210,10 @@ Child dashboard (`child-dashboard.tsx`) documents V1 activities:
 7. **Real Apple/Google IAP** + receipt verification in Cloud Functions
 8. Set `ALLOW_UNVERIFIED_SUBSCRIPTION_GRANT=false` on Functions before public release
 9. Legal review of consent copy in `src/constants/consent.ts`
-10. Asset performance fix (convert huge embedded-photo SVGs → PNG/WebP; load per card)
-11. Gate or replace the paywall Face ID simulation before store builds (`QA_PURCHASE_ENABLED` flag exists; paywall not wired yet)
+10. Asset performance fix — **done on `duc`**: photo SVGs flattened to JPEG/PNG (~262 MB → ~34 MB); re-run `scripts/optimize-card-art.ps1` for new Figma card art
+11. Gate paywall Face ID simulation — **done on `duc`**: `paywall.tsx` reads `QA_PURCHASE_ENABLED`
+
+Done on frontend (`duc`, 16 Sep 2026): store icon + Android adaptive icon on `#F1F3F5` (matches splash; no in-app palette change), mic/photo permission strings, paywall QA gate, forgot-password ActionCodeSettings, user-facing env hints removed, card/illustration assets rasterized without redesign.
 
 Done on backend (16 Sep 2026): EAS build profiles use `environment` (development/preview/production), `npm run eas:env:sync` pushes `EXPO_PUBLIC_*` into those environments, Firebase client config fails fast if vars are missing, Cloud Functions validate/sanitize entitlement input and document turning off unverified grants, `firestore.indexes.json` is wired into deploy, and `functions/.env.example` documents Functions env vars.
 
@@ -125,12 +232,10 @@ Done on backend (16 Sep 2026): EAS build profiles use `environment` (development
 | Task | Why |
 |------|-----|
 | Replace paywall Face ID simulation with StoreKit / Play Billing | Required for real money + App Review |
-| Wire paywall to `QA_PURCHASE_ENABLED` until real IAP exists | Prevents fake purchase UI in store builds |
 | Implement receipt verification in `functions/index.js` (TODO already marked) | Stop unverified entitlement grants |
-| Convert Emotion Match + Scenario SVGs to optimized PNG/WebP | ~143MB + ~50MB of giant SVGs cause Expo Go crashes / huge bundles |
-| Lazy-load / split other heavy screens if needed (workbook, rewards SVGs, roleplay) | Startup stability |
 | Run `eas init` to create `extra.eas.projectId` | Builds and Expo push tokens both need it |
-| Confirm password-reset ActionCodeSettings + authorized domains in Firebase Auth | Deep links must open app |
+| Confirm password-reset ActionCodeSettings + authorized domains in Firebase Auth | Client now sends ActionCodeSettings; confirm Firebase console domains |
+| Commission a purpose-drawn square app icon | Current icon is wordmark on `#F1F3F5` — valid for stores; designer mark optional |
 | Merge `duc` → `main` via PR when company is ready | Keep default branch current |
 | Clean ESLint / React Compiler issues (pre-existing in several screens) | Quality; not currently blocking builds |
 
@@ -151,14 +256,14 @@ Done on backend (16 Sep 2026): EAS build profiles use `environment` (development
 
 ### Known / expected issues
 
-1. **Expo Go / Android emulator crash or kick-back after bundle**
-   - Cause: multi‑MB SVG “images” imported as React components (Emotion Match ~40 files ~143MB; Scenarios ~20 files ~50MB).
-   - Mitigation started: lazy routes for those screens + lighter startup preload.
-   - Residual risk: still huge on first open of those games; emulator RAM limited.
+1. **Expo Go / Android emulator crash or kick-back after bundle — largely resolved on `duc`**
+   - Cause was multi-MB SVG “images” imported as React components.
+   - Fixed by `scripts/optimize-card-art.ps1` (assets ~262 MB → ~34 MB).
+   - Re-run the script whenever new Figma card art is added.
 
-2. **First Metro bundle after `--clear` is very slow** (often 30–90s+). Normal for this asset-heavy repo.
+2. **First Metro bundle after `--clear` is slow** (often 30–90s). Less severe after asset conversion.
 
-3. **Paywall “purchase” is QA-only** — Face ID sheet simulates success and calls Cloud Function; not a real store charge.
+3. **Paywall “purchase” is QA-only and gated** — Face ID sheet only when `EXPO_PUBLIC_ENABLE_QA_PURCHASE=true`. Store builds show “coming soon”.
 
 4. **Subscription grants can be unverified** while `ALLOW_UNVERIFIED_SUBSCRIPTION_GRANT` ≠ `"false"`.
 
@@ -179,10 +284,12 @@ From `PRODUCTION.md` §6 (still unchecked):
 - Privacy Policy opens
 - Daily emotion → encouragement
 - Level 1 free; Level 2+ paywall
-- Paywall activates trial via Cloud Function
+- Paywall: “coming soon” unless `EXPO_PUBLIC_ENABLE_QA_PURCHASE=true`; with flag, Face ID sheet → Cloud Function trial
+- Scenario / Emotion Match / Roleplay card art renders after raster conversion
 - Forgot password → deep link → reset
 - Contact Us creates `supportTickets`
 - Delete child / delete account cascade
+- App icon looks correct on home screen (iOS and Android)
 
 ### Suggested QA environments
 
@@ -362,7 +469,7 @@ npm run seed:emotion-prompts
 | Real IAP purchase flow | Not implemented (QA Face ID only) |
 | Social login | Hidden / not wired |
 | Remote push sending | Not implemented |
-| Asset optimization for card decks | Critical follow-up |
+| Asset optimization for card decks | **Done on `duc`** — re-run `scripts/optimize-card-art.ps1` for new art |
 | Some challenge “complete” paths / polish | Called out in `PRODUCTION.md` as post soft-launch |
 
 ---
@@ -421,36 +528,44 @@ npx expo start --clear
 
 ## 11. Documentation / access / credentials to hand over
 
+**Primary checklists:** §0A (platforms + secrets + machine setup) and §0B (how to log into the app). Do not mark this handover complete until §0A boxes are ticked.
+
 ### Docs in repo
 
 | File | Contents |
 |------|----------|
 | `HANDOVER.md` | This document — operational continuity for Ashley |
 | `PRODUCTION.md` | Full production/COPPA/EAS/smoke checklist |
-| `.env.example` | Required env var names |
+| `.env.example` | Required env var names (values stay in password manager) |
 | `.firebaserc` / `.firebaserc.example` | Firebase project binding |
 | `firebase.json` | Rules + functions deploy config |
 | `eas.json` | Build/submit profiles (wired to EAS environments) |
 | `scripts/sync-eas-env.mjs` | Pushes `EXPO_PUBLIC_*` from `.env` into EAS environments |
+| `scripts/optimize-card-art.ps1` | Re-rasterize new Figma card art if assets grow again |
 | `functions/index.js` | Entitlement Functions + soft-launch notes |
-| `src/constants/featureFlags.ts` | `QA_PURCHASE_ENABLED` — paywall must read this before store builds |
+| `src/constants/featureFlags.ts` | `QA_PURCHASE_ENABLED` — paywall Face ID only when true |
 
-### Access Ashley needs
+### Access confirmation (same list as §0A — verify Ashley can open each)
 
-1. GitHub repo (write)
-2. Firebase / GCP project `calm-courage-co` (Editor/Owner as appropriate)
-3. Expo/EAS account for the org
-4. Apple Developer + App Store Connect (when company ready)
-5. Google Play Console (when company ready)
-6. Secure copy of `.env` values / EAS secrets (not via git)
-7. Support inbox address for `EXPO_PUBLIC_SUPPORT_EMAIL`
-8. Final Privacy Policy URL from legal/marketing
+1. GitHub repo write access — https://github.com/ductranphan/calm-courage  
+2. Firebase / GCP Editor or Owner on `calm-courage-co`  
+3. Expo / EAS org membership (`eas login` works)  
+4. Apple Developer + App Store Connect (when company is ready)  
+5. Google Play Console (when company is ready)  
+6. Password-manager vault with full `.env` + any service accounts / keystores  
+7. Support inbox for `EXPO_PUBLIC_SUPPORT_EMAIL`  
+8. Privacy Policy host / final HTTPS URL from legal/marketing  
+
+### App login (same as §0B — no shared admin password)
+
+Parent signs up or signs in with email/password → verify email → Parent PIN → create child → parent/child switch. Level 1 free; Level 2+ paywall. QA unlock only with `EXPO_PUBLIC_ENABLE_QA_PURCHASE=true` locally.
 
 ### Do **not** hand over via chat/email in plain text if avoidable
 
-- Firebase API keys are “public client” keys but still shouldn’t be dumped casually
-- Any service-account JSON, keystores (`.jks`), `.p8`, provisioning profiles — password manager only
-- Never commit those files (`.gitignore` already blocks many)
+- Firebase web API keys are “public client” keys but still shouldn’t be dumped casually  
+- Any service-account JSON, keystores (`.jks`), `.p8`, provisioning profiles — password manager only  
+- Never commit those files (`.gitignore` already blocks many)  
+- Confirm Ashley’s invites **before** removing the previous developer’s access
 
 ---
 
@@ -472,25 +587,25 @@ Expo app (src/)
 2. **Parent access PIN is session memory only** — expected to re-prompt after kill/relaunch.
 3. **Active child is session memory only.**
 4. **Age gate adult clearance is local AsyncStorage**; under-13 years are not persisted.
-5. **Heavy art is the #1 performance risk**, not Firebase. Fix assets before spending weeks on Expo Go emulator debugging.
+5. **Heavy art was the #1 performance risk**; raster conversion on `duc` largely fixed it. Re-run the optimize script for new Figma exports.
 6. **Soft-launch entitlements are intentionally loose** until IAP exists — don’t ship that to public production.
 7. **Email-only auth for launch**; social buttons removed/hidden on purpose.
 8. **Consent version string** must be bumped when legal text changes (`CONSENT_VERSION`).
 
 ### Suggested first week for Ashley
 
-1. Get GitHub + Firebase + Expo access; clone `duc`.
-2. Create local `.env`; run app on a physical device or EAS preview.
-3. Walk `PRODUCTION.md` smoke tests against live `calm-courage-co`.
-4. Confirm Functions + rules still match repo (`firebase deploy` only if drift).
-5. Plan asset conversion for Emotion Match / Scenario cards.
-6. Align with company on Privacy Policy URL + store account owners.
+1. **Confirm every checkbox in §0A** (GitHub, Firebase, Expo, password-manager secrets) while the previous developer is still reachable.
+2. Clone `duc`, fill `.env` from the vault, run the app (§0A setup).
+3. Create a QA parent account via the app login path in §0B; record email/password/PIN in the vault.
+4. Walk `PRODUCTION.md` smoke tests against live `calm-courage-co` (physical device or EAS preview preferred).
+5. Confirm Functions + rules still match repo (`firebase deploy` only if drift).
+6. Align with company on Privacy Policy URL + Apple/Google store account owners.
 7. Open PR `duc` → `main` once validated.
 8. Start StoreKit / Play Billing design with receipt verification in Functions.
 
 ### One-sentence status for leadership
 
-> The Calm Courage V1 app and Firebase backend are largely built and the backend is live; remaining work is store accounts, privacy URL, real IAP, device QA, asset performance, and merging/releasing via EAS — not rebuilding the product from scratch.
+> The Calm Courage V1 app and Firebase backend are largely built and live; card-art performance and paywall QA gating are done on `duc`; remaining work is company access/credentials, privacy URL, store accounts, real IAP, device QA, and merging/releasing via EAS — not rebuilding the product from scratch.
 
 ---
 
