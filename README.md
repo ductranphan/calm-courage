@@ -29,6 +29,7 @@ Built with **Expo (SDK 57)**, **React Native**, and **Firebase** (Auth, Firestor
    ```bash
    git clone https://github.com/ductranphan/calm-courage.git
    cd calm-courage
+   git checkout duc
    npm install
    npm run functions:install
    ```
